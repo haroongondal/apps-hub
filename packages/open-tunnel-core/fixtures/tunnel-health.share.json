@@ -1,0 +1,6 @@
+{
+  "authority": "com.haroon.opentunnel.applink",
+  "path": "health",
+  "columns": ["app_id", "accessibility", "listener", "ai_source", "last_seen_at"],
+  "maxRows": 1
+}

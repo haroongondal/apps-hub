@@ -16,6 +16,7 @@ private enum ErrorCode {
   static let serviceStartFailed = "ERR_SERVICE_START_FAILED"
   static let probeFailed = "ERR_PROBE_FAILED"
   static let firewallNotSupported = "ERR_FIREWALL_NOT_SUPPORTED"
+  static let notSupported = "ERR_NOT_SUPPORTED"
   // Kotlin mirror: TunnelErrorCode.AUTH_FAILED. No iOS engine classifies
   // auth failures yet; the status payload is able to carry the code.
   static let authFailed = "ERR_AUTH_FAILED"
@@ -409,6 +410,8 @@ final class VpnManagerBridge {
         "nodeId": config.nodeId,
         "updatedAtMs": Int(Date().timeIntervalSince1970 * 1000),
       ]
+      // iOS 14+, below the 15.1 deployment target: traffic outside the tunnel is dropped while it is down.
+      protocolConfig.includeAllNetworks = config.enableKillSwitch
       manager.protocolConfiguration = protocolConfig
       manager.localizedDescription = "TunnelWall"
       manager.isEnabled = true
@@ -473,9 +476,6 @@ final class VpnManagerBridge {
   func stop(completion: @escaping (TunnelOutcome) -> Void) {
     TunnelStateRegistry.shared.setStatus(TunnelContracts.statusDisconnecting, nil)
     queue.async {
-      if let manager = self.cachedManager {
-        manager.connection.stopVPNTunnel()
-      }
       // Read back the kill-switch posture for the release decision.
       switch SharedPayload.readActiveConfig() {
       case let .success(handoff) where !handoff.enableKillSwitch:
@@ -483,7 +483,17 @@ final class VpnManagerBridge {
       case .success, .failure:
         break
       }
-      completion(.success)
+      guard let manager = self.cachedManager, manager.isOnDemandEnabled else {
+        self.cachedManager?.connection.stopVPNTunnel()
+        completion(.success)
+        return
+      }
+      // The on-demand connect rule would bring back a tunnel the user just turned off.
+      manager.isOnDemandEnabled = false
+      manager.saveToPreferences { _ in
+        manager.connection.stopVPNTunnel()
+        completion(.success)
+      }
     }
   }
 
@@ -724,7 +734,7 @@ public class OpenTunnelNativeModule: Module {
   public func definition() -> ModuleDefinition {
     Name("OpenTunnelNative")
 
-    Events("onStatusChanged", "onTrafficUpdate")
+    Events("onStatusChanged", "onTrafficUpdate", "onKillSwitchChanged", "onNetworkChanged")
 
     OnStartObserving {
       let forwarder = ModuleEventForwarder(module: self)
@@ -807,6 +817,29 @@ public class OpenTunnelNativeModule: Module {
       VpnManagerBridge.shared.statusMapping { state in
         promise.resolve(state)
       }
+    }
+
+    // iOS holds no blocking interface of its own (includeAllNetworks does it in the OS) and has no Android Always-on to read.
+    AsyncFunction("getKillSwitchStatus") { (promise: Promise) in
+      promise.resolve([
+        "blocking": false,
+        "alwaysOn": (nil as Bool?) as Any,
+        "lockdown": (nil as Bool?) as Any,
+      ])
+    }
+
+    // Reading the Wi-Fi name on iOS needs the Access WiFi Information entitlement, which no profile carries yet.
+    AsyncFunction("startNetworkWatch") { (promise: Promise) in
+      promise.reject(ErrorCode.notSupported, "Trusted Wi-Fi isn't available on iPhone yet.")
+    }
+
+    AsyncFunction("stopNetworkWatch") { (promise: Promise) in
+      promise.resolve(nil)
+    }
+
+    // Shields needs the network watch above and Halo, which is Android only.
+    AsyncFunction("publishShield") { (on: Bool, untrustedNow: Bool, promise: Promise) in
+      promise.reject(ErrorCode.notSupported, "Shields isn't available on iPhone.")
     }
 
     /**

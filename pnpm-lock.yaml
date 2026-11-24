@@ -1052,6 +1052,10 @@ importers:
         version: 5.9.3
 
   packages/open-tunnel-core:
+    dependencies:
+      '@apps-hub/app-link-contract':
+        specifier: workspace:*
+        version: link:../app-link-contract
     devDependencies:
       '@types/node':
         specifier: ^22.10.0

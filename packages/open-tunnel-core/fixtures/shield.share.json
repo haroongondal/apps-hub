@@ -1,0 +1,6 @@
+{
+  "authority": "com.haroon.opentunnel.applink",
+  "path": "shield",
+  "columns": ["on", "untrusted_now", "since"],
+  "maxRows": 1
+}

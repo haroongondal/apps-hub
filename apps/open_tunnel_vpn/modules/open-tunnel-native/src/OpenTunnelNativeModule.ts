@@ -155,7 +155,31 @@ export interface FirewallNativeApi {
   openUsageAccessSettings(): Promise<null>;
 }
 
-export interface OpenTunnelNativeApi extends FirewallNativeApi {
+/** Android: the app's blocking interface plus the system Always-on state; iOS reports false and null. */
+export interface KillSwitchStatus {
+  blocking: boolean;
+  /** Null until the VPN service ran in this app session, and always on iOS or Android 9 and older. */
+  alwaysOn: boolean | null;
+  lockdown: boolean | null;
+}
+
+/** The phone's own network (never the VPN). `ssid`/`bssid` are null when Android withholds them (no precise location). */
+export interface NetworkInfo {
+  connected: boolean;
+  wifi: boolean;
+  ssid: string | null;
+  bssid: string | null;
+}
+
+export interface ProtectionNativeApi {
+  getKillSwitchStatus(): Promise<unknown>;
+  startNetworkWatch(): Promise<null>;
+  stopNetworkWatch(): Promise<null>;
+  publishShield(on: boolean, untrustedNow: boolean): Promise<null>;
+  addListener(event: 'onKillSwitchChanged' | 'onNetworkChanged', listener: (payload: unknown) => void): { remove(): void };
+}
+
+export interface OpenTunnelNativeApi extends FirewallNativeApi, ProtectionNativeApi {
   startTunnel(config: VpnTunnelConfig): Promise<null>;
   stopTunnel(): Promise<null>;
   getState(): Promise<VpnStatusState>;
@@ -170,6 +194,7 @@ export interface OpenTunnelNativeApi extends FirewallNativeApi {
     event: 'onTrafficUpdate',
     listener: (payload: VpnTrafficPayload) => void,
   ): { remove(): void };
+  addListener(event: 'onKillSwitchChanged' | 'onNetworkChanged', listener: (payload: unknown) => void): { remove(): void };
 }
 
 /** Typed native rejects (Expo `Promise.reject` codes, plan §4.1). The
@@ -189,6 +214,10 @@ export const OPEN_TUNNEL_ERROR_CODES = {
   AUTH_FAILED: 'ERR_AUTH_FAILED',
   FIREWALL_NOT_SUPPORTED: 'ERR_FIREWALL_NOT_SUPPORTED',
   FIREWALL_FAILED: 'ERR_FIREWALL_FAILED',
+  /** Trusted Wi-Fi on iOS and on Android 11 and older; Shields on iOS. */
+  NOT_SUPPORTED: 'ERR_NOT_SUPPORTED',
+  /** Android could not save the Shields state the link provider serves. */
+  LINK_FAILED: 'ERR_LINK_FAILED',
 } as const;
 
 export type OpenTunnelErrorCode =

@@ -22,6 +22,7 @@ import {
 } from '@apps-hub/ui';
 
 import type { VpnNode } from 'open-tunnel-core';
+import type { KillSwitchView } from '../tunnel/kill-switch.ts';
 import type { TunnelSnapshot } from '../tunnel/tunnel-client.ts';
 import { countryLabel, formatBytes, formatDuration, type CountryOption } from './format.ts';
 import { SMOOTHED_SAMPLE_COUNT, sparklineBars, type TrafficSample } from './traffic-samples.ts';
@@ -45,6 +46,8 @@ export interface HomeScreenProps {
   /** Verbatim local (pre-start) failure wording, shown next to the
    * native error surface; null when clear. */
   actionError: string | null;
+  killSwitch: KillSwitchView;
+  onStopBlocking(): void;
   onAutoSelect(): void;
   onOpenServers(): void;
   onOpenSettings(): void;
@@ -62,6 +65,8 @@ export function HomeScreen({
   onRefreshList,
   loadError,
   actionError,
+  killSwitch,
+  onStopBlocking,
   onAutoSelect,
   onOpenServers,
   onOpenSettings,
@@ -88,6 +93,20 @@ export function HomeScreen({
         </Group>
       )}
 
+      {killSwitch === 'reconnecting' && (
+        <Notice tone="warn" title="Internet is blocked while TunnelWall reconnects">
+          Nothing leaves your phone outside the VPN until a relay connects.
+        </Notice>
+      )}
+      {killSwitch === 'blocked' && (
+        <Notice
+          tone="warn"
+          title="Internet is blocked"
+          action={<Button label="Stop blocking" variant="secondary" size="sm" onPress={onStopBlocking} />}
+        >
+          The VPN dropped, so TunnelWall blocks internet until you connect to a relay. Stop blocking to use the internet without the VPN.
+        </Notice>
+      )}
       {tunnel.state === 'error' && tunnel.message !== null && (
         <Notice tone="danger" title="Couldn't connect">
           {tunnel.message}
@@ -162,15 +181,15 @@ export function HomeScreen({
           }
         />
         <Row
-          title="Auto-select fastest"
+          title="Connect to the best relay"
           subtitle={
             country === null
-              ? 'Measures the cached relays and connects to the best score'
-              : `Measures the relays in ${countryName} and connects to the best score`
+              ? 'Checks which relays answer fastest and connects to the best one'
+              : `Checks the relays in ${countryName} and connects to the best one`
           }
           trailing={
             <Button
-              label="Scan"
+              label="Connect"
               variant="primary"
               size="sm"
               disabled={busy || nodeCount === 0}
@@ -184,7 +203,7 @@ export function HomeScreen({
       <Group title="Settings">
         <Row
           title="Settings"
-          subtitle="Kill switch, apps outside the tunnel, and privacy notes"
+          subtitle="Blocking without the VPN, trusted Wi-Fi, apps outside the VPN, and privacy notes"
           onPress={onOpenSettings}
           accessibilityHint="Opens the settings sheet"
         />

@@ -74,7 +74,7 @@ export function shieldCopy(
       return {
         title: 'Connection failed',
         subtitle: scanning ? 'Measuring relays' : 'Tap to find another relay',
-        action: 'Connects the fastest relay that answers',
+        action: 'Connects to the best relay that answers',
       };
     default:
       return {
@@ -83,8 +83,8 @@ export function shieldCopy(
           ? 'Measuring relays'
           : activeNode
             ? `Tap to connect to ${countryLabel(activeNode)}`
-            : 'Tap to find the fastest relay',
-        action: 'Connects the selected relay, or the fastest one',
+            : 'Tap to connect to the best relay',
+        action: 'Connects the selected relay, or the best one',
       };
   }
 }

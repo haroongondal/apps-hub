@@ -6,22 +6,26 @@
  * retrying the same relay with the same credentials cannot succeed.
  * No I/O and no state here — the shell owns the failed-id set.
  */
-import type { VpnNode } from 'open-tunnel-core';
+import type { BestRelayResult } from 'open-tunnel-core';
 import { OPEN_TUNNEL_ERROR_CODES, type OpenTunnelErrorCode } from 'open-tunnel-native';
+
+export { pickRelayCandidates } from 'open-tunnel-core';
 
 /** How many ranked relays one auto-select pass may try before giving up.
  * Raised from 3: VPN Gate relays go down or refuse clients often enough
  * that three tries left users stuck on thin country lists. */
 export const MAX_ATTEMPTS = 6;
 
-/** The next relay candidates: ranked order minus relays that already
- * failed this session, capped at `maxAttempts` tries per pass. */
-export function pickRelayCandidates(
-  ranked: readonly VpnNode[],
-  failedIds: ReadonlySet<string>,
-  maxAttempts: number,
-): VpnNode[] {
-  return ranked.filter((node) => !failedIds.has(node.id)).slice(0, maxAttempts);
+/** Plain words for a pass that connected nothing; null when there is nothing to say. */
+export function bestRelayFailure(result: BestRelayResult): string | null {
+  if (result.outcome === 'none-left') {
+    return 'Every relay here has already failed. Pull down to refresh the list, or choose another country.';
+  }
+  if (result.outcome === 'all-failed') {
+    const tried = result.attempts === 1 ? "The best relay didn't connect" : `None of the ${result.attempts} best relays connected`;
+    return `${tried}. Pull down to refresh the list, or choose another country.`;
+  }
+  return null;
 }
 
 /** True only for the engine-raised auth rejection: the relay answered but

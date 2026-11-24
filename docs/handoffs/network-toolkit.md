@@ -184,3 +184,145 @@ Next, in order: (1) the owner's go-ahead to release. Pushing or merging to
 `main` auto-releases both apps through the Store, so do not push or merge
 without it. (2) Phone check: the firewall checks above, plus the HomeNet checks
 if HomeNet has not been checked yet.
+
+## TunnelWall protection: kill switch, best relay, Trusted Wi-Fi (eco C3, 2026-11-23)
+
+Branch `eco/tunnelwall` (worktree `apps-hub-wt/eco-tunnelwall`), three code commits on top of
+`f595c4a9`: `73fcb21e` (kill switch), `c13b0e52` (best relay), `93bccc5a` (Trusted Wi-Fi). Not
+pushed, not on a phone.
+
+### What was there before (recon)
+
+- `enableKillSwitch` reached the service, but both engines host their own VpnService
+  (ics-openvpn's `OpenVPNService`, WireGuard's `GoBackend$VpnService`), so on the live path the
+  switch did nothing on Android. Only the unused hosted path called `Builder.setBlocking(true)`,
+  which only puts the tun fd in blocking-read mode; it is not a kill switch (removed).
+- ics-openvpn already covers `reasserting`: its `getTunReopenStatus` answers only `NOACTION` or
+  `OPEN_BEFORE_CLOSE` (javap of the AAR), so its own reconnect has no gap.
+- The real leak windows: a relay switch (App.tsx stopped, then started), the engine ending (drop,
+  auth failure, failed failover), the app process dying, and boot.
+- Auto-select with failover already existed in App.tsx (`pickRelayCandidates`, `settled`).
+
+### Built
+
+- Kill switch (Android): once a tunnel has connected with the switch on ("armed"),
+  `OpenTunnelVpnService` holds its own interface (IPv4 `100.127.223.1/32` + `0.0.0.0/0`, IPv6
+  `fd00::2/128` + `::/0`, never read) whenever no engine interface is up: before the old engine
+  stops on a relay switch, after the engine ends, after a failed start, and at an Always-on start
+  when the process had died armed (`kill_switch` SharedPreferences, one boolean). The app's own
+  package is outside the block so it can fetch VPN Gate and probe relays. The service keeps its
+  foreground notice ("Internet is blocked until the VPN reconnects") and the server-active flag,
+  so the firewall cannot take the slot. Lifted by: a relay connecting (its interface replaces
+  the block), Disconnect or Stop blocking, or any revoke. Decisions: `KillSwitch.kt` (JVM test).
+  App view: `src/tunnel/kill-switch.ts` (`connected | reconnecting | blocked | off`).
+- Lockdown hint: the service reads `VpnService.isAlwaysOn()` / `isLockdownEnabled()` (API 29,
+  instance methods, so only known after it ran in this process). `getKillSwitchStatus()` returns
+  `{blocking, alwaysOn, lockdown}`; the settings row says what is on and opens
+  `Settings.ACTION_VPN_SETTINGS`.
+- iOS: `includeAllNetworks = enableKillSwitch` (iOS 14, below the 15.1 target) next to the
+  existing `NEOnDemandRuleConnect`; a user stop turns on-demand off first so the OS does not bring
+  the tunnel back. Compile not verified here (no Pods in the worktree); iOS engines stay gated.
+- Connect to the best relay: `connectRankedRelay` in `packages/open-tunnel-core/src/best-relay.ts`
+  over the LatencyProber ranking (fitness formula unchanged, 8 probes at a time, listed ping as
+  fallback), max 6 attempts, failed relays skipped, cancel stops; App.tsx runs it; plain-words
+  failure copy in `relay-failover.ts`.
+- Trusted Wi-Fi (off by default; owner decision pending): Settings > Trusted Wi-Fi. Module
+  `startNetworkWatch`/`stopNetworkWatch` + `onNetworkChanged`
+  (`registerBestMatchingNetworkCallback`, non-VPN internet request, `FLAG_INCLUDE_LOCATION_INFO`,
+  changes only). Logic in `src/tunnel/trusted-wifi.ts`; list in the local sqlite settings.
+
+### Decisions (my call)
+
+- Kill switch arms only after a connect succeeded: a dead relay on a first connect must not take
+  the internet away. A process that died armed stays armed for the next start and for an
+  Always-on start (the user's last intent was "VPN on").
+- Any revoke disarms (ics logs `permission_revoked` from its `onRevoke`; `OpenVpnEngine` passes
+  `EXTRA_REVOKED`): the user or another VPN app took the slot, and blocking would take it back.
+- At an Always-on start with the switch armed, the block wins over the firewall; Stop blocking
+  gives the slot back to the firewall if it was on and not paused.
+- A relay switch with the switch on skips the app's explicit stop: the native START replaces the
+  engine with the block held in between (Android only; iOS and switch-off keep stop-then-start).
+- An engine's `establish()` replaces the block interface (Android resets an app's old interface
+  when the same app establishes another), so a block held when an engine started is established
+  again, new before old closes, the next time the service holds it (relay switch, failed start,
+  RELEASE); `KillSwitch.reusesBlock` (wave-4 S1).
+- Every `OpenVpnEngine` RELEASE carries its `session` (`EXTRA_ENGINE`); a RELEASE from an engine
+  other than the running one (the old relay's, arriving after a switch) is ignored, so it cannot
+  stop the new engine; with no engine running it is handled as before
+  (`ServiceContracts.isStaleRelease`, wave-4 S2). Not covered: the old engine's own `disconnected`
+  status post can still reach the registry before the new engine reports.
+- Trusted Wi-Fi identifies a network by SSID plus BSSID, which needs precise location on
+  Android 10+ (asked only when the switch is turned on). A no-permission fingerprint (gateway
+  address, DNS servers) was rejected: home routers share `192.168.1.1`, and a false match means
+  no VPN on a stranger's network. Unreadable names count as not trusted (the safe direction).
+- Trusted Wi-Fi needs Android 12+ (the location-info callback); older Android and iOS reject
+  `ERR_NOT_SUPPORTED`. iOS `NEOnDemandRuleDisconnect` per SSID was not built: no iOS engine can
+  start and reading the SSID needs the Access WiFi Information entitlement.
+- No new service: the watch runs while the app's JS runtime is alive (app open, or in the
+  background while connected or blocking). Turning the switch on never connects on the network
+  you are on right then; each network is decided once, so a manual disconnect sticks until the
+  network changes. Trusted networks never auto-disconnect.
+
+### Not proven (needs the phone)
+
+All of it: the block actually black-holes traffic on HyperOS, the switch gap, Always-on restart
+after a process kill, ics revoke detection, the SSID/BSSID reads, background behaviour.
+
+## TunnelWall Shields (eco P4 B4, 2026-11-24)
+
+Branch `eco/tunnelwall`, on top of the C3 commits. Not pushed, not on a phone.
+
+### Built
+
+- Settings > Shields (Android 12+, off by default): one switch, "Warn me and protect me on networks I
+  don't trust". On turns on Trusted Wi-Fi auto-connect (the existing precise-location ask); a refusal
+  leaves Shields on and says auto-connect is off and every network counts as not trusted.
+- `untrustedNow(network, trusted)` in `src/tunnel/trusted-wifi.ts`: connected and not a trusted Wi-Fi
+  (mobile data and unreadable Wi-Fi count as not trusted; no network counts as nothing).
+- New module function `publishShield(on, untrustedNow)` (TS contract, adapter, Kotlin, Swift typed
+  `ERR_NOT_SUPPORTED`; Kotlin failure `ERR_LINK_FAILED`). App.tsx calls it when Shields, the network or
+  the trusted list changes; only two booleans cross the bridge.
+- Kotlin: `ShieldLink` (pure: state step, ping decision, rows; `ShieldLinkTest`), `TunnelLinkStore`
+  (SharedPreferences `applink`: shield on/untrusted/since and the heartbeat; sends the CHANGED ping),
+  `TunnelLinkProvider` on `com.haroon.opentunnel.applink` serving `shield` and `health`, guard copies in
+  `applink/` (`AppLinkGuardTest` over the contract fixtures).
+- Shares: `packages/open-tunnel-core/src/shield-share.ts` (`SHIELD_SHARE`, `TUNNEL_HEALTH_SHARE`, not
+  exported from the index so Metro never resolves app-link-contract); fixtures in
+  `packages/open-tunnel-core/fixtures/`, bound by `shield-share.test.ts` (TS) and
+  `TunnelLinkProviderShareTest` (Kotlin). The node test also audits the module and app manifests and
+  checks the Kotlin ping against `CHANGED_PING`.
+- Heartbeat: written when the JS runtime starts (module `OnCreate`) and on every tunnel status change
+  (`TunnelStateRegistry.attach` from the module and from `OpenTunnelVpnService.onCreate`). A query never
+  writes.
+
+### Decisions (my call)
+
+- The switch lives in the JS settings store like Trusted Wi-Fi; the native side keeps only what the
+  provider serves. Every app start republishes, so the two cannot stay apart.
+- Shields off turns auto-connect off too (one master switch). The trusted list is kept.
+- The share serves no row while Shields is off; `health` is always served (the Store reads it).
+- Ping only when Halo's pulse (on and untrusted) flips: entering or leaving an untrusted network, and
+  turning Shields on or off while on one. `since` restarts on any change of on or untrusted.
+- `untrusted_now` is the last state TunnelWall saw while its network watch is live in this process
+  (`TunnelLinkStore.networkWatched`: `watchStarted()` by `startNetworkWatch`, then raised by the
+  first Shields-on `publishShield` after that start, which App.tsx sends only once it has read a
+  network; cleared by `stopNetworkWatch` and the module's `OnDestroy`). While the watch is not
+  running, or has started but not yet reported (process died and the query started a fresh one, the
+  app just opened on a new network, or the module was destroyed), the provider serves
+  `untrusted_now=1` while Shields is on, so a stale trusted row never hides a new network (wave-4
+  Medium and its follow-up, `ShieldLinkTest.withoutALiveNetworkWatchASavedTrustedRowIsServedAsUntrusted`,
+  `aRowSavedBeforeTheWatchReportedIsServedAsUntrusted`). Not covered: a FROZEN process (HyperOS)
+  keeps the flag and still serves its last row until it thaws and the callback catches up. A live
+  reading in the provider would need the trusted list and precise location natively, and was not
+  built.
+- The provider and permission are in the module manifest, so a prebuild keeps them; the merged app
+  manifest carries them (checked in `build/intermediates/merged_manifest`).
+
+### Not proven (needs the phone)
+
+The provider answering Halo and refusing the shell, the ping reaching Halo, the pulse flip on a real
+network change, the location-refused path, the heartbeat after open and after a connect.
+
+## AppLinkTarget (TunnelWall, 2026-11-24)
+
+TunnelWall sends one thing to a sibling: the Shields CHANGED ping to Halo (`TunnelLinkStore.publishShield`). It now calls `AppLinkTarget.trustedReceiver(context, intent)` first; false sends nothing (the Shields state is still saved). The module manifest has `<queries><package android:name="com.haroon.halo"/></queries>`. `AppLinkTarget.kt` and its test are canonical copies in `modules/open-tunnel-native/android/.../applink/`. TunnelWall has no readers and no activity senders. Phone check not run: with Halo uninstalled or not Store-signed, flipping Shields sends nothing and the app is unaffected; with the Store-signed Halo, Halo still hears the ping.
