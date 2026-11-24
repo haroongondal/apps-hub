@@ -219,7 +219,7 @@
       while (menuBacklog.length) fn(menuBacklog.shift());
     },
     // Design with AI: AI hub holds the keys and the page never sees one. request always resolves
-    // { ok, status, json?, error?: 'hubmissing'|'notallowed'|'nokey'|'timeout'|'bad' } (SPEC §14.3); open('store'|'aihub')
+    // { ok, status, json?, error?: 'hubmissing'|'update'|'notallowed'|'nokey'|'timeout'|'bad' } (SPEC §14.3); open('store'|'aihub')
     // resolves 'opened' | 'not_installed' | 'refused'. The Mac's native.ai keeps its key functions (preload.cjs).
     ai: {
       request: body => call('aiRequest', { body }),

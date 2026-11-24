@@ -3,8 +3,8 @@
 import type { ChatReply, ChatRequest, ErrorKind } from 'ai-hub-client/src/contract.ts';
 import { isRealReply } from './old-keys.ts';
 
-// error: what the page words itself. hubmissing, notallowed and nokey are the three AI hub states with a button; the rest are plain failures.
-export type AiReply = { ok: boolean; status: number; json?: object; error?: 'hubmissing' | 'notallowed' | 'nokey' | 'timeout' | 'bad' };
+// error: what the page words itself. hubmissing, update, notallowed and nokey are the four AI hub states with a button; the rest are plain failures.
+export type AiReply = { ok: boolean; status: number; json?: object; error?: 'hubmissing' | 'update' | 'notallowed' | 'nokey' | 'timeout' | 'bad' };
 export type AiSource = 'hub' | 'none'; // who answered last, for the Store's health row
 export type HubPort = { chat(req: ChatRequest): Promise<ChatReply> };
 
@@ -56,7 +56,8 @@ export function replyFromHub(r: ChatReply): AiReply {
 
 /** The page already words these statuses and errors; the three hub states carry a button. No hub error text reaches the page. */
 export function replyFromHubError(kind: ErrorKind): AiReply {
-  if (kind === 'hub-missing' || kind === 'version') return { ok: false, status: 0, error: 'hubmissing' };
+  if (kind === 'hub-missing') return { ok: false, status: 0, error: 'hubmissing' };
+  if (kind === 'version') return { ok: false, status: 0, error: 'update' }; // installed, but older than this request needs
   if (kind === 'not-allowed') return { ok: false, status: 0, error: 'notallowed' };
   if (kind === 'no-key') return { ok: false, status: 0, error: 'nokey' };
   if (kind === 'busy') return { ok: false, status: 429 };
@@ -65,7 +66,7 @@ export function replyFromHubError(kind: ErrorKind): AiReply {
   return { ok: false, status: 0, error: 'bad' }; // too-large, invalid, cancelled
 }
 
-const HUB_STATES = new Set(['hubmissing', 'notallowed', 'nokey']);
+const HUB_STATES = new Set(['hubmissing', 'update', 'notallowed', 'nokey']);
 
 export function createAiRouter(deps: { hub: HubPort; record: (source: AiSource) => void; served: () => void }) {
   return async function route(body: Record<string, unknown>): Promise<AiReply> {
@@ -74,8 +75,10 @@ export function createAiRouter(deps: { hub: HubPort; record: (source: AiSource) 
     try {
       const chat = await deps.hub.chat(req);
       const reply = replyFromHub(chat);
-      deps.record('hub');
-      if (isRealReply(chat)) deps.served();
+      if (isRealReply(chat)) {
+        deps.record('hub');
+        deps.served();
+      }
       return reply;
     } catch (e) {
       const kind = (e as { kind?: ErrorKind } | null)?.kind;

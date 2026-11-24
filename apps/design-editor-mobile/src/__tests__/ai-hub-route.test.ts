@@ -65,7 +65,8 @@ test('hub failures map to the statuses and errors the page words, and never carr
   assert.deepEqual(replyFromHubError('timeout'), { ok: false, status: 0, error: 'timeout' });
   assert.deepEqual(replyFromHubError('provider-error'), { ok: false, status: 502 });
   for (const k of ['too-large', 'invalid', 'cancelled'] as const) assert.deepEqual(replyFromHubError(k), { ok: false, status: 0, error: 'bad' });
-  for (const k of ['hub-missing', 'version'] as const) assert.deepEqual(replyFromHubError(k), { ok: false, status: 0, error: 'hubmissing' });
+  assert.deepEqual(replyFromHubError('hub-missing'), { ok: false, status: 0, error: 'hubmissing' });
+  assert.deepEqual(replyFromHubError('version'), { ok: false, status: 0, error: 'update' });
   assert.deepEqual(replyFromHubError('not-allowed'), { ok: false, status: 0, error: 'notallowed' });
   assert.deepEqual(replyFromHubError('no-key'), { ok: false, status: 0, error: 'nokey' });
 });
@@ -77,7 +78,13 @@ test('hub served: the source is hub', async () => {
   assert.deepEqual(seen.source, ['hub']);
 });
 
-for (const [kind, error] of [['hub-missing', 'hubmissing'], ['version', 'hubmissing'], ['not-allowed', 'notallowed'], ['no-key', 'nokey']] as const) {
+test('an empty reply is not a hub that serves this app: the source is not set to hub', async () => {
+  const { route, seen } = setup(async () => reply({ text: ' ' }));
+  await route(sanitised());
+  assert.deepEqual(seen.source, []);
+});
+
+for (const [kind, error] of [['hub-missing', 'hubmissing'], ['version', 'update'], ['not-allowed', 'notallowed'], ['no-key', 'nokey']] as const) {
   test(`${kind} from the hub: one hub call, the ${error} state, source none`, async () => {
     const { route, seen } = setup(fail(kind));
     assert.deepEqual(await route(sanitised()), { ok: false, status: 0, error });

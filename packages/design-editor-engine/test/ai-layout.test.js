@@ -112,8 +112,9 @@ test('cuts text by characters, not by UTF-16 halves', () => {
   assert.equal(out.items[0].text, 'a'.repeat(299) + '😀');
 });
 
-test('the three AI hub states say what to do and which app the button opens, in plain words', () => {
+test('the four AI hub states say what to do and which app the button opens, in plain words', () => {
   assert.deepEqual(AiLayout.hubNeeded('hubmissing'), { message: 'AI needs AI hub.', button: 'Install AI hub', open: 'store' });
+  assert.deepEqual(AiLayout.hubNeeded('update'), { message: 'AI hub needs an update.', button: 'Update AI hub', open: 'store' });
   assert.deepEqual(AiLayout.hubNeeded('notallowed'), { message: 'AI hub has not allowed Design Editor yet.', button: 'Allow Design Editor in AI hub', open: 'aihub' });
   assert.deepEqual(AiLayout.hubNeeded('nokey'), { message: 'AI hub has no key yet.', button: 'Add a key in AI hub', open: 'aihub' });
   assert.equal(AiLayout.hubNeeded('timeout'), null);

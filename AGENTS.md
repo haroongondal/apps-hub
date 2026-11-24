@@ -192,9 +192,10 @@ Current apps:
   changed until the person opens a tool on the "Add to Design Editor" screen. Design with AI (the
   layout chat) runs through AI hub only (`com.haroon.aihub`): the phone app has no AI key, no key
   screen and no provider of its own, and the hub holds the Groq or Gemini keys. What leaves the
-  phone is the typed description and the page size, sent by the hub to the same Groq or Gemini
-  service as before; the app never sees a key. When the hub is not installed, the app says "AI needs
-  AI hub" with a button that opens the Store; when the owner has not allowed Design Editor there,
+  phone is the typed description and the page size, sent by the hub to Groq, or to Gemini when
+  Groq has no working key in the hub; the app never sees a key. When the hub is not installed, the
+  app says "AI needs AI hub" with a button that opens the Store ("AI hub needs an update" with
+  "Update AI hub" when it is too old); when the owner has not allowed Design Editor there,
   "Allow Design Editor in AI hub" opens the hub; when the hub has no key, "Add a key in AI hub".
   Busy, timeout and other failures are plain messages. Keys an older build saved are deleted only
   after the hub has returned a real reply to a Design with AI request on that phone (a marker file

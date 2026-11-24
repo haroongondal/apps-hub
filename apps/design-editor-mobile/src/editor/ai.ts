@@ -33,6 +33,7 @@ const oldKeys: OldKeyDeps = {
   },
 };
 
+// 'hub' is written only here, on a real reply: the Store's health row must not say the hub serves this app before it has.
 const route = createAiRouter({ hub: aiHub, record: recordSource, served: () => void afterHubReply(oldKeys).catch(() => {}) });
 
 export async function aiRequest(page: unknown): Promise<AiReply> {
@@ -42,11 +43,11 @@ export async function aiRequest(page: unknown): Promise<AiReply> {
 }
 
 // Asking once on start puts this app in the hub's Apps list ("Asked to use AI. Allow?"), even before anyone taps Generate.
-// It also refreshes the health row, and finishes clearing the keys saved before AI hub only once a real reply has come (old-keys.ts).
+// It also resets the health row to none (a served reply sets it to hub again), and finishes clearing the keys saved before AI hub only once a real reply has come (old-keys.ts).
 export function aiHubWarmUp(): void {
   void (async () => {
-    const hub = await aiHub.available().catch(() => ({ ok: false }));
-    recordSource(hub.ok ? 'hub' : 'none');
+    await aiHub.available().catch(() => {});
+    recordSource('none');
     await onStart(oldKeys);
   })().catch(() => {});
 }

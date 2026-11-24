@@ -11,7 +11,7 @@ object AppHealth {
   val COLUMNS = arrayOf("app_id", "accessibility", "listener", "ai_source", "last_seen_at")
   const val AI_SOURCE_FILE = "ai-source.txt"
   const val HEARTBEAT_FILE = "last-seen-at.txt"
-  private val SOURCES = setOf("hub", "own", "none")
+  private val SOURCES = setOf("hub", "none") // the contract also allows "own"; this app has no key of its own
 
   fun aiSource(text: String?): String = text?.trim()?.takeIf { it in SOURCES } ?: "none"
 
