@@ -64,3 +64,9 @@ test('every link switch is off by default and a document without links gives all
   const s = normalize({});
   assert.deepEqual(s.links, { shieldPulse: false, waitingPulse: false, waitingAod: false, bubble: false, briefing: false, briefingPrivate: false });
 });
+
+test('the Links screen does not promise text on the locked always-on screen or hide amounts', () => {
+  const src = fs.readFileSync(join(import.meta.dirname, '../LinksScreen.tsx'), 'utf8');
+  assert.doesNotMatch(src, /Amounts are never shown|up to three short titles|short lines for the day/);
+  assert.match(src, /only in the preview/);
+});

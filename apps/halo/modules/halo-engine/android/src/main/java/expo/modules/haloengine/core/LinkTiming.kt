@@ -16,6 +16,11 @@ class RereadGate {
     pendingAt = null
   }
 
+  // The posted read was removed (switches off, service stopped), so a request must be allowed again.
+  fun cancel() {
+    pendingAt = null
+  }
+
   private fun request(at: Long): Long? {
     if (pendingAt != null) return null
     val due = lastReadAt?.let { maxOf(at, it + MIN_GAP_MS) } ?: at

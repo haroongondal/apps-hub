@@ -66,6 +66,7 @@ object Links {
 
   fun stop() = main.post {
     main.removeCallbacks(read)
+    gate.cancel()
     main.removeCallbacks(tick)
     bubble?.remove()
     bubble = null
@@ -84,6 +85,7 @@ object Links {
 
   private fun clear() {
     main.removeCallbacks(read)
+    gate.cancel()
     snapshot = LinkSnapshot()
     pulse = PulseState()
     onChange?.invoke()

@@ -37,6 +37,15 @@ class LinkTimingTest {
     assertEquals(t + RereadGate.MIN_GAP_MS, g.onOpen(t + 10_000))
   }
 
+  @Test fun cancelThenOnOpenSchedules() {
+    val g = RereadGate()
+    g.onRead(t)
+    assertEquals(t + RereadGate.MIN_GAP_MS, g.onOpen(t + 10_000))
+    assertNull(g.onOpen(t + 20_000))
+    g.cancel()
+    assertEquals(t + RereadGate.MIN_GAP_MS, g.onOpen(t + 30_000))
+  }
+
   @Test fun theAlwaysOnScreenRereadsOnlyDataOlderThanFifteenMinutes() {
     val g = RereadGate()
     assertEquals(t, g.onStale(t))

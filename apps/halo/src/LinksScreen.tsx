@@ -35,7 +35,7 @@ export default function LinksScreen({ settings, update, onBack }: { settings: Se
         />
         <SwitchRow
           title="Waiting on the always-on screen"
-          subtitle="How many things wait and up to three short titles. Amounts are never shown."
+          subtitle="Shows how many things wait. Titles show only in the preview in Halo, never on the locked screen."
           value={l.waitingAod}
           onChange={(waitingAod) => set({ waitingAod })}
         />
@@ -49,14 +49,14 @@ export default function LinksScreen({ settings, update, onBack }: { settings: Se
       <Group title="Briefing" footer="Anyone who picks up your phone can read the always-on screen.">
         <SwitchRow
           title="Briefing on the always-on screen"
-          subtitle="Inflow's short lines for the day, such as bills and to-dos. Medicine and steps stay hidden."
+          subtitle="Shows that your briefing is ready. The lines themselves show only in the preview in Halo. Medicine and steps stay hidden."
           value={l.briefing}
           onChange={(briefing) => set({ briefing })}
         />
         {l.briefing && (
           <SwitchRow
             title="Show private briefing lines on the always-on screen"
-            subtitle="Also shows medicine and steps, and how many people are home (never their names)."
+            subtitle="The preview in Halo also shows medicine and steps, and how many people are home (never their names). The locked screen is unchanged."
             value={l.briefingPrivate}
             onChange={(briefingPrivate) => set({ briefingPrivate })}
           />

@@ -82,13 +82,13 @@ export interface Links {
   shieldPulse: boolean;
   /** A slow pulse while something waits in Inflow or Deputy. */
   waitingPulse: boolean;
-  /** The count and up to three titles of what waits, on the always-on screen. */
+  /** The count of what waits on the always-on screen; titles only in the in-app preview. */
   waitingAod: boolean;
   /** A small bubble with the count over other apps; a tap opens the app it came from. */
   bubble: boolean;
-  /** Inflow's briefing lines on the always-on screen. */
+  /** "Briefing ready" on the always-on screen; the lines only in the in-app preview. */
   briefing: boolean;
-  /** Also show private briefing lines (medicine, steps) and how many people are home. */
+  /** Also show private briefing lines (medicine, steps) and how many people are home, in the in-app preview only. */
   briefingPrivate: boolean;
 }
 
