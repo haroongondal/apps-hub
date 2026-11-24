@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Group, Notice, Row, Segmented, Text, space } from '@apps-hub/ui';
 import { apps, setAppEnabled, type AppInfo } from 'ai-hub-core';
+import { useRefreshOnForeground } from './useRefreshOnForeground.ts';
 import { BLOCKED_TEXT, PENDING_TEXT, STRONGROOM, lastUsedText, plainError, usageText } from './format.ts';
 
 export function AppsGroup() {
@@ -12,6 +13,7 @@ export function AppsGroup() {
   useEffect(() => {
     refresh();
   }, []);
+  useRefreshOnForeground(refresh);
 
   const toggle = async (app: AppInfo, enabled: boolean) => {
     setError(null);

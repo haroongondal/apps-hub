@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Button, Group, Notice, Row, Text, confirmAction, space } from '@apps-hub/ui';
 import { calls, clearCalls, type CallInfo } from 'ai-hub-core';
+import { useRefreshOnForeground } from './useRefreshOnForeground.ts';
 import { plainError, requestText } from './format.ts';
 
 // (my call) The owner decides whether this log stays. It holds the app, the job, the service and the time, never what was asked or answered.
@@ -13,6 +14,7 @@ export function RecentGroup() {
   useEffect(() => {
     refresh();
   }, []);
+  useRefreshOnForeground(refresh);
 
   const clear = () =>
     confirmAction({
