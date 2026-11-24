@@ -1,0 +1,12 @@
+[
+  { "serviceType": "_companion-link._tcp", "raw": "Haroon’s iPhone", "clean": "Haroon’s iPhone", "owner": "Haroon" },
+  { "serviceType": "_companion-link._tcp", "raw": "Sara's iPad", "clean": "Sara's iPad", "owner": "Sara" },
+  { "serviceType": "_airplay._tcp", "raw": "A1B2C3D4E5F6@Sara's MacBook Air", "clean": "Sara's MacBook Air", "owner": "Sara" },
+  { "serviceType": "_airplay._tcp", "raw": "Living Room TV", "clean": "Living Room TV", "owner": null },
+  { "serviceType": "_googlecast._tcp", "raw": "Google-Nest-Mini-1a2b3c4d5e6f", "clean": "Google-Nest-Mini-1a2b3c4d5e6f", "owner": null },
+  { "serviceType": "_companion-link._tcp", "raw": "iPhone", "clean": "iPhone", "owner": null },
+  { "serviceType": "_companion-link._tcp", "raw": "iPhone's iPhone", "clean": "iPhone's iPhone", "owner": null },
+  { "serviceType": "_companion-link._tcp", "raw": "Mary Jane's Galaxy S21", "clean": "Mary Jane's Galaxy S21", "owner": "Mary Jane" },
+  { "serviceType": "_companion-link._tcp", "raw": "Ali's", "clean": "Ali's", "owner": null },
+  { "serviceType": "_companion-link._tcp", "raw": "Sara\\032s iPhone", "clean": "Sara s iPhone", "owner": null }
+]

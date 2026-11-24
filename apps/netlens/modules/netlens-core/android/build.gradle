@@ -18,6 +18,10 @@ android {
 }
 
 dependencies {
+  // Background who's-home and new-device checks. Apache-2.0 (AOSP), no Play Services; the Store app ships the same version.
+  implementation("androidx.work:work-runtime-ktx:2.12.0")
   // Hard OS rule tests (TCP RST ⇒ alive classifier) run on the Gradle JVM.
   testImplementation("junit:junit:4.13.2")
+  // Test-only fixture reader (shared JSON fixtures in packages/core); Apache-2.0, not in the APK.
+  testImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
 }

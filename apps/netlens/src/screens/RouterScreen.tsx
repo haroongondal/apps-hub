@@ -5,7 +5,7 @@
  * here talks to the network directly. States: finding, no-wifi, no-upnp, ready.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, Switch, View } from 'react-native';
+import { Linking, Platform, Switch, View } from 'react-native';
 import {
   Button,
   Empty,
@@ -27,6 +27,7 @@ import {
   computeSubnetForHost,
   deletePortMapping,
   collectServiceEvents,
+  deputyOutcomeMessage,
   discoverIgd,
   displayNameFor,
   getRouterFacts,
@@ -34,7 +35,9 @@ import {
   listPortMappings,
   rateBps,
   readByteCounters,
+  routerRestartProposal,
   type ByteCounters,
+  type DeputyProposalOutcome,
   type GuestWifi,
   type IgdServices,
   type InterfaceInfo,
@@ -42,7 +45,7 @@ import {
   type RouterFacts,
   wifiQrText,
 } from '@apps-hub/core';
-import { createNetLensNativeBinding } from 'netlens-core';
+import { createDeputyBinding, createNetLensNativeBinding } from 'netlens-core';
 
 import { QrCode } from '../components/QrCode';
 import { useNetworkScan } from '../scan/ScanProvider';
@@ -234,6 +237,38 @@ function GuestWifiCard() {
         <Row title={<QrCode text={qrText} label={`QR code to join ${form.ssid}`} />} />
       ) : null}
     </Group>
+  );
+}
+
+// Opens a draft in Deputy from this screen; Deputy starts nothing until the owner taps Start there.
+function DeputyRestartCard() {
+  const deputy = useRef(createDeputyBinding()).current;
+  const [busy, setBusy] = useState(false);
+  const [outcome, setOutcome] = useState<DeputyProposalOutcome | null>(null);
+  const message = outcome === null ? null : deputyOutcomeMessage(outcome);
+
+  const propose = async (): Promise<void> => {
+    setBusy(true);
+    setOutcome(null);
+    setOutcome(await deputy.proposeDeputyTask(routerRestartProposal()));
+    setBusy(false);
+  };
+
+  return (
+    <View style={{ gap: space.sm }}>
+      <Button
+        label="Restart the router with Deputy"
+        variant="secondary"
+        block
+        busy={busy}
+        onPress={() => void propose()}
+        accessibilityHint="Opens Deputy with the restart task ready for you to check"
+      />
+      <Text variant="meta" tone="muted">
+        Deputy shows you the task first. Nothing happens until you tap Start in Deputy.
+      </Text>
+      {message !== null ? <Notice tone={outcome === 'handed_over' ? 'ok' : 'warn'}>{message}</Notice> : null}
+    </View>
   );
 }
 
@@ -526,6 +561,8 @@ export default function RouterScreen() {
           </Group>
         </>
       ) : null}
+
+      {phase !== 'finding' && Platform.OS === 'android' ? <DeputyRestartCard /> : null}
 
       <GuestWifiCard />
 

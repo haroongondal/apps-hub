@@ -28,3 +28,7 @@ export * from './service-discovery.ts';
 export * from './same-interface.ts';
 export * from './wake.ts';
 export * from './wol.ts';
+export * from './presence.ts';
+export * from './new-devices.ts';
+export * from './home-watch.ts';
+export * from './deputy-proposal.ts';
