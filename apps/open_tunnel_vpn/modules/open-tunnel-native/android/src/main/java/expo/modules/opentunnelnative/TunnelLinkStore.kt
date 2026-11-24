@@ -16,6 +16,9 @@ private const val CHANGED_ACTION = "com.haroon.autopilot.CHANGED"
 
 /** What the link provider serves: the Shields state and the heartbeat. Only this app writes it; a provider query only reads. */
 object TunnelLinkStore {
+  /** Process-level: true only while the module's network watch is registered, so a fresh or orphaned process serves untrusted. */
+  @Volatile var networkWatched = false
+
   private fun prefs(context: Context): SharedPreferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
   fun shield(context: Context): ShieldState? {

@@ -25,8 +25,9 @@ object ShieldLink {
 
   private fun pulse(state: ShieldState?) = state?.on == true && state.untrusted
 
-  fun shieldRows(state: ShieldState?): List<Array<Any?>> =
-    if (state?.on == true) listOf(arrayOf(1, if (state.untrusted) 1 else 0, state.sinceMs)) else emptyList()
+  // Without a live network watch (process died or never opened) the saved row may be stale: a network it cannot read counts as untrusted.
+  fun shieldRows(state: ShieldState?, networkWatched: Boolean): List<Array<Any?>> =
+    if (state?.on == true) listOf(arrayOf(1, if (state.untrusted || !networkWatched) 1 else 0, state.sinceMs)) else emptyList()
 
   fun healthRows(lastSeenAtMs: Long?): List<Array<Any?>> = listOf(arrayOf(APP_ID, null, null, "none", lastSeenAtMs))
 }

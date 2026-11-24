@@ -654,12 +654,14 @@ class OpenTunnelNativeModule : Module() {
     connectivity.registerBestMatchingNetworkCallback(request, callback, Handler(Looper.getMainLooper()))
     networkCallback = callback
     networkWatchManager = connectivity
+    TunnelLinkStore.networkWatched = true
   }
 
   @Synchronized
   private fun stopNetworkWatch() {
     val callback = networkCallback ?: return
     networkCallback = null
+    TunnelLinkStore.networkWatched = false
     lastNetwork = null
     runCatching { networkWatchManager?.unregisterNetworkCallback(callback) }
     networkWatchManager = null

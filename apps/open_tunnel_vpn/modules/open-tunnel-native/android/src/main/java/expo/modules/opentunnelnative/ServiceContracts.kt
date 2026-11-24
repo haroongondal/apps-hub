@@ -15,4 +15,8 @@ object ServiceContracts {
   const val EXTRA_CONFIG = "config"
   const val EXTRA_HOLD = "hold"
   const val EXTRA_REVOKED = "revoked"
+  const val EXTRA_ENGINE = "engine"
+
+  // A relay switch replaces the engine before the old one's RELEASE may arrive; that RELEASE must not end the new one.
+  fun isStaleRelease(currentEngine: Long?, sender: Long): Boolean = currentEngine != null && currentEngine != sender
 }

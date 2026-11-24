@@ -29,11 +29,15 @@ import de.blinkt.openvpn.core.keepVPNAlive
 import java.io.StringReader
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 
 // ics-openvpn hosts its own VpnService; the manifest pulls it into the app process so VpnStatus listeners here see it.
 class OpenVpnEngine(context: Context) : TunnelEngine {
 
   override val hostsThroughAppService = false
+
+  /** Names this engine in its RELEASE, so the service can tell it from the engine that replaced it. */
+  val session = sessions.incrementAndGet()
 
   private val appContext = context.applicationContext
   @Volatile private var totals: Pair<Long, Long>? = null
@@ -197,11 +201,13 @@ class OpenVpnEngine(context: Context) : TunnelEngine {
         .setClassName(appContext, ServiceContracts.SERVICE_CLASS_NAME)
         .setAction(ServiceContracts.ACTION_RELEASE)
         .putExtra(ServiceContracts.EXTRA_HOLD, hold)
-        .putExtra(ServiceContracts.EXTRA_REVOKED, revoked),
+        .putExtra(ServiceContracts.EXTRA_REVOKED, revoked)
+        .putExtra(ServiceContracts.EXTRA_ENGINE, session),
     )
   }
 
   companion object {
+    private val sessions = AtomicLong(0)
     private const val CONNECT_TIMEOUT_MS = 30_000L
     private const val STOP_WAIT_MS = 3_000L
 

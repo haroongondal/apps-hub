@@ -242,6 +242,15 @@ pushed, not on a phone.
   gives the slot back to the firewall if it was on and not paused.
 - A relay switch with the switch on skips the app's explicit stop: the native START replaces the
   engine with the block held in between (Android only; iOS and switch-off keep stop-then-start).
+- An engine's `establish()` replaces the block interface (Android resets an app's old interface
+  when the same app establishes another), so a block held when an engine started is established
+  again, new before old closes, the next time the service holds it (relay switch, failed start,
+  RELEASE); `KillSwitch.reusesBlock` (wave-4 S1).
+- Every `OpenVpnEngine` RELEASE carries its `session` (`EXTRA_ENGINE`); a RELEASE from an engine
+  other than the running one (the old relay's, arriving after a switch) is ignored, so it cannot
+  stop the new engine; with no engine running it is handled as before
+  (`ServiceContracts.isStaleRelease`, wave-4 S2). Not covered: the old engine's own `disconnected`
+  status post can still reach the registry before the new engine reports.
 - Trusted Wi-Fi identifies a network by SSID plus BSSID, which needs precise location on
   Android 10+ (asked only when the switch is turned on). A no-permission fingerprint (gateway
   address, DNS servers) was rejected: home routers share `192.168.1.1`, and a false match means
@@ -294,10 +303,15 @@ Branch `eco/tunnelwall`, on top of the C3 commits. Not pushed, not on a phone.
 - The share serves no row while Shields is off; `health` is always served (the Store reads it).
 - Ping only when Halo's pulse (on and untrusted) flips: entering or leaving an untrusted network, and
   turning Shields on or off while on one. `since` restarts on any change of on or untrusted.
-- `untrusted_now` is the last state TunnelWall saw. When the process dies (C3: the watch runs only
-  while the app is open or connected) the row keeps that state; Halo can judge it by `since` and the
-  health row's `last_seen_at`. A live reading in the provider would need the trusted list and precise
-  location natively, and was not built.
+- `untrusted_now` is the last state TunnelWall saw while its network watch is registered in this
+  process (`TunnelLinkStore.networkWatched`, set by `startNetworkWatch`, cleared by
+  `stopNetworkWatch` and the module's `OnDestroy`). Without a live watch (process died and the query
+  started a fresh one, or the module was destroyed) the provider serves `untrusted_now=1` while
+  Shields is on, so a stale trusted row never hides a new network (wave-4 Medium,
+  `ShieldLinkTest.withoutALiveNetworkWatchASavedTrustedRowIsServedAsUntrusted`). Not covered: a
+  process frozen by HyperOS keeps the flag and its last row until it thaws and the callback
+  catches up. A live reading in the provider would need the trusted list and precise location
+  natively, and was not built.
 - The provider and permission are in the module manifest, so a prebuild keeps them; the merged app
   manifest carries them (checked in `build/intermediates/merged_manifest`).
 

@@ -14,7 +14,7 @@ class TunnelLinkProvider : ContentProvider() {
     val ctx = context
     if (ctx == null || !AppLinkCaller.allowed(ctx)) throw SecurityException("Not a signed sibling app")
     val (columns, rows) = when (uri.pathSegments) {
-      listOf(ShieldLink.SHIELD_PATH) -> ShieldLink.SHIELD_COLUMNS to ShieldLink.shieldRows(TunnelLinkStore.shield(ctx))
+      listOf(ShieldLink.SHIELD_PATH) -> ShieldLink.SHIELD_COLUMNS to ShieldLink.shieldRows(TunnelLinkStore.shield(ctx), TunnelLinkStore.networkWatched)
       listOf(ShieldLink.HEALTH_PATH) -> ShieldLink.HEALTH_COLUMNS to ShieldLink.healthRows(TunnelLinkStore.lastSeenAt(ctx))
       else -> throw IllegalArgumentException("Unknown share path")
     }

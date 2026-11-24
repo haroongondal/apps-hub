@@ -48,10 +48,17 @@ class ShieldLinkTest {
   }
 
   @Test fun rowsOnlyWhileShieldsIsOn() {
-    assertTrue(ShieldLink.shieldRows(null).isEmpty())
-    assertTrue(ShieldLink.shieldRows(off).isEmpty())
-    assertArrayEquals(arrayOf<Any?>(1, 1, 3L), ShieldLink.shieldRows(onUntrusted).single())
-    assertArrayEquals(arrayOf<Any?>(1, 0, 2L), ShieldLink.shieldRows(onTrusted).single())
+    assertTrue(ShieldLink.shieldRows(null, networkWatched = true).isEmpty())
+    assertTrue(ShieldLink.shieldRows(off, networkWatched = true).isEmpty())
+    assertArrayEquals(arrayOf<Any?>(1, 1, 3L), ShieldLink.shieldRows(onUntrusted, networkWatched = true).single())
+    assertArrayEquals(arrayOf<Any?>(1, 0, 2L), ShieldLink.shieldRows(onTrusted, networkWatched = true).single())
+  }
+
+  @Test fun withoutALiveNetworkWatchASavedTrustedRowIsServedAsUntrusted() {
+    assertArrayEquals(arrayOf<Any?>(1, 1, 2L), ShieldLink.shieldRows(onTrusted, networkWatched = false).single())
+    assertArrayEquals(arrayOf<Any?>(1, 1, 3L), ShieldLink.shieldRows(onUntrusted, networkWatched = false).single())
+    assertTrue(ShieldLink.shieldRows(off, networkWatched = false).isEmpty())
+    assertTrue(ShieldLink.shieldRows(null, networkWatched = false).isEmpty())
   }
 
   @Test fun theHealthRowSaysNoAccessibilityNoListenerNoAi() {

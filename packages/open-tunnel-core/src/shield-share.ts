@@ -1,7 +1,7 @@
 // Not exported from index.ts: the app bundle never needs it, and Metro then never resolves app-link-contract.
 import { HEALTH_AUTHORITIES, appHealthShare, defineShare } from '@apps-hub/app-link-contract';
 
-/** One row, only while Shields is on; untrusted_now is what TunnelWall last saw, never which network it is. */
+/** One row, only while Shields is on; untrusted_now is what TunnelWall last saw (1 when it is not watching the network), never which network it is. */
 export interface ShieldRow {
   on: number;
   untrusted_now: number;

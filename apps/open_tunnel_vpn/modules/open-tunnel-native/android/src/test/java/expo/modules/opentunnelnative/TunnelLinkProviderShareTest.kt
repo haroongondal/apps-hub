@@ -41,7 +41,7 @@ class TunnelLinkProviderShareTest {
   }
 
   @Test fun everyRowHasExactlyTheShareColumnsAndAtMostTheCap() {
-    val shield = ShieldLink.shieldRows(ShieldState(on = true, untrusted = true, sinceMs = 5L))
+    val shield = ShieldLink.shieldRows(ShieldState(on = true, untrusted = true, sinceMs = 5L), networkWatched = true)
     assertEquals(ShieldLink.SHIELD_LIMIT, shield.size)
     assertTrue(shield.all { it.size == ShieldLink.SHIELD_COLUMNS.size })
     val health = ShieldLink.healthRows(7L)

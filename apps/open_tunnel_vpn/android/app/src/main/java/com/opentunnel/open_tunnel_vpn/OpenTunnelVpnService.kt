@@ -17,6 +17,7 @@ import com.opentunnel.open_tunnel_vpn.firewall.FirewallService
 import com.opentunnel.open_tunnel_vpn.engines.EngineAdapter
 import com.opentunnel.open_tunnel_vpn.engines.EngineConfig
 import com.opentunnel.open_tunnel_vpn.engines.EngineUnavailableException
+import com.opentunnel.open_tunnel_vpn.engines.OpenVpnEngine
 import com.opentunnel.open_tunnel_vpn.engines.TunnelEngine
 import expo.modules.opentunnelnative.KillSwitch
 import expo.modules.opentunnelnative.KillSwitchEvent
@@ -100,6 +101,8 @@ class OpenTunnelVpnService : VpnService() {
   private var killSwitchEnabled = false
   private var armed = false
   private var blockFd: ParcelFileDescriptor? = null
+  // Set when an engine starts while the block is held: its establish() may have replaced the block interface.
+  private var engineStartedSinceBlock = false
   private val killSwitchPrefs by lazy { getSharedPreferences(KILL_SWITCH_PREFS, MODE_PRIVATE) }
   private val statusListener = object : TunnelEventBus.Listener {
     override fun onStatus(state: String, message: String?, code: String?) {
@@ -140,6 +143,12 @@ class OpenTunnelVpnService : VpnService() {
       ServiceContracts.ACTION_STOP -> stopTunnel(startId)
       // The engine already ended on its own and reported the final state.
       ServiceContracts.ACTION_RELEASE -> {
+        // Only OpenVpnEngine sends RELEASE (sessions start at 1); any other running engine is never the sender.
+        val current = engine?.let { (it as? OpenVpnEngine)?.session ?: 0L }
+        if (ServiceContracts.isStaleRelease(current, intent?.getLongExtra(ServiceContracts.EXTRA_ENGINE, 0L) ?: 0L)) {
+          Log.i(TAG, "ignored a release from a replaced engine")
+          return START_NOT_STICKY
+        }
         engine?.let { runCatching { it.stop() } }
         engine = null
         TrafficTicker.stop()
@@ -197,6 +206,7 @@ class OpenTunnelVpnService : VpnService() {
   }
 
   private fun startEngine(config: EngineConfig) {
+    if (blockFd != null) engineStartedSinceBlock = true
     try {
       val selected = EngineAdapter.engineFor(config.protocol, this)
       var hostFd: ParcelFileDescriptor? = null
@@ -463,7 +473,9 @@ class OpenTunnelVpnService : VpnService() {
 
   /** An interface that routes all traffic and is never read, so nothing leaves; the app itself stays outside to reach VPN Gate. */
   private fun holdBlock(): Boolean {
-    if (blockFd != null) return true
+    if (KillSwitch.reusesBlock(blockFd != null, engineStartedSinceBlock)) return true
+    // The new block is established before the old one closes, so a still-live old block leaves no gap.
+    val stale = blockFd
     blockFd = runCatching {
       Builder()
         .setSession("TunnelWall")
@@ -474,7 +486,9 @@ class OpenTunnelVpnService : VpnService() {
         .addDisallowedApplication(packageName)
         .establish()
     }.onFailure { Log.w(TAG, "could not block traffic: ${it.javaClass.simpleName}") }.getOrNull()
-    if (blockFd != null) publishBlocking(true)
+    engineStartedSinceBlock = false
+    stale?.let { runCatching { it.close() } }
+    if (blockFd != null) publishBlocking(true) else if (stale != null) publishBlocking(false)
     return blockFd != null
   }
 

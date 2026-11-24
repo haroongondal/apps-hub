@@ -47,4 +47,12 @@ class KillSwitchTest {
     )
     assertTrue(TunnelStatus.ALL.none { KillSwitch.holdsBlock(false, it) })
   }
+
+  @Test
+  fun aBlockHeldBeforeAnEngineStartedIsEstablishedAgain() {
+    assertTrue(KillSwitch.reusesBlock(held = true, engineStartedSince = false))
+    assertFalse(KillSwitch.reusesBlock(held = true, engineStartedSince = true))
+    assertFalse(KillSwitch.reusesBlock(held = false, engineStartedSince = false))
+    assertFalse(KillSwitch.reusesBlock(held = false, engineStartedSince = true))
+  }
 }

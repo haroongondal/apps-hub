@@ -15,4 +15,7 @@ object KillSwitch {
   // ics-openvpn keeps its interface while reasserting (tun reopen is NOACTION or OPEN_BEFORE_CLOSE); a block would replace it.
   fun holdsBlock(armed: Boolean, status: String): Boolean =
     armed && status != TunnelStatus.CONNECTED && status != TunnelStatus.REASSERTING
+
+  // Android resets an app's interface when the same app establishes another, so an engine started after the block may have replaced it.
+  fun reusesBlock(held: Boolean, engineStartedSince: Boolean): Boolean = held && !engineStartedSince
 }
