@@ -22,8 +22,8 @@ import java.nio.ByteBuffer
 // The one place a "Make a video" Composition is made: the preview plays it and the export writes it.
 object ComposeBuilder {
   fun composition(plan: ComposePlan, preview: Boolean = false): Composition {
-    val picture = effects(plan, preview).videoEffects
     val items = composeItems(plan).map { spec ->
+      val picture = pictureFor(spec.still, plan, preview)
       if (spec.still) still(spec, stillMedia(spec), plan.fps, picture)
       else item(spec, media(spec.uri, spec.startUs, spec.endUs), Effects(clipGain(spec), picture))
     }
@@ -70,6 +70,11 @@ object ComposeBuilder {
   // the preview plays at the clips' own rates, the export still caps it.
   fun effects(plan: ComposePlan, preview: Boolean): Effects =
     if (preview) Effects(emptyList(), listOf(fitTo(plan.width, plan.height))) else scaleTo(plan.width, plan.height, plan.fps)
+
+  // A photo gets only the fit: its frame rate is already set on the item, and the frame-drop shader failed on photos
+  // on the phone (GL error 0x506, 2026-11-25), so the export failed on any reel.
+  fun pictureFor(still: Boolean, plan: ComposePlan, preview: Boolean): List<Effect> =
+    if (still) listOf(fitTo(plan.width, plan.height)) else effects(plan, preview).videoEffects
 
   fun scaleTo(width: Int, height: Int, fps: Int) = Effects(
     emptyList(),
