@@ -173,4 +173,12 @@ class ShareIntakeTest {
     assertFalse(insidePrivateDirs("/data/user/0/com.other/files/../../com.haroon.designeditorx/a", dirs))
     assertFalse(insidePrivateDirs("/data/user/0/com.haroon.designeditor/../com.other/files/a", dirs))
   }
+
+  @Test
+  fun aShareIsRememberedOnlyWhenOneCopyWorked() {
+    assertFalse(shouldRecord(emptyList()))
+    assertFalse(shouldRecord(listOf("no_space", "too_big", "unreadable")))
+    assertTrue(shouldRecord(listOf("no_space", null, "too_big")))
+    assertTrue(shouldRecord(listOf(null)))
+  }
 }

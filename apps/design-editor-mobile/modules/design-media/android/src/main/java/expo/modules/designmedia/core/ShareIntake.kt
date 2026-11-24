@@ -84,6 +84,10 @@ fun expiredBatches(names: List<String>, now: Long, keepMs: Long = SHARE_KEEP_MS)
 // (time, then one address per line); the same list within a day is that rebuild, not a new share.
 fun shareRecord(uris: List<String>, now: Long): String = (listOf(now.toString()) + uris).joinToString("\n")
 
+// Only a share with at least one good copy is remembered: after "not enough space" the owner frees room and shares again.
+// problems holds each copy's problem word, null when the copy worked.
+fun shouldRecord(problems: List<String?>): Boolean = problems.any { it == null }
+
 fun alreadyTaken(record: String?, uris: List<String>, now: Long, keepMs: Long = SHARE_REPEAT_MS): Boolean {
   val lines = record?.lines().orEmpty()
   val at = lines.firstOrNull()?.toLongOrNull() ?: return false

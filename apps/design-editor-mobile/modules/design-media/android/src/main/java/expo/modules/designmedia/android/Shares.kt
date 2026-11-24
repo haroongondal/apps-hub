@@ -17,6 +17,7 @@ import expo.modules.designmedia.core.insidePrivateDirs
 import expo.modules.designmedia.core.isOwnAuthority
 import expo.modules.designmedia.core.problemOf
 import expo.modules.designmedia.core.shareRecord
+import expo.modules.designmedia.core.shouldRecord
 import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
@@ -51,8 +52,9 @@ object Shares {
     val root = File(context.filesDir, "shared")
     expiredBatches(root.list()?.toList().orEmpty(), System.currentTimeMillis()).forEach { File(root, it).deleteRecursively() }
     val batch = File(root, System.currentTimeMillis().toString()).apply { mkdirs() }
-    accepted.keep.forEachIndexed { n, uri -> items += copyOne(context, Uri.parse(uri), File(batch, "$n.part"), intent.type) }
-    runCatching { last.writeText(shareRecord(listed, now)) }
+    val copies = accepted.keep.mapIndexed { n, uri -> copyOne(context, Uri.parse(uri), File(batch, "$n.part"), intent.type) }
+    items += copies
+    if (shouldRecord(copies.map { it["problem"] as String? })) runCatching { last.writeText(shareRecord(listed, now)) }
   }
 
   @Synchronized
