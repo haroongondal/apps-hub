@@ -1,3 +1,4 @@
+import { request as httpsRequest } from 'node:https';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -60,12 +61,23 @@ async function fetchManifest(): Promise<StoreManifest> {
 }
 
 async function upload(key: string, body: Buffer | string, contentType: string): Promise<void> {
-  const res = await fetch(`${API}/admin/${key}`, {
-    method: 'PUT',
-    headers: { ...auth, 'content-type': contentType },
-    body: typeof body === 'string' ? body : new Uint8Array(body),
+  // node:https has no headers timeout (fetch's undici gives up after 5 minutes, too short on a slow uplink).
+  const data = typeof body === 'string' ? Buffer.from(body) : body;
+  const { status, text } = await new Promise<{ status: number; text: string }>((resolveReq, reject) => {
+    const req = httpsRequest(
+      `${API}/admin/${key}`,
+      { method: 'PUT', headers: { ...auth, 'content-type': contentType, 'content-length': data.length } },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => resolveReq({ status: res.statusCode ?? 0, text: Buffer.concat(chunks).toString() }));
+      },
+    );
+    req.setTimeout(0);
+    req.on('error', reject);
+    req.end(data);
   });
-  if (!res.ok) throw new Error(`PUT ${key}: ${res.status} ${await res.text()}`);
+  if (status < 200 || status > 299) throw new Error(`PUT ${key}: ${status} ${text}`);
 }
 
 let manifest = await fetchManifest();
@@ -82,7 +94,7 @@ if (values.rollback) {
     return releaseAndroid({
       root,
       id,
-      manifest,
+      fetchManifest,
       versionCode: plan.newVersionCode,
       changelog: values.changelog ? changelog : withBranchTag(plan.changelog),
       commit: plan.toCommit,
@@ -96,7 +108,7 @@ if (values.rollback) {
 
 const commit = readHead(ROOT);
 for (const id of ids) {
-  manifest = await releaseAndroid({ root: ROOT, id, manifest, versionCode: nextVersionCode(manifest, id), changelog, commit, upload });
+  manifest = await releaseAndroid({ root: ROOT, id, fetchManifest, versionCode: nextVersionCode(manifest, id), changelog, commit, upload });
   // Publish after each app so a later failure never strands an uploaded build.
   await upload(MANIFEST_PATH, JSON.stringify(manifest, null, 2), 'application/json');
   console.log(`✔ ${id} ${manifest.apps.find((a) => a.id === id)?.android?.versionCode} published`);

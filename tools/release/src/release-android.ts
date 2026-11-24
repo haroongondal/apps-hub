@@ -36,7 +36,8 @@ export interface ReleaseAndroidOptions {
   /** Checkout to build in: the repo root for a normal release, a temporary worktree for a rollback. */
   root: string;
   id: string;
-  manifest: StoreManifest;
+  /** The live manifest: an upload can take long enough for another release to publish, so the entry is merged onto a fresh copy fetched after it. */
+  fetchManifest: () => Promise<StoreManifest>;
   versionCode: number;
   changelog: string;
   /** Full sha of the commit checked out at `root`. */
@@ -75,8 +76,15 @@ export async function releaseAndroid(o: ReleaseAndroidOptions): Promise<StoreMan
   const bytes = readFileSync(apk);
   const apkPath = `apps/${id}/android/${versionCode}.apk`;
   const android = androidEntry({ info, versionName, apkPath, sha256: await sha256File(apk), sizeBytes: bytes.length, commit: o.commit });
-  const next = upsertAndroidRelease(o.manifest, { id, name: app.name, changelog: o.changelog }, android);
   console.log(`▶ ${id}: uploading ${apkPath} (${(bytes.length / 1e6).toFixed(1)} MB)`);
-  await o.upload(apkPath, bytes, 'application/vnd.android.package-archive');
-  return next;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await o.upload(apkPath, bytes, 'application/vnd.android.package-archive');
+      break;
+    } catch (e) {
+      if (attempt === 5) throw e;
+      console.log(`  upload attempt ${attempt} failed (${(e as Error).message}), retrying`);
+    }
+  }
+  return upsertAndroidRelease(await o.fetchManifest(), { id, name: app.name, changelog: o.changelog }, android);
 }
