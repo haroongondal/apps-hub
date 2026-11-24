@@ -24,8 +24,8 @@ class ComposeTest {
     assertEquals(
       ComposePlan(
         listOf(
-          ComposeClip("content://media/a", "a.mp4", 0.0, 10.0, true, 1.5),
-          ComposeClip("content://media/b", "b.mp4", 0.0, 4.0, false, 1.0),
+          ComposeClip("content://media/a", "a.mp4", 0.0, 10.0, true, 1.5, fps = 30.0),
+          ComposeClip("content://media/b", "b.mp4", 0.0, 4.0, false, 1.0, fps = 30.0),
         ),
         1920, 1080, 30, 6_220_800, 11_222_400L, "mp4",
         listOf(ComposeMusic("content://media/s", "s.m4a", 0.0, 11.0, 3.0, 0.5)),
@@ -84,11 +84,32 @@ class ComposeTest {
   // A photo already has its frame rate from setFrameRate, so only video items get the cap.
   @Test
   fun photosAreFittedButNeverFrameDroppedInTheExport() {
-    val photo = ComposeBuilder.pictureFor(still = true, plan, preview = false)
+    val photo = ComposeBuilder.pictureFor(still = true, capFrames = true, plan, preview = false)
     assertEquals(0, photo.count { it is FrameDropEffect })
     assertEquals(1, photo.size)
-    assertEquals(1, ComposeBuilder.pictureFor(still = false, plan, preview = false).count { it is FrameDropEffect })
-    assertEquals(0, ComposeBuilder.pictureFor(still = false, plan, preview = true).count { it is FrameDropEffect })
+    assertEquals(1, ComposeBuilder.pictureFor(still = false, capFrames = true, plan, preview = false).count { it is FrameDropEffect })
+    assertEquals(0, ComposeBuilder.pictureFor(still = false, capFrames = true, plan, preview = true).count { it is FrameDropEffect })
+  }
+
+  // Found on the phone 2026-11-25: three ordinary video clips failed the same way (GL error 0x506), with or without a song.
+  // A clip no faster than the plan's rate has nothing to drop, so it skips the shader; a faster or unknown-rate clip keeps it.
+  @Test
+  fun onlyClipsFasterThanThePlansRateGetTheFrameDrop() {
+    fun clip(fps: Double) = ComposeClip("content://media/v", "v.mp4", 0.0, 4.0, true, 1.0, fps = fps)
+    val p = plan.copy(fps = 30, clips = listOf(clip(30.0), clip(29.97), clip(24.0), clip(60.0), clip(30.6), clip(0.0)))
+    assertEquals(listOf(false, false, false, true, true, true), composeItems(p).map { it.capFrames })
+    val none = ComposeBuilder.pictureFor(still = false, capFrames = false, p, preview = false)
+    assertEquals(0, none.count { it is FrameDropEffect })
+    assertEquals(1, none.size)
+  }
+
+  @Test
+  fun aClipsOwnRateTravelsInThePlanAndOlderPlansWithoutItStillDecode() {
+    val withRate = plan.copy(clips = listOf(ComposeClip("content://media/v", "v.mp4", 0.0, 4.0, true, 1.0, fps = 29.97)))
+    assertEquals(withRate, decodePlan(encodePlan(withRate)))
+    val unknown = plan.copy(clips = listOf(ComposeClip("content://media/v", "v.mp4", 0.0, 4.0, true, 1.0)))
+    assertFalse(encodePlan(unknown).getValue("clips").toString().contains("fps"))
+    assertEquals(unknown, decodePlan(encodePlan(unknown)))
   }
 
   @Test

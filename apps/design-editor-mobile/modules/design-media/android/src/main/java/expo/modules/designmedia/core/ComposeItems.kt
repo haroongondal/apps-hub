@@ -1,6 +1,13 @@
 package expo.modules.designmedia.core
 
-data class ItemSpec(val uri: String, val startUs: Long, val endUs: Long, val keepAudio: Boolean, val volume: Float = 1f, val still: Boolean = false)
+// capFrames: this video is faster than the plan's rate (or its rate is unknown), so the export must drop frames from it.
+data class ItemSpec(
+  val uri: String, val startUs: Long, val endUs: Long, val keepAudio: Boolean, val volume: Float = 1f, val still: Boolean = false,
+  val capFrames: Boolean = false,
+)
+
+// A half frame per second of slack, so 29.97 and 30 count as the same rate.
+private const val RATE_SLACK = 0.5
 
 // startUs and endUs are times in the audio file; gapBeforeUs is the silence since the previous piece (the first counts from 0).
 data class MusicSpec(val uri: String, val startUs: Long, val endUs: Long, val gapBeforeUs: Long, val volume: Float)
@@ -8,7 +15,7 @@ data class MusicSpec(val uri: String, val startUs: Long, val endUs: Long, val ga
 fun composeItems(plan: ComposePlan): List<ItemSpec> =
   plan.clips.map {
     if (it.still) ItemSpec(it.uri, 0, microseconds(it.outS) - microseconds(it.inS), false, 1f, true)
-    else ItemSpec(it.uri, microseconds(it.inS), microseconds(it.outS), it.hasAudio, it.volume.toFloat())
+    else ItemSpec(it.uri, microseconds(it.inS), microseconds(it.outS), it.hasAudio, it.volume.toFloat(), false, it.fps <= 0.0 || it.fps > plan.fps + RATE_SLACK)
   }
 
 fun musicItems(plan: ComposePlan): List<MusicSpec> {

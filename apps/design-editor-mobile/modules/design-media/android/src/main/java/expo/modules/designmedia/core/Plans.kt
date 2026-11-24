@@ -81,9 +81,11 @@ data class StabilizePlan(val level: String, val search: Int, val quality: Double
   override val tool get() = "stabilize"
 }
 
-// volume, music and still default so a plan queued before them still decodes; a still is a photo shown for outS - inS.
+// volume, music, still and fps default so a plan queued before them still decodes; a still is a photo shown for outS - inS.
+// fps is the video's own frame rate; 0 means unknown, and the frame-rate cap is then kept.
 data class ComposeClip(
   val uri: String, val name: String, val inS: Double, val outS: Double, val hasAudio: Boolean, val volume: Double = 1.0, val still: Boolean = false,
+  val fps: Double = 0.0,
 )
 
 // startS is the place on the video's timeline; inS and outS are times in the audio file, already cut to the video's end.
@@ -298,6 +300,7 @@ fun encodePlan(p: Plan): JsonObject = when (p) {
       buildJsonObject {
         put("uri", c.uri); put("name", c.name); put("inS", c.inS); put("outS", c.outS); put("hasAudio", c.hasAudio); put("volume", c.volume)
         if (c.still) put("still", true)
+        if (c.fps > 0.0) put("fps", c.fps)
       }
     }))
     put("music", JsonArray(p.music.map { m ->
@@ -374,7 +377,7 @@ private fun decodeComposePlan(o: JsonObject) = ComposePlan(
     val c = it.jsonObject
     ComposeClip(
       textOf(c, "uri"), textOf(c, "name"), doubleOf(c, "inS"), doubleOf(c, "outS"), c.getValue("hasAudio").jsonPrimitive.boolean,
-      optDouble(c, "volume") ?: 1.0, present(c, "still")?.jsonPrimitive?.boolean ?: false,
+      optDouble(c, "volume") ?: 1.0, present(c, "still")?.jsonPrimitive?.boolean ?: false, optDouble(c, "fps") ?: 0.0,
     )
   },
   width = intOf(o, "width"), height = intOf(o, "height"), fps = intOf(o, "fps"), videoBps = intOf(o, "videoBps"),

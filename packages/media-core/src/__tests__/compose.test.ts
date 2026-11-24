@@ -23,8 +23,8 @@ test('planCompose: every clip travels in the plan, with the size, rate and plann
     plan: {
       tool: 'compose',
       clips: [
-        { uri: 'content://a', name: 'a', inS: 0, outS: 10, hasAudio: true, volume: 1 },
-        { uri: 'content://b', name: 'b', inS: 0, outS: 4, hasAudio: false, volume: 1 },
+        { uri: 'content://a', name: 'a', inS: 0, outS: 10, hasAudio: true, volume: 1, fps: 30 },
+        { uri: 'content://b', name: 'b', inS: 0, outS: 4, hasAudio: false, volume: 1, fps: 30 },
       ],
       music: [],
       width: 1280, height: 720, fps: 30, videoBps: 2_764_800, plannedBytes: 5_174_400, ext: 'mp4',

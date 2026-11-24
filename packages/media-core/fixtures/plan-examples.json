@@ -205,7 +205,8 @@
      "inS": 0,
      "outS": 10,
      "hasAudio": true,
-     "volume": 1.5
+     "volume": 1.5,
+     "fps": 30
     },
     {
      "uri": "content://media/b",
@@ -213,7 +214,8 @@
      "inS": 0,
      "outS": 4,
      "hasAudio": false,
-     "volume": 1
+     "volume": 1,
+     "fps": 30
     }
    ],
    "music": [
