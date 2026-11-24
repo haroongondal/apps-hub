@@ -48,7 +48,8 @@ export interface ReversePlan { tool: 'reverse'; sound: boolean; quality: number;
 export interface StabilizePlan { tool: 'stabilize'; level: 'minimum' | 'recommended' | 'most'; search: number; quality: number; ext: 'mp4' }
 // "Make a video": every clip travels inside the plan, so the queue, retry and resume need nothing new.
 // still: a photo shown for outS - inS seconds (a reel), sent only when true so older plans stay the same.
-export interface ComposeClip { uri: string; name: string; inS: number; outS: number; hasAudio: boolean; volume: number; still?: true }
+// fps: the video's own frame rate. A clip no faster than the plan's keeps its frames; older plans omit it and keep the cap.
+export interface ComposeClip { uri: string; name: string; inS: number; outS: number; hasAudio: boolean; volume: number; still?: true; fps?: number }
 // startS is the place on the video's timeline; inS and outS are times in the audio file, already cut to the video's end.
 export interface ComposeMusic { uri: string; name: string; inS: number; outS: number; startS: number; volume: number }
 export interface ComposePlan { tool: 'compose'; clips: ComposeClip[]; music: ComposeMusic[]; width: number; height: number; fps: number; videoBps: number; plannedBytes: number; ext: 'mp4' }
