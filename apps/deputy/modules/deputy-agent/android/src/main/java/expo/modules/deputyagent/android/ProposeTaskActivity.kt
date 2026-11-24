@@ -15,6 +15,7 @@ import java.util.UUID
 /** PROPOSE_TASK: opens Deputy's draft screen and waits; the caller hears `handed_over` when the owner saves or starts it, `cancelled` when they close it. */
 class ProposeTaskActivity : Activity() {
   private var id: String? = null
+  private var answered = false
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
@@ -29,12 +30,21 @@ class ProposeTaskActivity : Activity() {
     val open = packageManager.getLaunchIntentForPackage(packageName) ?: return answer(RESULT_CANCELED, "failed", ProposeTask.BAD_EXTRAS)
 
     id = proposalId
-    setResult(RESULT_OK, result("done", ProposeTask.HANDED_OVER))
     setContentView(waitingView())
     ProposalInbox.put(proposal) { kept ->
       runOnUiThread { if (kept) answer(RESULT_OK, "done", ProposeTask.HANDED_OVER) else answer(RESULT_CANCELED, "cancelled", ProposeTask.CANCELLED) }
     }
     startActivity(open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+  }
+
+  // Back reaches here before onDestroy, the last point where the result can still be set.
+  override fun finish() {
+    val mine = id
+    if (!answered && mine != null) {
+      if (ProposalInbox.answerOnLeaving(mine) == ProposeTask.HANDED_OVER) setResult(RESULT_OK, result("done", ProposeTask.HANDED_OVER))
+      else setResult(RESULT_CANCELED, result("cancelled", ProposeTask.CANCELLED))
+    }
+    super.finish()
   }
 
   override fun onDestroy() {
@@ -64,6 +74,7 @@ class ProposeTaskActivity : Activity() {
   private fun result(status: String, code: String) = Intent().putExtra("status", status).putExtra("code", code)
 
   private fun answer(resultCode: Int, status: String, code: String) {
+    answered = true
     setResult(resultCode, result(status, code))
     finish()
   }

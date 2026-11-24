@@ -1600,7 +1600,9 @@ Decisions (my call unless marked):
   result only when the activity finishes, and the brief wants `cancelled` when the
   owner closes the sheet. So `ProposeTaskActivity` stays in the caller's task with a
   small screen and Open Deputy while Deputy shows the sheet in its own task. Back on
-  that screen leaves `handed_over` (the draft is already in Deputy's screen). A
+  that screen leaves `handed_over` only once Deputy's screen has taken the draft;
+  before that it leaves `cancelled` (`ProposalInbox.answerOnLeaving`, set in
+  `finish()`, since Back finishes before `onDestroy`). A
   newer proposal or a share replacing the sheet answers the older caller
   `cancelled`. A recreated activity (process death) answers `cancelled`.
 - **Kept means saved or started.** (my call) Both return `handed_over`; the sheet's

@@ -67,6 +67,10 @@ object ProposalInbox {
     done?.second?.invoke(kept)
   }
 
+  /** What a caller hears when the waiting screen is left with Back: the draft counts as handed over only once the screen has taken it. */
+  @Synchronized
+  fun answerOnLeaving(id: String) = if (pending?.id == id) ProposeTask.CANCELLED else ProposeTask.HANDED_OVER
+
   @Synchronized
   fun forget(id: String) {
     if (waiting?.first == id) waiting = null

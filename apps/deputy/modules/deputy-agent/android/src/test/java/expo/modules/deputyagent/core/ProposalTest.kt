@@ -98,6 +98,18 @@ class ProposalTest {
     }
   }
 
+  @Test fun backOnTheWaitingScreenIsHandedOverOnlyOnceTheDraftWasTaken() {
+    val p = Proposal("c1", "t", "", emptyList(), "Inflow")
+    ProposalInbox.put(p) {}
+    try {
+      assertEquals("still pending, nothing shown", ProposeTask.CANCELLED, ProposalInbox.answerOnLeaving("c1"))
+      assertEquals(p, ProposalInbox.take())
+      assertEquals("the draft is shown", ProposeTask.HANDED_OVER, ProposalInbox.answerOnLeaving("c1"))
+    } finally {
+      ProposalInbox.forget("c1")
+    }
+  }
+
   @Test fun packageNamesAreCheckedByShape() {
     assertTrue(ProposeTask.isPackageName("com.haroon.inflow"))
     for (bad in listOf("inflow", "com..x", "com.x y", "1com.x", "com.x\n", "x".repeat(199) + ".y")) assertFalse(bad, ProposeTask.isPackageName(bad))
