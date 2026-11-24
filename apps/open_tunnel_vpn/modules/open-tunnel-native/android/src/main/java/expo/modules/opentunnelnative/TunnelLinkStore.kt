@@ -16,8 +16,26 @@ private const val CHANGED_ACTION = "com.haroon.autopilot.CHANGED"
 
 /** What the link provider serves: the Shields state and the heartbeat. Only this app writes it; a provider query only reads. */
 object TunnelLinkStore {
-  /** Process-level: true only while the module's network watch is registered, so a fresh or orphaned process serves untrusted. */
-  @Volatile var networkWatched = false
+  @Volatile private var watching = false
+  @Volatile private var reported = false
+
+  /** Process-level: true only while the watch is registered AND a Shields-on publish has followed its start, so a saved row from before is never served as current. */
+  val networkWatched: Boolean get() = watching && reported
+
+  fun watchStarted() {
+    reported = false
+    watching = true
+  }
+
+  fun watchStopped() {
+    watching = false
+    reported = false
+  }
+
+  // App.tsx publishes Shields on only once it has read a network, so that publish is the first live reading.
+  internal fun noteShield(on: Boolean) {
+    if (on) reported = true
+  }
 
   private fun prefs(context: Context): SharedPreferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -44,6 +62,7 @@ object TunnelLinkStore {
         .putLong(KEY_SINCE, step.state.sinceMs)
         .commit(),
     ) { "Shields state not saved" }
+    noteShield(on)
     if (step.ping) {
       val intent = Intent(CHANGED_ACTION).setPackage(SiblingPackages.HALO)
       sendIfTrusted({ AppLinkTarget.trustedReceiver(context, intent) }) { context.sendBroadcast(intent, AppLinkGuard.PERMISSION) }

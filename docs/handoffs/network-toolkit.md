@@ -303,15 +303,18 @@ Branch `eco/tunnelwall`, on top of the C3 commits. Not pushed, not on a phone.
 - The share serves no row while Shields is off; `health` is always served (the Store reads it).
 - Ping only when Halo's pulse (on and untrusted) flips: entering or leaving an untrusted network, and
   turning Shields on or off while on one. `since` restarts on any change of on or untrusted.
-- `untrusted_now` is the last state TunnelWall saw while its network watch is registered in this
-  process (`TunnelLinkStore.networkWatched`, set by `startNetworkWatch`, cleared by
-  `stopNetworkWatch` and the module's `OnDestroy`). Without a live watch (process died and the query
-  started a fresh one, or the module was destroyed) the provider serves `untrusted_now=1` while
-  Shields is on, so a stale trusted row never hides a new network (wave-4 Medium,
-  `ShieldLinkTest.withoutALiveNetworkWatchASavedTrustedRowIsServedAsUntrusted`). Not covered: a
-  process frozen by HyperOS keeps the flag and its last row until it thaws and the callback
-  catches up. A live reading in the provider would need the trusted list and precise location
-  natively, and was not built.
+- `untrusted_now` is the last state TunnelWall saw while its network watch is live in this process
+  (`TunnelLinkStore.networkWatched`: `watchStarted()` by `startNetworkWatch`, then raised by the
+  first Shields-on `publishShield` after that start, which App.tsx sends only once it has read a
+  network; cleared by `stopNetworkWatch` and the module's `OnDestroy`). While the watch is not
+  running, or has started but not yet reported (process died and the query started a fresh one, the
+  app just opened on a new network, or the module was destroyed), the provider serves
+  `untrusted_now=1` while Shields is on, so a stale trusted row never hides a new network (wave-4
+  Medium and its follow-up, `ShieldLinkTest.withoutALiveNetworkWatchASavedTrustedRowIsServedAsUntrusted`,
+  `aRowSavedBeforeTheWatchReportedIsServedAsUntrusted`). Not covered: a FROZEN process (HyperOS)
+  keeps the flag and still serves its last row until it thaws and the callback catches up. A live
+  reading in the provider would need the trusted list and precise location natively, and was not
+  built.
 - The provider and permission are in the module manifest, so a prebuild keeps them; the merged app
   manifest carries them (checked in `build/intermediates/merged_manifest`).
 

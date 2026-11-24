@@ -61,6 +61,23 @@ class ShieldLinkTest {
     assertTrue(ShieldLink.shieldRows(null, networkWatched = false).isEmpty())
   }
 
+  @Test fun aRowSavedBeforeTheWatchReportedIsServedAsUntrusted() {
+    TunnelLinkStore.watchStarted()
+    assertFalse(TunnelLinkStore.networkWatched)
+    assertArrayEquals(arrayOf<Any?>(1, 1, 2L), ShieldLink.shieldRows(onTrusted, TunnelLinkStore.networkWatched).single())
+    TunnelLinkStore.noteShield(on = false)
+    assertFalse(TunnelLinkStore.networkWatched)
+    TunnelLinkStore.noteShield(on = true)
+    assertArrayEquals(arrayOf<Any?>(1, 0, 2L), ShieldLink.shieldRows(onTrusted, TunnelLinkStore.networkWatched).single())
+    TunnelLinkStore.watchStarted()
+    assertFalse(TunnelLinkStore.networkWatched)
+    TunnelLinkStore.noteShield(on = true)
+    TunnelLinkStore.watchStopped()
+    assertFalse(TunnelLinkStore.networkWatched)
+    TunnelLinkStore.noteShield(on = true)
+    assertFalse(TunnelLinkStore.networkWatched)
+  }
+
   @Test fun theHealthRowSaysNoAccessibilityNoListenerNoAi() {
     assertArrayEquals(arrayOf<Any?>("open-tunnel", null, null, "none", 42L), ShieldLink.healthRows(42L).single())
     assertArrayEquals(arrayOf<Any?>("open-tunnel", null, null, "none", null), ShieldLink.healthRows(null).single())
