@@ -120,3 +120,9 @@ test('the four AI hub states say what to do and which app the button opens, in p
   assert.equal(AiLayout.hubNeeded('timeout'), null);
   assert.equal(AiLayout.hubNeeded('constructor'), null);
 });
+
+test('the phone page tells the owner the description goes to Groq or Gemini, whichever AI hub uses for chat', () => {
+  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '../mobile.html'), 'utf8');
+  const line = html.match(/<p class="hint">AI runs through AI hub\.[^<]*<\/p>/)?.[0] ?? '';
+  for (const word of ['Groq', 'Gemini', 'whichever AI hub uses']) assert.ok(line.includes(word), word);
+});
