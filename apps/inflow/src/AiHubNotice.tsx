@@ -33,7 +33,14 @@ export function useHubIssue(): HubIssue | null {
   const [issue, setIssue] = useState<HubIssue | null>(null);
   useEffect(() => {
     let live = true;
-    aiHub.available().then((a) => live && setIssue(issueOfAvailability(a))).catch(() => undefined);
+    aiHub
+      .available()
+      .then((a) => {
+        // The kind alone cannot tell the three "not allowed" causes apart; the message can. Fixed texts only, never a key or request.
+        if (!a.ok) console.warn(`AI hub check failed: ${a.kind}: ${a.message}`);
+        if (live) setIssue(issueOfAvailability(a));
+      })
+      .catch(() => undefined);
     return () => {
       live = false;
     };
