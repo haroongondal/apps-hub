@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { Button, Group, Header, Notice, Screen, Segmented, Text, radius, space, useTheme } from '@apps-hub/ui';
 import InflowCore from 'inflow-core';
+import { AiErrorNotice } from './AiHubNotice.tsx';
 import { Chips } from './Chips.tsx';
 import { PDF_FAILED, PERIOD_OPTIONS, PICK_SOMETHING, PREVIEW_FAILED, SECTION_OPTIONS, SEND_FAILED, SENDS_NOTICE, AI_NOTICE, charsLabel, hashToSend, includeFrom, pdfArgs, pdfMessage, periodRange, previewStep, summaryStep, type Choice, type Period, type Section, type Step } from './doctor.ts';
 import { beginPermissionPrompt, endPermissionPrompt } from './lockGrace.ts';
@@ -95,8 +96,8 @@ export function DoctorScreen({ onBack }: { onBack: () => void }) {
           </ScrollView>
         </View>
         <Notice>{SENDS_NOTICE}</Notice>
-        {sending && <Notice tone="accent">Sending to Groq. This can take a moment.</Notice>}
-        <Button label={sending ? 'Sending' : 'Send to Groq'} busy={sending} disabled={sending} onPress={() => void send()} block />
+        {sending && <Notice tone="accent">Sending. This can take a moment.</Notice>}
+        <Button label={sending ? 'Sending' : 'Send'} busy={sending} disabled={sending} onPress={() => void send()} block />
         <Button label="Back" variant="ghost" disabled={sending} onPress={toChoose} block />
         {foot}
       </Screen>
@@ -125,7 +126,7 @@ export function DoctorScreen({ onBack }: { onBack: () => void }) {
     return (
       <Screen scroll>
         {head}
-        <Notice tone="danger">{step.message}</Notice>
+        <AiErrorNotice text={step.message} />
         {again !== null && <Button label="Review again" busy={busy} onPress={() => void review(again)} block />}
         <Button label="Back" variant="ghost" onPress={toChoose} block />
         {foot}

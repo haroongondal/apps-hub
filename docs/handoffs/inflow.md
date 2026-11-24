@@ -282,7 +282,7 @@ Who may read what:
 Every query runs `requireSibling()` first (signature permission plus same key, else SecurityException). Any other caller, or a switch that is off, gets an empty cursor with the right columns. All paths are read-only (insert and delete throw, update answers 0).
 
 What the shares hold:
-- `ask_items`: SMS and email only, Ask AI's `NEVER_SEND_FILTER` (no one-time codes, nothing kept from AI, no app records), never Strongroom or Inflow items, never the Autopilot picked-chat exception, only items saved at or after the first AI key, text cut at 4000, app and sender at 80. `ask_ids` lists the ids `ask_items` would serve, so Nexus can delete what no longer qualifies. Nexus sends what it reads to Gemini and Groq (its own keys or AI hub); the switch says so.
+- `ask_items`: SMS and email only, Ask AI's `NEVER_SEND_FILTER` (no one-time codes, nothing kept from AI, no app records), never Strongroom or Inflow items, never the Autopilot picked-chat exception, only items saved at or after AI was first turned on in Inflow, text cut at 4000, app and sender at 80. `ask_ids` lists the ids `ask_items` would serve, so Nexus can delete what no longer qualifies. Nexus sends what it reads to Gemini and Groq (its own keys or AI hub); the switch says so.
 - `debits`: money out from the last 60 days (newest 500 by id; a per-pass cap), own transfers left out, `amount_minor` in the transaction's own minor unit in any currency, merchant the shown name cut at 80, `account` a label with at most the last four digits of the whole string. Debits stay on the phone in Nexus (never indexed into Ask).
 - `briefing`: lines built in code, never raw message text or other people's titles. `kind` is bill, event, spent, medicine, steps, home, cards, tasks or nexus. `personal` is 1 for spent, medicine, steps and home (forced at serve time). Medicine and steps rows are filtered at serve time while the health switch is off.
 
@@ -297,7 +297,7 @@ What the shares hold:
 | Nexus | Let Nexus read my messages | `nexusAsk` | `nexusAsk()`, `setNexusAsk` |
 | Nexus | Let Nexus match my receipts | `nexusDebits` | `nexusDebits()`, `setNexusDebits` |
 
-Subtitles (SettingsScreen.tsx): the Halo switch says Halo can read these lines and nothing leaves the phone; the health switch says it adds the next medicine time and today's steps to the morning summary and to the briefing Halo shows; the summary switch names who is home and the other apps' lines; the messages switch says Nexus keeps a copy and sends the text to Gemini and Groq, through AI hub or with the owner's own keys, that one-time codes are left out, and that only messages from after the first AI key in Inflow are read. The summary default is off (R12).
+Subtitles (SettingsScreen.tsx): the Halo switch says Halo can read these lines and nothing leaves the phone; the health switch says it adds the next medicine time and today's steps to the morning summary and to the briefing Halo shows; the summary switch names who is home and the other apps' lines; the messages switch says Nexus keeps a copy and sends the text to Gemini and Groq, through AI hub or with the owner's own keys, that one-time codes are left out, and that only messages from after AI was first turned on in Inflow are read. The summary default is off (R12).
 
 ### Summary lock-screen rule
 
@@ -382,7 +382,7 @@ Next step: merge `eco/inflow` to main (owner's go; release by local command only
 16. After install check `dumpsys notification` for a live InflowListener and logcat for 'Reject service' (HyperOS Autostart), as for any Inflow build.
 17. HyperOS and `VISIBILITY_SECRET`: with 'Morning and evening summary' on, a secure lock and the system setting 'show sensitive notification content' on, post a summary with a personal line (spent, steps or who is home): nothing of it may appear on the lock screen (not even the app name or a count). If HyperOS shows it, record it and switch the summary to `setLocalOnly(true)` plus no post while locked. With a Wear OS watch paired, note whether the lines reach the watch.
 
-## E2: AI through AI hub (eco/inflow, 2026-11-24)
+## E2: AI through AI hub (eco/inflow, 2026-11-24) - SUPERSEDED by 'Hub only' below (own-key fallback, key settings and the own-key health paths are gone)
 
 ### What was built
 - Inflow's non-health AI calls go to AI hub (`com.haroon.aihub`) first, through the Kotlin `AiHubClient` of `packages/ai-hub-client`, and fall back to the owner's own key. Paths on the hub: the 30-minute batch and the Autopilot fast run (summaries, importance, to-dos, money, Autopilot suggestion drafting all come from that one batch prompt), spending categories (`TxnCategorize`), weekly and monthly reports (`ReportRun`), and Ask AI (plan and answer) when "health in Ask" is off.
@@ -421,3 +421,37 @@ Install Inflow and AI hub from Store releases (debug builds are signed with the 
 2. Hub on, Inflow not allowed: install AI hub with a key, leave Inflow off in its Apps list. Send now: Inflow appears in the hub's Apps list as asking; Inflow's items are still summarised through the own key; a second Send now within 10 minutes makes no new hub request (the hub's request count for Inflow does not rise); after 10 minutes, or after force-stopping Inflow, it asks again.
 3. Hub on, Inflow allowed: turn Inflow on in AI hub. Send now, Make a report now, and Ask AI with health in Ask off: the hub's usage for Inflow rises, the own key's provider dashboard shows no new requests, `ai_source` becomes hub, Inflow's spend today rises at gpt-oss-120b's prices (or not at all if the hub served a model Inflow does not know). Then remove the hub's Groq and Gemini keys so it answers no-key: the next Send now goes once to the own key (its dashboard shows it) and `ai_source` becomes own.
 4. Doctor summary still on the own Groq key: with the hub on and Inflow allowed, Vitals > Doctor summary > Make: the Groq dashboard of the owner's own key shows the request; the hub's usage for Inflow does not rise. Turn "health in Ask" on and ask "How did I sleep last week?": the own key's dashboard shows two requests, the hub none.
+
+## Hub only (hub-only/inflow, 2026-11-24)
+
+Plain words: Inflow no longer has an AI of its own. Every AI call goes to AI hub, and Settings has no key screens. Owner decision, 2026-11-24 (docs/ai-hub/PLAN.md P3).
+
+### What was built
+- Deleted: `OpenAiCompatProvider`, `HubFirst`, `HubPause`, `AiHttp`, `AiModels.validate`/`KNOWN` (own models), the own-key paths for Ask with health and the Doctor summary, the key test, and the TS functions `knownModels`, `setAiModel`, `addAiKey`, `removeAiKey`, `testAiKey` with `KeyPanel`/`ModelPanel`/`removeAiKeyConfirm`. R44's 'Inflow AI needs its own key' no longer holds.
+- `core/HubAi.kt`: `TextAi`, `HubAi(hub, foreground, answered, ids)` (one chat request, no fallback), `HubChat`, `HubCopy` (the plain words). Hub error kinds map to `AiError.Kind` HUB_MISSING / NOT_ALLOWED / VERSION / NO_KEY (all `waits`: queue and a report's tries are kept), BAD_REQUEST (too-large, invalid), SERVER (busy, provider-error, cancelled, unreadable), TIMEOUT. No hub error text reaches a screen.
+- `core/AiSwitch.kt`: 'Use AI' is the opt-in. `aiOn` meta; a phone with a key saved stays on, one without stays off (decided once, written down before any key can be deleted); the first turn-on sets `aiSince`.
+- Key cleanup rule (coordinator, 2026-11-24): saved keys (`ai_keys`) are deleted ONLY after the first successful hub chat (a real, readable reply) on the phone. Never on `available()` alone, never after a hub error. `aiHubWorked` meta is the marker; `AiSwitch.cleanup()` runs after the first success and at every start while the marker exists. `AiSwitchTest` covers: nothing but `available()` -> keys stay; each failed call kind -> keys stay; unreadable reply -> keys stay; first success -> deleted and AI stays on; a delete that failed is retried at the next start and never loses the reply. Proven to fail under the old rule by removing the marker check (2 tests failed), then restored. The keys stay in Inflow if the hub has no key (nothing moves them into the hub: it never imports a key).
+- `core/AskRun.kt`: the plan and answer calls of Ask AI, moved out of `AiRunner` so a test can drive them. `DoctorRunner(payload, ai, capReached, spend)`.
+- `AiPricing`: the hub reply names the model; known models are priced, an unknown one at the dearest known model (daily limit rule kept).
+- Health through the hub (PRIVACY-RELEVANT, OWNER TO CONFIRM): the Doctor summary (owner's tap, after the preview and hash check) and Ask AI with 'Include health in Ask AI' on now go to AI hub, so the text goes to Groq through the hub (Gemini if the hub falls back; the hub keeps only counts). Both stay off by default; consent copy: 'Your health text goes to Groq through AI hub; AI hub keeps only counts, never the text.' (`HEALTH_PRIVACY` in `doctor.ts`, shown in both). `AskRunTest` proves health text is in a request only when the switch is on (and then only in the answer request, not the plan); `HubRoutingTest` pins that the batch, categoriser and reports never name health code and that the Doctor summary runs only from its two module functions. The old pins that forbade the hub for health are gone.
+- Screens: Settings > AI has 'Use AI' (Off/On), the daily limit, status and Send now. `AiHubNotice.tsx`: 'AI needs AI hub.' + 'Install AI hub' (opens the Store), 'Allow Inflow in AI hub.' and 'Add a key in AI hub.' + 'Open AI hub', 'AI needs a newer AI hub.' + 'Update AI hub' (Store). Shown in Settings, Ask AI, Doctor summary errors, Reports and Send now. `src/aiHub.ts` holds the words; `modules/inflow-core/fixtures/ai-hub-copy.json` is read by `HubCopyTest.kt` and `aiHub.test.ts`. `useHubIssue` calls `aiHub.available()` so Inflow is listed in the hub's Apps.
+- Opening the Store: no helper exists and the Store has no page link for one app, so `HubLaunch.openStore` opens its launcher activity (`getLaunchIntentForPackage`) after checking the resolved package is exactly `com.haroon.store` and signed like Inflow (the Store is not in `SiblingPackages`, so `AppLinkTarget.decide` would refuse it; `HubLaunch.storeTrusted` has the same two checks, `HubLaunchTest`). `openAiHub` uses `AppLinkTarget.trustedActivity(requireLinkPermission = false)`. `<queries><package com.haroon.store/>` added. No link scheme invented.
+- `ai_source` health row: `hub` while AI is on, `none` while off (`AppHealth.row(listener, aiOn, lastSeen)`, meta `aiSource` no longer written).
+- Manifest comment: INTERNET is for Gmail only now.
+
+### Behaviour changes to know
+- An offline phone is a hub `provider-error` (the hub cannot tell it apart), so a report try is counted (3 tries then failed, 'Try again' restarts) where before offline waited without a try. Telling them apart needs ACCESS_NETWORK_STATE (not added) or a hub error kind.
+- The hub's chat job can fall back to Gemini when Groq has no working key; the mandated consent copy says Groq. Owner to decide whether to reword or to get a Groq-only chat from the hub.
+- 'Install AI hub' opens the Store's own list, not the AI hub page.
+
+### Gates (2026-11-24)
+- `:inflow-core:testDebugUnitTest :app:assembleDebug`: BUILD SUCCESSFUL, 844 tests, 0 failures (baseline 853: 20 own-provider tests and the 10 HubFirst tests removed, hub-only tests added).
+- `pnpm --filter inflow test` 149 pass (baseline 143), typecheck exit 0; app-link-contract 139; autopilot-contract 17; ai-hub-client 10. `npx expo export --platform android` exit 0.
+
+### Phone checks NOT run (Store release builds only)
+1. Install Inflow and AI hub from the Store. Hub missing: uninstall AI hub; Settings > AI shows 'AI needs AI hub.' and Install AI hub opens the Store; Ask AI and Send now show the same words.
+2. Hub installed, Inflow off in its Apps list: Settings shows 'Allow Inflow in AI hub.' and Inflow is listed as asking; Open AI hub opens it. Allow it.
+3. Hub with no key: Send now shows 'Add a key in AI hub.'; add a Groq key in the hub. An old own key saved in Inflow is still there until now (check by an upgrade from the hub-first build).
+4. Turn 'Use AI' on, Send now, Make a report now, Ask AI: the hub's usage for Inflow rises; after the first real reply the old own key is gone (it cannot be seen any more; check that no own-key request appears on the provider dashboard).
+5. Doctor summary with the hub: preview, Send; the hub's usage rises (counts only). Ask AI with health on: one plan request and one answer request through the hub.
+6. Restart the app after step 4 with an old key restored by an upgrade test: it is removed at start.

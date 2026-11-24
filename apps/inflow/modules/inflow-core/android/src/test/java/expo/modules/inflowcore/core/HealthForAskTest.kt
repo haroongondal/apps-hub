@@ -11,7 +11,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-// R10: the Ask answer request, built the way AiRunner.ask builds it, with health data present in every store.
+// R10: the Ask answer request, built the way AskRun builds it, with health data present in every store.
 class HealthForAskTest {
   private val zone = ZoneId.of("Asia/Karachi")
   private fun at(s: String) = LocalDateTime.parse(s).atZone(zone).toInstant().toEpochMilli()
@@ -34,16 +34,13 @@ class HealthForAskTest {
   private fun requestBody(settingOn: Boolean): String {
     val h = HealthForAsk.context(settingOn, health, meds, from, to, now, zone)
     val bodies = mutableListOf<String>()
-    val ok = HttpReply(200, """{"choices":[{"message":{"content":"ok"}}]}""")
-    OpenAiCompatProvider("https://api.example.com/v1/", "m", listOf("k"), null, { _, _, b -> bodies += b; ok })
-      .complete(Ask.answerSystem(h != null), Ask.answerUser("How did I sleep?", items, emptyList(), now, zone, h))
+    FakeHub.ai { bodies += it; FakeHub.reply("ok") }.complete(Ask.answerSystem(h != null), Ask.answerUser("How did I sleep?", items, emptyList(), now, zone, h))
     return bodies.single()
   }
 
   private val today = run {
     val bodies = mutableListOf<String>()
-    OpenAiCompatProvider("https://api.example.com/v1/", "m", listOf("k"), null, { _, _, b -> bodies += b; HttpReply(200, """{"choices":[{"message":{"content":"ok"}}]}""") })
-      .complete(Ask.answerSystem(), Ask.answerUser("How did I sleep?", items, emptyList(), now, zone))
+    FakeHub.ai { bodies += it; FakeHub.reply("ok") }.complete(Ask.answerSystem(), Ask.answerUser("How did I sleep?", items, emptyList(), now, zone))
     bodies.single()
   }
 

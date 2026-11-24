@@ -306,10 +306,10 @@ Current apps:
   emails (IMAP with an app password) into an encrypted on-phone store (SQLCipher),
   reads bank SMS and emails into a spending ledger, and shows it behind a fingerprint
   lock, with AI summaries, importance, to-dos, money categories and an Ask AI tab
-  through the owner's OpenAI-compatible API key (https only; never sent: OTPs,
-  blocked apps or senders, apps not recorded, items saved before the first key; Ask AI also sends ledger transactions of any age, with chat titles and a you/not-you flag per item; spending categories and the weekly/monthly reports send the fields of every transaction, including ones from bank pushes and from apps or senders kept from the AI, but never message text). POST_NOTIFICATIONS covers the reports (8 weekly, 4 monthly kept), medicine reminders and the daily summary.
+  through AI hub only (no key of its own; never sent: OTPs,
+  blocked apps or senders, apps not recorded, items saved before the owner first turned AI on; Ask AI also sends ledger transactions of any age, with chat titles and a you/not-you flag per item; spending categories and the weekly/monthly reports send the fields of every transaction, including ones from bank pushes and from apps or senders kept from the AI, but never message text). POST_NOTIFICATIONS covers the reports (8 weekly, 4 monthly kept), medicine reminders and the daily summary.
   Android only, private Store only (`com.haroon.inflow`; READ_SMS, RECEIVE_SMS,
-  INTERNET for `imap.gmail.com` and the owner's chosen AI address). Kotlin owns
+  INTERNET for `imap.gmail.com` only; AI goes through AI hub on the phone). Kotlin owns
   capture, storage, parsing, Gmail and AI; RN only renders. WhatsApp chats are grouped by contact, WhatsApp text is kept forever, and the media WhatsApp notifications expose is stored encrypted in the app's private files (never sent to the AI). Home is money card, Inbox (one row per chat-like app), Important (no payments), Coming up, Recent chats, All apps; Money has Overview, Reports and All. In an SMS contact list, senders the AI mostly reads as promotions (and no bank) fold into one "Promotions" row (nothing is deleted; the owner can override per sender; schema v7 `sender_promo`). Spec:
   `docs/superpowers/specs/2026-11-13-inflow-design.md`, `docs/superpowers/specs/2026-11-17-inflow-ux-design.md`; plans:
   `docs/superpowers/plans/2026-11-13-inflow-stage-*.md`, `docs/superpowers/plans/2026-11-18-inflow-ux.md`; progress:
@@ -386,17 +386,26 @@ Current apps:
   `trustedProvider`, and before each start or broadcast `trustedActivity` or `trustedReceiver`;
   `SiblingTrustWiringTest` fails on a broadcast, bind or service start without it. Shares:
   `packages/autopilot-contract/src/inflow-shares.ts`.
-  AI hub (E2): when AI hub is installed and the owner has allowed Inflow there, the 30-minute
-  batch (summaries, importance, to-dos, money and Autopilot suggestions), spending categories,
-  the weekly and monthly reports and Ask AI go to AI hub first (the hub picks Groq gpt-oss-120b or
-  its Gemini fallback) with exactly the text R44 already allows, and Inflow falls back once to the
-  owner's own key when the hub is missing, refuses Inflow (remembered for 10 minutes), is too
-  old, has no key or the request is over 512 KB. The hub's own per-app switch is the opt-in, and
-  with it on Inflow's text can reach the hub's Gemini fallback even when the owner's own key is
-  Groq or a custom address. A hub reply that names a model Inflow does not price counts at the
-  dearest known price toward the daily limit. Inflow's AI stays on only while an own key is
-  saved, the key test always uses the own key, and the Doctor summary and Ask AI with health in
-  Ask on never go through the hub (own key only; the Doctor summary only to Groq).
+  AI hub only (owner decision 2026-11-24; this replaces E2's hub-first with an own-key fallback and R44's
+  'Inflow AI needs its own key'): Inflow has no AI provider, API key, model, effort or address of its own and
+  no key settings screen. The 30-minute batch (summaries, importance, to-dos, money and Autopilot suggestions),
+  spending categories, the weekly and monthly reports, Ask AI and the Doctor summary all go to AI hub
+  (`com.haroon.aihub`) as chat jobs through `ai-hub-client`, with exactly the text R44 already allows; the hub
+  picks Groq gpt-oss-120b, or Gemini when Groq has no working key, and keeps only counts. 'Use AI' in Settings
+  is the owner's opt-in (the old 'a key is saved'): it sets aiSince the first time, and only items saved from
+  then on are sent; a phone that had a key stays on. Without the hub the screens say, in plain words with one
+  button each: 'AI needs AI hub.' (Install AI hub opens the Store, which has no page link for one app), 'Allow
+  Inflow in AI hub.' and 'Add a key in AI hub.' (Open AI hub), 'AI needs a newer AI hub.' (Update AI hub); no hub
+  error text reaches a screen and a hub that is not ready keeps the queue and the report's tries. Keys saved
+  before this change are deleted from `ai_keys` only after the first SUCCESSFUL hub chat (a real reply) on the
+  phone, never on `available()` alone and never after a hub error; a stored marker (`aiHubWorked`) makes the
+  cleanup run again at every start. A hub reply that names a model Inflow does not price counts at the
+  dearest known price toward the daily limit. Health text (privacy-relevant change, owner to confirm): the
+  Doctor summary (on the owner's tap, after the preview) and Ask AI with 'Include health in Ask AI' on now go
+  through the hub, so the text reaches Groq via AI hub (Gemini if the hub falls back); both switches stay off
+  by default with consent copy 'Your health text goes to Groq through AI hub; AI hub keeps only counts, never
+  the text.' The background batch, categories and reports never carry health text (`HubRoutingTest`,
+  `AskRunTest`). The health row's `ai_source` is `hub` while AI is on and `none` while off.
 
 - **clipboard** (`apps/clipboard`) — the owner's own clipboard history, replacing Gboard's
   1-hour delete. Android only, private Store only (`com.haroon.clipboard`). An

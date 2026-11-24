@@ -62,10 +62,9 @@ class AutopilotProvider : ContentProvider() {
       }
       HEALTH -> MatrixCursor(AppHealth.COLUMNS).also { c ->
         val listener = runCatching { context?.let { NotificationManagerCompat.getEnabledListenerPackages(it).contains(it.packageName) } }.getOrNull() == true
-        val keys = store != null && runCatching { AiConfig(store).on() }.getOrDefault(false)
+        val aiOn = store != null && runCatching { AiConfig(store).on() }.getOrDefault(false)
         val seen = if (store != null) runCatching { AppHealth.lastSeen(store) }.getOrNull() else null
-        val source = if (store != null) runCatching { store.meta(AppHealth.META_AI_SOURCE) }.getOrNull() else null
-        c.addRow(AppHealth.row(listener, keys, seen, source))
+        c.addRow(AppHealth.row(listener, aiOn, seen))
       }
       BRIEFING -> MatrixCursor(BRIEFING_COLUMNS).also { c ->
         val ctx = context

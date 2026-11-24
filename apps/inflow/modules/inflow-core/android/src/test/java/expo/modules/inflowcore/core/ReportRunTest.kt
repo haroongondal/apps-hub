@@ -1,7 +1,6 @@
 package expo.modules.inflowcore.core
 
-import java.io.IOException
-import java.net.SocketTimeoutException
+import expo.modules.aihubclient.core.Kinds
 import java.time.Instant
 import java.time.ZoneId
 import kotlinx.serialization.json.Json
@@ -46,17 +45,20 @@ class ReportRunTest {
      "insights":["You spent 1,500.50 on food."]}
   """.trimIndent()
 
-  private fun post(url: String, headers: Map<String, String>, body: String): HttpReply {
-    if (offline) throw IOException("down")
-    bodies += body
-    if (slow) throw SocketTimeoutException("Read timed out")
-    prompts += Json.parseToJsonElement(body).jsonObject["messages"]!!.jsonArray[1].jsonObject["content"]!!.jsonPrimitive.content
-    if (code != 200) return HttpReply(code, "no")
-    val content = Json.encodeToString(kotlinx.serialization.serializer<String>(), answer(prompts.last()))
-    return HttpReply(200, """{"choices":[{"message":{"role":"assistant","content":$content}}],"usage":{"prompt_tokens":10,"completion_tokens":5}}""")
+  private fun post(json: String): String {
+    if (offline) FakeHub.fail(Kinds.PROVIDER)
+    bodies += json
+    if (slow) FakeHub.fail(Kinds.TIMEOUT)
+    prompts += FakeHub.user(json)
+    when (code) {
+      200 -> Unit
+      401 -> FakeHub.fail(Kinds.NO_KEY)
+      else -> FakeHub.fail(Kinds.PROVIDER)
+    }
+    return FakeHub.reply(answer(prompts.last()))
   }
 
-  private val provider = OpenAiCompatProvider("https://x.example/v1", "m", listOf("k"), null, ::post, {})
+  private val provider = FakeHub.ai(hub = ::post)
 
   private fun run() = ReportRun(
     store, { if (aiOn) provider else null }, { spent++ }, { cap }, { "Haroon" }, { listOf("Alfalah 2310") }, { clock }, karachi,
@@ -131,21 +133,15 @@ class ReportRunTest {
     assertEquals(1, prompts.size)
   }
 
-  @Test fun authAndOfflineWaitWithoutCountingATry() {
+  @Test fun aHubThatIsNotReadyWaitsWithoutCountingATry() {
     addTxn("2025-11-10T12:00:00")
     code = 401
     run().runDue()
     var row = store.rows.single { it.kind == ReportKind.WEEKLY }
     assertEquals("waiting", row.status)
     assertEquals(0, row.tries)
-    assertTrue(row.message!!.contains("API key"))
+    assertEquals(HubCopy.NO_KEY, row.message)
     code = 200
-    offline = true
-    run().runDue()
-    row = store.rows.single { it.kind == ReportKind.WEEKLY }
-    assertEquals("waiting", row.status)
-    assertEquals(0, row.tries)
-    offline = false
     run().runDue()
     assertEquals("ready", store.rows.single { it.kind == ReportKind.WEEKLY }.status)
   }
@@ -191,7 +187,7 @@ class ReportRunTest {
   @Test fun reportsAskForAtMost8000Tokens() {
     addTxn("2025-11-10T12:00:00")
     run().runDue()
-    assertTrue(bodies.first().contains("\"max_tokens\":8000"))
+    assertTrue(bodies.first().contains("\"maxTokens\":8000"))
   }
 
   @Test fun makingAPartialDeletesTheOlderPartials() {
@@ -258,7 +254,7 @@ class ReportRunTest {
     aiOn = false
     run().runDue()
     assertTrue(store.rows.isEmpty())
-    assertEquals(false to ReportRun.NO_KEY, run().make(week1, manual = true))
+    assertEquals(false to ReportRun.AI_OFF, run().make(week1, manual = true))
   }
 
   // ---- ready: partial, notify, prune

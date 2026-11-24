@@ -352,7 +352,7 @@ class ReportRun(
   }
 
   private fun makeOne(p: Period, manual: Boolean): Pair<Boolean, String?> {
-    val provider = provider() ?: return false to NO_KEY
+    val provider = provider() ?: return false to AI_OFF
     val t = now()
     var tries = if (manual) 0 else store.row(p)?.tries ?: 0
     val txns = store.txns(p.start, p.end)
@@ -369,8 +369,8 @@ class ReportRun(
         ReportJson.MAX_TOKENS,
       )
     } catch (e: AiError) {
-      // A bad key or no network says nothing about this report: no try is used. A refusal, a timeout or a server failure may have been billed: it counts, so MAX_TRIES ends any loop.
-      if (e.kind == AiError.Kind.AUTH || e.kind == AiError.Kind.OFFLINE) return waiting(p, e.message ?: RETRY, tries, t)
+      // AI hub not ready or no network says nothing about this report: no try is used. A refusal, a timeout or a server failure may have been billed: it counts, so MAX_TRIES ends any loop.
+      if (e.kind.waits) return waiting(p, e.message ?: RETRY, tries, t)
       return badReply(p, ++tries, t, e.message.takeIf { e.kind != AiError.Kind.BAD_REQUEST })
     }
     spend(reply)
@@ -408,6 +408,6 @@ class ReportRun(
     const val CAP_WAIT = "Waiting for tomorrow: today's AI limit is reached."
     const val RETRY = "Inflow will try again soon."
     const val FAILED_COPY = "Couldn't make this report."
-    const val NO_KEY = "No API key is set. Add your API key in Settings."
+    const val AI_OFF = "AI is off. Turn it on in Settings."
   }
 }

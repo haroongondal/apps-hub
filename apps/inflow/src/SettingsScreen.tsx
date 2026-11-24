@@ -131,7 +131,7 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
         </Row>
       </Group>
       <Group title="Nexus">
-        <Row title="Let Nexus read my messages" subtitle="Nexus keeps a copy of your text messages and emails to answer your questions, and sends them to Gemini and Groq, through AI hub or with your own keys. One-time codes are left out. Only messages from after you first added an AI key in Inflow.">
+        <Row title="Let Nexus read my messages" subtitle="Nexus keeps a copy of your text messages and emails to answer your questions, and sends them to Gemini and Groq, through AI hub or with your own keys. One-time codes are left out. Only messages from after you turned on AI in Inflow.">
           <Segmented accessibilityLabel="Let Nexus read my messages" options={RECORD_OPTIONS} value={nexusAsk ? 'on' : 'off'} onChange={(k) => change(() => InflowCore.setNexusAsk(k === 'on'))} />
         </Row>
         <Row title="Let Nexus match my receipts" subtitle="Nexus can see the money you spent in the last 60 days to match receipts. Nothing leaves the phone.">

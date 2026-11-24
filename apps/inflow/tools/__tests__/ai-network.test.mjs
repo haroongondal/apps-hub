@@ -3,20 +3,26 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
-// The owner's AI address is the second network surface (after Gmail): these pin where it lives and how a key is kept from leaving it.
-const main = join(import.meta.dirname, '..', '..', 'modules', 'inflow-core', 'android', 'src', 'main');
+// Inflow has no AI network code of its own any more: AI goes through AI hub on the phone. These pin that it stays that way.
+const root = join(import.meta.dirname, '..', '..');
+const main = join(root, 'modules', 'inflow-core', 'android', 'src', 'main');
 const files = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(join(dir, e.name)) : [join(dir, e.name)]));
-const sources = files(main).filter((f) => f.endsWith('.kt'));
-const config = readFileSync(join(main, 'java', 'expo', 'modules', 'inflowcore', 'android', 'AiConfig.kt'), 'utf8');
+const kotlin = files(main).filter((f) => f.endsWith('.kt'));
+const read = (f) => readFileSync(f, 'utf8');
 
-test('HttpURLConnection appears only in the AI client and the Gmail client (Gmail itself speaks IMAP)', () => {
-  const users = sources.filter((f) => readFileSync(f, 'utf8').includes('HttpURLConnection')).map((f) => f.slice(f.lastIndexOf('/') + 1)).sort();
-  assert.ok(users.includes('AiConfig.kt'));
-  assert.deepEqual(users.filter((u) => u !== 'AiConfig.kt' && u !== 'GmailClient.kt'), []);
+test('no source opens an http connection or names an AI provider address', () => {
+  for (const f of kotlin) {
+    const text = read(f);
+    for (const word of ['HttpURLConnection', 'api.groq.com', 'generativelanguage', 'OkHttp']) assert.ok(!text.includes(word), `${f} mentions ${word}`);
+  }
 });
 
-test('an AI request goes only to an https address, is never redirected, and a key is read for its own address only', () => {
-  assert.match(config, /startsWith\("https:\/\/"\)/);
-  assert.match(config, /instanceFollowRedirects = false/);
-  assert.match(config, /base_url = \?/);
+test('the only way to AI is the hub client, built in one file', () => {
+  const users = kotlin.filter((f) => read(f).includes('AiHubClient(')).map((f) => f.slice(f.lastIndexOf('/') + 1));
+  assert.deepEqual(users, ['AiConfig.kt']);
+});
+
+test('the TypeScript side has no AI key or model screen', () => {
+  const src = files(join(root, 'src')).filter((f) => /\.tsx?$/.test(f) && !f.includes('__tests__'));
+  for (const f of src) assert.ok(!/addAiKey|removeAiKey|testAiKey|setAiModel|knownModels/.test(read(f)), f);
 });

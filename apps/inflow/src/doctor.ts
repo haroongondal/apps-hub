@@ -22,9 +22,10 @@ export const PICK_SOMETHING = 'Pick at least one thing to include.';
 export const SEND_FAILED = "Inflow couldn't send that. Close and reopen the app, then try again.";
 export const PREVIEW_FAILED = "Inflow couldn't prepare that. Close and reopen the app, then try again.";
 export const PDF_FAILED = "Inflow couldn't save the PDF. Try again, or pick another folder.";
-export const SENDS_NOTICE = 'Inflow will send exactly this text to Groq (gpt-oss-120b) and nothing else. Nothing is sent until you tap Send.';
+export const HEALTH_PRIVACY = 'Your health text goes to Groq through AI hub; AI hub keeps only counts, never the text.';
+export const SENDS_NOTICE = `Inflow will send exactly this text and nothing else. ${HEALTH_PRIVACY} Nothing is sent until you tap Send.`;
 export const AI_NOTICE = 'Written by an AI from the text you sent. It can be wrong. Check it before you share it.';
-export const HEALTH_IN_ASK_NOTE = 'When on, Ask AI can use your daily steps, sleep and heart rate numbers and how many doses of each medicine you took, for the dates you ask about. It never sees your journal or medicine names. Off by default.';
+export const HEALTH_IN_ASK_NOTE = `When on, Ask AI can use your daily steps, sleep and heart rate numbers and how many doses of each medicine you took, for the dates you ask about. It never sees your journal or medicine names. ${HEALTH_PRIVACY} Off by default.`;
 // The text the module returns when the data moved between the preview and the send.
 export const DATA_CHANGED = 'Your data changed since the preview. Review it again.';
 

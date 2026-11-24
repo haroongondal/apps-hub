@@ -2,7 +2,7 @@
   <uses-permission android:name="android.permission.READ_SMS" />
   <uses-permission android:name="android.permission.RECEIVE_SMS" />
   <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-  <!-- Gmail over IMAP (imap.gmail.com:993), and https to the AI address the owner sets in Settings; nothing else. -->
+  <!-- Gmail over IMAP (imap.gmail.com:993); nothing else. AI goes through AI hub on this phone, not over the network from here. -->
   <uses-permission android:name="android.permission.INTERNET" />
   <!-- The "your report is ready" notification, suggestion cards and medicine reminders. A runtime permission (Android 13+); without it reports are still made and listed, and medicines are saved and logged. -->
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -22,6 +22,8 @@
     <package android:name="com.haroon.strongroom" />
     <package android:name="com.haroon.pdfeditor" />
     <package android:name="com.haroon.halo" />
+    <!-- The Store, opened by "Install AI hub" when AI hub is missing. -->
+    <package android:name="com.haroon.store" />
     <!-- The morning briefing reads these shares of the owner's other apps (HomeNet, Strongroom, Deputy, Nexus): query only, signature-guarded on their side. -->
     <provider android:authorities="com.haroon.netlens.applink" />
     <provider android:authorities="com.haroon.strongroom.applink" />

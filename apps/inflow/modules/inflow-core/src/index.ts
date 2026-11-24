@@ -221,23 +221,12 @@ export interface ReportData {
 }
 
 export interface AiStatus {
-  baseUrl: string;
-  model: string;
-  knownModel: string | null;
-  // Only the last four characters of each key ever reach JS.
-  keys: { id: number; ending: string }[];
   capUsd: number | null; // null = no limit
   spentTodayUsd: number;
   queued: number;
   lastRunAt: number | null;
   error: string | null;
   on: boolean;
-}
-
-export interface KnownModelInfo {
-  name: string;
-  baseUrl: string;
-  model: string;
 }
 
 export interface GmailStatus {
@@ -442,12 +431,11 @@ export interface InflowCoreApi {
   // Sends onCaptured when it imported anything.
   syncGmail(): Promise<{ imported: number }>;
   aiStatus(): AiStatus;
-  knownModels(): KnownModelInfo[];
-  // Returns the validation copy for a non-https address or a bad price, or null once saved. Null prices = the built-in ones.
-  setAiModel(baseUrl: string, model: string, prices: { inputPerM: number; cachedPerM: number; outputPerM: number } | null): string | null;
-  addAiKey(apiKey: string): string | null;
-  removeAiKey(id: number): void;
-  testAiKey(id: number): Promise<string | null>;
+  // AI is the owner's opt-in: the first time it goes on, Inflow starts sending what it saves from then on.
+  setAiOn(on: boolean): void;
+  // The buttons under the AI hub notices. False: that app is not installed or is not ours.
+  openStore(): boolean;
+  openAiHub(): boolean;
   // Returns the error copy for a limit outside 0.01 to 100, or null once saved.
   setAiCap(usd: number | null): string | null;
   sendAiNow(): Promise<{ sent: number; saved: number; stoppedByCap: boolean; error: string | null }>;

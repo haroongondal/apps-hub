@@ -1,12 +1,8 @@
 package expo.modules.inflowcore.core
 
-import java.io.IOException
+import expo.modules.aihubclient.core.Kinds
 import java.time.Instant
 import java.time.ZoneId
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -30,30 +26,33 @@ class AiRunTest {
   private var answer: (List<Long>) -> String = { ids -> reply(ids) }
   private var calls = 0
   private var httpCode: (Int) -> Int = { 200 }   // the status of the nth request (1-based)
-  private val prices = Prices(1.0, 0.0, 1.0)
+  private val prices = AiPricing.KNOWN.getValue(FakeHub.MODEL)
 
   private fun reply(ids: List<Long>, extra: (Long) -> String = { "null" }) =
     """{"items":[${ids.joinToString(",") { """{"id":$it,"kind":"message","summary":"Note $it.","importance":"normal","money":${extra(it)},"todos":[],"tags":[]}""" }}]}"""
 
-  private fun post(url: String, headers: Map<String, String>, body: String): HttpReply {
-    if (offline) throw IOException("down")
-    val user = Json.parseToJsonElement(body).jsonObject["messages"]!!.jsonArray[1].jsonObject["content"]!!.jsonPrimitive.content
+  private fun post(json: String): String {
+    if (offline) FakeHub.fail(Kinds.PROVIDER)
+    val user = FakeHub.user(json)
     prompts += user
-    val code = httpCode(++calls)
-    if (code != 200) return HttpReply(code, "no")
+    when (httpCode(++calls)) {
+      200 -> Unit
+      401 -> FakeHub.fail(Kinds.NO_KEY)
+      503 -> FakeHub.fail(Kinds.PROVIDER)
+      else -> FakeHub.fail(Kinds.INVALID)
+    }
     val ids = Regex("\"id\":(\\d+)").findAll(user).map { it.groupValues[1].toLong() }.toList()
-    val content = Json.encodeToString(kotlinx.serialization.serializer<String>(), answer(ids))
-    return HttpReply(200, """{"choices":[{"message":{"role":"assistant","content":$content}}],"usage":{"prompt_tokens":${usage.inputTokens},"completion_tokens":${usage.outputTokens}}}""")
+    return FakeHub.reply(answer(ids), usage)
   }
 
-  private val provider = OpenAiCompatProvider("https://x.example/v1", "m", listOf("k"), null, ::post, {})
+  private val provider = FakeHub.ai(hub = ::post)
 
   private val suggestionStore = MemorySuggestionStore()
 
   private fun runner(
     cap: Double? = 0.50, hasProvider: Boolean = true, channelOf: (Long) -> Channel = { Channel.NOTIFICATION },
     accounts: List<String> = emptyList(), hook: ((AiResult, AiInput) -> Unit)? = suggestionHook(suggestionStore, { AutopilotSettings(pickedChats = setOf("$sms|sms:ali")) }, { clock }, karachi, store::hasOwnMessageAfter),
-  ) = AiRun(store, ledger, { if (hasProvider) provider else null }, { prices }, { cap }, { accounts }, channelOf, { clock }, karachi, suggestions = hook)
+  ) = AiRun(store, ledger, { if (hasProvider) provider else null }, { cap }, { accounts }, channelOf, { clock }, karachi, suggestions = hook)
 
   private fun keyAdded(at: Long = t0 - 60_000) = store.setMeta(AiMeta.SINCE, at.toString())
 
@@ -198,15 +197,15 @@ class AiRunTest {
 
   @Test fun capStopsBeforeNextRequest() {
     bigQueue()
-    usage = Usage(20_000, 0, 0)   // costs $0.02 at $1 per million
-    store.addSpend("2026-11-14", 0.49)
+    usage = Usage(1_000_000, 0, 0)   // $0.15 at the model's price
+    store.addSpend("2026-11-14", 0.40)
     val r = runner(cap = 0.50).run()
     assertEquals(1, prompts.size)
     assertTrue(r.stoppedByCap)
     assertEquals(AiRun.CAP_REACHED, r.error)
     assertEquals(40, r.saved)
     assertEquals(21, store.queue.size)   // the rest waits
-    assertEquals(0.51, store.spentToday("2026-11-14"), 1e-9)
+    assertEquals(0.55, store.spentToday("2026-11-14"), 1e-9)
     assertEquals("Inflow reached today's AI spending limit. It will send the rest tomorrow, or raise the limit in Settings.", r.error)
   }
 
@@ -278,7 +277,7 @@ class AiRunTest {
     save("hello")
     offline = true
     val r = runner().run()
-    assertEquals("Inflow couldn't reach the model. Check the phone's connection and try again.", r.error)
+    assertEquals(HubCopy.FAILED, r.error)
     assertEquals(0, r.saved)
     assertEquals(setOf(1L), store.queue.keys)
     assertEquals(0, store.queue.getValue(1).second)
@@ -290,7 +289,7 @@ class AiRunTest {
     save("hello")
     usage = Usage(400_000, 0, 100_000)
     runner().run()
-    assertEquals(0.5, store.spentToday("2026-11-14"), 1e-9)
+    assertEquals(0.12, store.spentToday("2026-11-14"), 1e-9)   // 0.4M in at 0.15 plus 0.1M out at 0.60
   }
 
   @Test fun spendIsEstimatedWhenTheModelSendsNoUsage() {
@@ -298,7 +297,7 @@ class AiRunTest {
     save("hello")
     usage = Usage(0, 0, 0)
     runner().run()
-    assertTrue(store.spentToday("2026-11-14") > 0.0)   // prices are 1.0 per million: the prompt and the reply are counted by length
+    assertTrue(store.spentToday("2026-11-14") > 0.0)   // a reply with no usage is counted by the prompt and reply length
   }
 
   @Test fun savedResultsFeedLedger() {
@@ -353,7 +352,7 @@ class AiRunTest {
     httpCode = { n -> if (n == 1) 400 else 200 }
     val r = runner().run()
     assertEquals(2, calls)
-    assertTrue(r.error!!.contains("rejected the request (HTTP 400)"))   // the refusal is reported, so Settings shows it
+    assertEquals(HubCopy.REFUSED, r.error)   // the refusal is reported, so Settings shows it
     assertEquals(1, r.saved)
     assertEquals(40, store.queue.size)   // the refused batch used its first try
     assertTrue(store.queue.values.all { it.second == 1 })
@@ -366,7 +365,7 @@ class AiRunTest {
     keyAdded()
     save("hello")
     httpCode = { 401 }
-    assertTrue(runner().run().error!!.contains("refused the API key"))
+    assertEquals(HubCopy.NO_KEY, runner().run().error)
     assertEquals(0, store.queue.getValue(1).second)
     httpCode = { 503 }
     assertNotNull(runner().run().error)

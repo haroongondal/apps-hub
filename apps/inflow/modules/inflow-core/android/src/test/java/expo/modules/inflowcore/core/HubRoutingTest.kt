@@ -6,55 +6,54 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-// Source pins: AI hub may fall back to Gemini, so the Doctor summary and anything carrying health data must stay on the owner's own key.
+// Source pins for the hub-only change: AI hub is the one way out, and health text goes through it only from the two owner-driven paths.
 class HubRoutingTest {
   private val main = File("src/main/java/expo/modules/inflowcore")
   private fun src(path: String) = File(main, path).also { assertTrue("missing $it from ${File(".").absoluteFile}", it.isFile) }.readText()
-  private val hubWords = listOf("HubFirst", "AiHubClient", "aihubclient", "cfg.provider(", ".provider(")
+  private val kotlin = main.walkTopDown().filter { it.extension == "kt" }.toList()
+  private val healthWords = listOf("SqlHealthStore", "SqlMedicineStore", "SqlJournalStore", "HealthForAsk", "HealthAggregate", "BriefingHealth", "DoctorPayload")
 
-  @Test fun theHubIsBuiltInOnePlaceOnly() {
-    val users = main.walkTopDown().filter { it.extension == "kt" }
-      .filter { f -> f.readText().let { "AiHubClient(" in it || "HubFirst(" in it } }
-      .map { it.name }.toSortedSet()
-    assertEquals(sortedSetOf("AiConfig.kt", "HubFirst.kt"), users)
+  @Test fun theHubClientIsBuiltInOnePlaceOnly() {
+    assertEquals(sortedSetOf("AiConfig.kt"), kotlin.filter { "AiHubClient(" in it.readText() }.map { it.name }.toSortedSet())
   }
 
-  @Test fun theDoctorSummaryNeverCallsTheHub() {
-    for (f in listOf("android/DoctorRunner.kt", "android/DoctorPdf.kt", "core/DoctorSummary.kt")) {
+  @Test fun noOwnProviderKeyOrAddressIsLeft() {
+    val gone = listOf("OpenAiCompatProvider", "HubFirst", "HubPause", "HttpURLConnection", "api.groq.com", "generativelanguage", "Bearer ", "INSERT INTO ai_keys", "AiModels", "ownProvider")
+    for (f in kotlin) for (w in gone) assertFalse("${f.name} mentions $w", w in f.readText())
+  }
+
+  @Test fun theOnlyWayToDeleteAKeyIsTheHubAnsweredCleanup() {
+    val users = kotlin.filter { "DELETE FROM ai_keys" in it.readText() }.map { it.name }
+    assertEquals(listOf("AiConfig.kt"), users)
+    assertEquals(listOf("AiSwitch.kt"), kotlin.filter { "keys.deleteAll()" in it.readText() }.map { it.name })
+  }
+
+  @Test fun onlyAskAndTheDoctorSummaryTouchBothHealthDataAndAnAiProvider() {
+    val both = kotlin.filter { f -> f.readText().let { t -> healthWords.any { it in t } && (".provider(" in t || "TextAi" in t || ".hub(" in t) } }.map { it.name }.toSortedSet()
+    assertEquals(sortedSetOf("AiRunner.kt", "AskRun.kt", "DoctorRunner.kt"), both)
+  }
+
+  @Test fun theBackgroundBatchCategoriserAndReportsNeverNameHealthData() {
+    for (f in listOf("core/AiQueue.kt", "core/TxnCategorize.kt", "core/Reports.kt", "core/Ai.kt")) {
       val text = src(f)
-      for (w in hubWords) assertFalse("$f mentions $w", w in text)
+      for (w in healthWords) assertFalse("$f mentions $w", w in text)
     }
-    assertTrue(src("android/DoctorRunner.kt").contains("OpenAiCompatProvider(AiModels.GROQ_URL, MODEL, keys, known.effort, post)"))
+    val background = src("android/AiRunner.kt").substringAfter("private fun execute(").substringBefore("fun ask(")
+    for (w in healthWords) assertFalse("the background run mentions $w", w in background)
   }
 
-  @Test fun healthDataPathsNeverCallTheHub() {
-    for (f in listOf("core/HealthForAsk.kt", "core/HealthAggregate.kt", "core/Medicines.kt", "core/Journal.kt", "core/BriefingHealth.kt")) {
-      val text = src(f)
-      for (w in hubWords) assertFalse("$f mentions $w", w in text)
-    }
-  }
-
-  // The reverse pin: a file that names a health reader may not name a provider, whatever the allow-list above says. Ask's one pinned line is the only exception.
-  @Test fun noFileThatNamesHealthDataNamesAProvider() {
-    val health = listOf("SqlHealthStore", "SqlMedicineStore", "SqlJournalStore", "HealthForAsk", "HealthAggregate", "BriefingHealth", "DoctorPayload")
-    val bad = main.walkTopDown().filter { it.extension == "kt" }.filter { f -> f.readText().let { t -> health.any { it in t } && (".provider(" in t || "TextAi" in t) } }
-      .map { it.name }.toSortedSet()
-    assertEquals(sortedSetOf("AiRunner.kt"), bad)
-  }
-
-  @Test fun askWithHealthOnUsesTheOwnKeyForTheWholeAsk() {
+  @Test fun askBuildsHealthOnlyFromItsSwitch() {
     val ask = src("android/AiRunner.kt").substringAfter("fun ask(")
-    val choice = "val provider = (if (healthOn) cfg.ownProvider() else cfg.provider(foreground = true))"
-    assertTrue(choice in ask)
-    assertTrue(ask.indexOf("val healthOn = HealthForAsk.on(store.meta(HealthForAsk.META))") in 0 until ask.indexOf(choice))
-    // The answer gets health only from the same flag that picked the own key, and no other provider is made in Ask.
-    assertTrue("HealthForAsk.context(healthOn," in ask)
-    assertEquals(2, Regex("""\.provider\(|ownProvider\(""").findAll(ask).count())
+    val switchRead = "val healthOn = HealthForAsk.on(store.meta(HealthForAsk.META))"
+    assertTrue(switchRead in ask)
+    assertTrue(ask.indexOf(switchRead) < ask.indexOf("HealthForAsk.context(healthOn,"))
+    val calls = kotlin.filter { it.name != "HealthForAsk.kt" }.sumOf { Regex("""HealthForAsk\.context\(""").findAll(it.readText()).count() }
+    assertEquals(1, calls)
   }
 
-  @Test fun theKeyTestUsesTheOwnKey() {
-    val test = src("android/AiRunner.kt").substringAfter("fun test(").substringBefore("fun ask(")
-    assertTrue("cfg.ownProvider(keyId)" in test)
-    assertFalse("cfg.provider(" in test)
+  @Test fun theDoctorSummaryRunsOnlyFromItsTwoModuleFunctions() {
+    assertEquals(listOf("DoctorRunner.kt", "InflowCoreModule.kt"), kotlin.filter { "DoctorRunner" in it.readText() }.map { it.name }.sorted())
+    assertEquals(2, Regex("""DoctorRunner\.of\(""").findAll(File(main, "InflowCoreModule.kt").readText()).count())
+    assertTrue(src("InflowCoreModule.kt").contains("DoctorRunner.of(context, store()).summarize("))
   }
 }

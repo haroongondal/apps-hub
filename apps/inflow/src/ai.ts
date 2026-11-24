@@ -51,7 +51,6 @@ export const sendResultLabel = (sent: number, saved: number): string =>
 
 export const importanceLabel = (importance: 'high' | 'normal' | 'low'): string => importance.charAt(0).toUpperCase() + importance.slice(1);
 
-export const ASK_OFF = 'Add an API key in Settings to ask questions.';
 export const ASK_EMPTY = "Inflow didn't get an answer. Try again.";
 
 const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
