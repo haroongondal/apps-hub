@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import type { ReconciledDevice } from '../device-repository.ts';
-import { DEFAULT_HOME_WATCH_SETTINGS, homeWatchSnapshot, parseHomeWatchStatus, readHomeRouter, routerIdOf } from '../home-watch.ts';
+import { DEFAULT_HOME_WATCH_SETTINGS, homeWatchSnapshot, parseHomeWatchStatus, postScanSyncSettings, readHomeRouter, routerIdOf } from '../home-watch.ts';
 
 let nextId = 1;
 function dev(over: Partial<ReconciledDevice> = {}): ReconciledDevice {
@@ -131,4 +131,19 @@ test('readHomeRouter: a router that gives no ID (or no description) is null, so 
   assert.equal(await readHomeRouter(routerBinding({ '192.168.1.1:80/d.xml': '<root/>' }), lan, ['http://192.168.1.1/d.xml']), null);
   assert.equal(await readHomeRouter(routerBinding({}), lan, ['http://192.168.1.1/d.xml']), null);
   assert.equal(await readHomeRouter(routerBinding({}), lan, []), null);
+});
+
+test('post-scan sync keeps the latest share and switch values', () => {
+  const home = { networkId: 'n', gatewayIp: '192.168.1.1', label: 'Home', routerId: 'uuid:r', routerUrl: 'http://192.168.1.1:5000/old.xml' };
+  const router = { routerId: 'uuid:r', routerUrl: 'http://192.168.1.1:5000/new.xml' };
+  const waiting = { ...DEFAULT_HOME_WATCH_SETTINGS, whoIsHome: true, newDevices: true, share: true, home };
+  const latest = { ...waiting, share: false, newDevices: false };
+  assert.deepEqual(postScanSyncSettings(latest, router, 'Flat 4'), {
+    ...latest,
+    home: { ...home, label: 'Flat 4', routerUrl: router.routerUrl },
+  });
+  assert.equal(postScanSyncSettings({ ...latest, whoIsHome: false }, router, null), null, 'both switches off: nothing is saved');
+  assert.equal(postScanSyncSettings({ ...latest, home: null }, router, null), null);
+  assert.equal(postScanSyncSettings(null, router, null), null);
+  assert.equal(postScanSyncSettings(latest, { ...router, routerId: 'uuid:other' }, null), null, 'another router is not home');
 });

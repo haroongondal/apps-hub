@@ -104,6 +104,19 @@ export function homeWatchSnapshot(devices: readonly ReconciledDevice[]): HomeWat
   return { people: [...people.values()], known: [...known.values()].slice(0, MAX_KNOWN) };
 }
 
+/** What the post-scan sync may save: the owner's latest switches with a refreshed home; null when nothing should be saved. */
+export function postScanSyncSettings(
+  latest: HomeWatchSettings | null,
+  router: { routerId: string; routerUrl: string },
+  networkName: string | null,
+): HomeWatchSettings | null {
+  const saved = latest?.home;
+  if (!latest || !saved || !(latest.whoIsHome || latest.newDevices)) return null;
+  // Another router at the same address is not home.
+  if (router.routerId !== saved.routerId) return null;
+  return { ...latest, home: { ...saved, label: networkName ?? saved.label, routerUrl: router.routerUrl } };
+}
+
 const UDN = /<UDN>\s*(uuid:[^<>\s]{1,128})\s*<\/UDN>/i;
 const MAX_ROUTER_URLS = 8;
 

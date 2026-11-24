@@ -7,6 +7,7 @@ import {
   MAX_SWEEP_PREFIX,
   hashNetworkId,
   homeWatchSnapshot,
+  postScanSyncSettings,
   readHomeRouter,
   type HomeWatchSettings,
   type HomeWatchStatus,
@@ -46,7 +47,13 @@ export function useHomeWatch(
   locationsByIp: ReadonlyMap<string, string[]>,
 ): HomeWatch {
   const binding = useRef(createHomeWatchBinding()).current;
-  const [status, setStatus] = useState<HomeWatchStatus | null>(null);
+  const [status, setStatusState] = useState<HomeWatchStatus | null>(null);
+  // The owner's switches as last saved or being saved; the post-scan sync reads this when its timer fires.
+  const latestSettings = useRef<HomeWatchSettings | null>(null);
+  const setStatus = useCallback((s: HomeWatchStatus | null) => {
+    latestSettings.current = s?.supported ? s.settings : null;
+    setStatusState(s);
+  }, []);
   const [notificationsAllowed, setNotificationsAllowed] = useState(true);
 
   useEffect(() => {
@@ -64,23 +71,21 @@ export function useHomeWatch(
       cancelled = true;
       sub.remove();
     };
-  }, [binding]);
+  }, [binding, setStatus]);
 
   const settings = status?.supported ? status.settings : null;
   const onHome = settings?.home != null && settings.home.networkId === currentNetworkId;
   const watching = settings !== null && (settings.whoIsHome || settings.newDevices);
 
   useEffect(() => {
-    const saved = settings?.home;
-    if (!settings || !saved || !iface || !onHome || !scanDone || !watching) return;
+    if (!settings?.home || !iface || !onHome || !scanDone || !watching) return;
+    const gatewayIp = settings.home.gatewayIp;
     let cancelled = false;
     const timer = setTimeout(() => {
-      void readHomeRouter(net, iface, locationsByIp.get(saved.gatewayIp) ?? []).then((router) => {
-        // Another router at the same address is not home: nothing from this scan reaches the background checks.
-        if (cancelled || router === null || router.routerId !== saved.routerId) return;
-        // The router may announce its description on a new port after a restart.
-        const home = { ...saved, label: networkName ?? saved.label, routerUrl: router.routerUrl };
-        binding.setHomeWatch({ ...settings, home }, homeWatchSnapshot(devices)).then(setStatus, () => undefined);
+      void readHomeRouter(net, iface, locationsByIp.get(gatewayIp) ?? []).then((router) => {
+        if (cancelled || router === null) return;
+        const next = postScanSyncSettings(latestSettings.current, router, networkName);
+        if (next) binding.setHomeWatch(next, homeWatchSnapshot(devices)).then(setStatus, () => undefined);
       });
     }, SYNC_DELAY_MS);
     return () => {
@@ -106,21 +111,24 @@ export function useHomeWatch(
       if (patch.newDevices) setNotificationsAllowed(await notificationsGranted(true).catch(() => false));
       // Only a home pinned just now has a checked router; otherwise the post-scan sync sends the list once it has checked.
       const pinned = next.home !== null && next.home !== prev.home;
+      const before = latestSettings.current;
+      latestSettings.current = next;
       try {
         setStatus(await binding.setHomeWatch(next, pinned ? homeWatchSnapshot(devices) : null));
         return null;
       } catch (e: unknown) {
+        latestSettings.current = before;
         return `HomeNet could not save this setting: ${e instanceof Error ? e.message : String(e)}`;
       }
     },
-    [binding, currentNetworkId, devices, iface, locationsByIp, net, networkName, settings],
+    [binding, currentNetworkId, devices, iface, locationsByIp, net, networkName, setStatus, settings],
   );
 
   const markDeviceMine = useCallback(
     async (ip: string): Promise<void> => {
       setStatus(await binding.markDeviceMine(ip));
     },
-    [binding],
+    [binding, setStatus],
   );
 
   return useMemo(
