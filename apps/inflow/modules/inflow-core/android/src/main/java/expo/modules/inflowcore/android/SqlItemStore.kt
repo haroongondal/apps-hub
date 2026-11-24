@@ -28,6 +28,8 @@ import expo.modules.inflowcore.core.ItemStore
 import expo.modules.inflowcore.core.LegacyAction
 import expo.modules.inflowcore.core.LegacyRepair
 import expo.modules.inflowcore.core.LegacyRow
+import expo.modules.inflowcore.core.NexusAskItem
+import expo.modules.inflowcore.core.NexusShares
 import expo.modules.inflowcore.core.KEY_LOST_MESSAGE
 import expo.modules.inflowcore.core.OpenPlan
 import expo.modules.inflowcore.core.SearchText
@@ -150,6 +152,15 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     ).use { c -> if (c.moveToFirst()) AutopilotItem(c.getLong(0), c.getString(1), c.getString(2), c.str(3), c.str(4), c.getString(5), c.getLong(6)) else null }
   }
 
+  // Pay with Deputy: the sender's name only, never the message text, and nothing from an app on the never-share list.
+  fun billPayee(itemId: Long): String? {
+    val never = AutopilotAccess.NEVER_SHARE.toTypedArray()
+    return query(
+      "SELECT COALESCE(n.name, i.sender) FROM items i LEFT JOIN sender_names n ON n.sender_key = i.sender_key WHERE i.id = ? AND i.pkg NOT IN (${never.joinToString(",") { "?" }})",
+      itemId, *never,
+    ).use { c -> if (c.moveToFirst()) c.str(0) else null }
+  }
+
   override fun hasOwnMessageAfter(pkg: String, conversationKey: String, at: Long): Boolean =
     query("SELECT 1 FROM items WHERE pkg = ? AND conversation_key = ? AND lower(sender) = 'you' AND posted_at > ? LIMIT 1", pkg, conversationKey, at).use { it.moveToFirst() }
 
@@ -215,6 +226,18 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
         "WHERE $where ORDER BY i.posted_at DESC, i.id DESC LIMIT ?",
       *args.toTypedArray(),
     ).use { c -> buildList { while (c.moveToNext()) add(AskItem(c.getString(0), c.str(1), c.getLong(2), c.str(3), c.getString(4))) } }
+  }
+
+  // Like Ask AI: nothing saved before the first AI key, and nothing at all before there is one.
+  fun nexusAskItems(sinceId: Long, limit: Int): List<NexusAskItem> {
+    val from = enabledSince() ?: return emptyList()
+    return query(NEXUS_ASK_ITEMS_SQL, sinceId, from, limit.toLong())
+      .use { c -> buildList { while (c.moveToNext()) add(NexusAskItem(c.getLong(0), c.getString(1), c.str(2), c.getString(3), c.getLong(4))) } }
+  }
+
+  fun nexusAskIds(sinceId: Long, limit: Int): List<Long> {
+    val from = enabledSince() ?: return emptyList()
+    return query(NEXUS_ASK_IDS_SQL, sinceId, from, limit.toLong()).use { c -> buildList { while (c.moveToNext()) add(c.getLong(0)) } }
   }
 
   fun setTodoDone(id: Long, done: Boolean) {
@@ -570,7 +593,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
 
   companion object {
     private const val DB_NAME = "inflow.db"
-    private const val SCHEMA_VERSION = 8
+    private const val SCHEMA_VERSION = 10
     private const val GENERIC_FAILURE =
       "Inflow can't open your saved history. The history file is kept, not deleted. Restart the phone and try again."
     private const val ITEM_COLUMNS = "i.id, i.pkg, i.app_label, i.sender, i.sender_key, COALESCE(n.name, i.sender), i.conversation, " +
@@ -586,6 +609,11 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     private val SMS_OR_EMAIL = "($SMS_OR_EMAIL_TERMS)"
     internal const val NEVER_SENT_PREFIX = "nosend:"
     internal val NEVER_SEND_FILTER = "i.otp_expires_at IS NULL AND $SMS_OR_EMAIL AND $SENDABLE"
+    // Nexus's ask_items and ask_ids: Ask AI's filter (never the picked-chat exception), posted after the first AI key, never Strongroom or Inflow, paged by id (two ?: since-id, first-key time).
+    internal val NEXUS_ASK_WHERE = "i.id > ? AND i.posted_at >= ? AND i.pkg NOT IN (${AutopilotAccess.SQL_LIST}) AND $NEVER_SEND_FILTER"
+    internal val NEXUS_ASK_ITEMS_SQL = "SELECT i.id, i.app_label, COALESCE(n.name, i.sender), substr(COALESCE(i.email_text, i.text), 1, ${NexusShares.MAX_TEXT}), i.posted_at " +
+      "FROM items i LEFT JOIN sender_names n ON n.sender_key = i.sender_key WHERE $NEXUS_ASK_WHERE ORDER BY i.id LIMIT ?"
+    internal val NEXUS_ASK_IDS_SQL = "SELECT i.id FROM items i WHERE $NEXUS_ASK_WHERE ORDER BY i.id LIMIT ?"
     // R44's one exception: NEVER_SEND_FILTER with the owner's picked conversations ("pkg|conversationKey") also eligible, bound as parameters (one ? each, after the posted_at one). Only the queue uses it.
     internal fun queueFilter(picked: Int): String {
       val pickedChat = if (picked == 0) "0" else "(i.pkg || '|' || i.conversation_key) IN (${List(picked) { "?" }.joinToString(",")})"
@@ -681,7 +709,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     internal const val SET_PROMOTION_SQL = "INSERT INTO sender_promo(sender_key, promo) VALUES (?, ?) ON CONFLICT(sender_key) DO UPDATE SET promo = excluded.promo"
     private val lock = Any()
 
-    private val SCHEMA_V1 = listOf(
+    internal val SCHEMA_V1 = listOf(
       "CREATE TABLE IF NOT EXISTS items(id INTEGER PRIMARY KEY, hash TEXT NOT NULL UNIQUE, pkg TEXT NOT NULL, app_label TEXT NOT NULL, " +
         "sender TEXT, sender_key TEXT, conversation TEXT, conversation_key TEXT, title TEXT, text TEXT NOT NULL, " +
         "posted_at INTEGER NOT NULL, captured_at INTEGER NOT NULL, otp_expires_at INTEGER, " +
@@ -698,7 +726,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
 
     // Not idempotent: ensureSchema runs it once, in the same transaction as the version bump.
     // items is rebuilt with AUTOINCREMENT (ids kept) because txn_sources.item_id has no foreign key: a deleted item's id must never come back.
-    private val SCHEMA_V2 = listOf(
+    internal val SCHEMA_V2 = listOf(
       "CREATE TABLE items_new(id INTEGER PRIMARY KEY AUTOINCREMENT, hash TEXT NOT NULL UNIQUE, pkg TEXT NOT NULL, app_label TEXT NOT NULL, " +
         "sender TEXT, sender_key TEXT, conversation TEXT, conversation_key TEXT, title TEXT, text TEXT NOT NULL, " +
         "posted_at INTEGER NOT NULL, captured_at INTEGER NOT NULL, otp_expires_at INTEGER, " +
@@ -724,7 +752,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     )
 
     // Not idempotent, like v2: ensureSchema runs it once. email_hash/email_text hold a Gmail message and the notification it merged with.
-    private val SCHEMA_V3 = listOf(
+    internal val SCHEMA_V3 = listOf(
       "ALTER TABLE items ADD COLUMN email_hash TEXT",
       "ALTER TABLE items ADD COLUMN email_text TEXT",
       "CREATE UNIQUE INDEX items_email ON items(email_hash) WHERE email_hash IS NOT NULL",
@@ -732,7 +760,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     )
 
     // Not idempotent, like v2 and v3. ai_keys holds the owner's API keys in this SQLCipher file (R23): a future export must skip it.
-    private val SCHEMA_V4 = listOf(
+    internal val SCHEMA_V4 = listOf(
       "CREATE TABLE ai_results(item_id INTEGER PRIMARY KEY, kind TEXT NOT NULL, summary TEXT NOT NULL, importance TEXT NOT NULL, tags TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL)",
       "CREATE TABLE ai_queue(item_id INTEGER PRIMARY KEY, at INTEGER NOT NULL, tries INTEGER NOT NULL DEFAULT 0)",
       "CREATE TABLE ai_blocks(block_key TEXT PRIMARY KEY)",
@@ -746,7 +774,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
     )
 
     // Not idempotent, like the others. chat_map: chat id -> contact name (R36). media: one row per stored file (the same bytes under two items are two files), its bytes live encrypted in filesDir/media (K4).
-    private val SCHEMA_V5 = listOf(
+    internal val SCHEMA_V5 = listOf(
       "CREATE TABLE chat_map(tag TEXT PRIMARY KEY, name TEXT NOT NULL)",
       "CREATE TABLE media(id INTEGER PRIMARY KEY AUTOINCREMENT, item_id INTEGER NOT NULL, kind TEXT NOT NULL, mime TEXT NOT NULL, " +
         "size INTEGER NOT NULL, file TEXT NOT NULL, sha TEXT NOT NULL, at INTEGER NOT NULL, UNIQUE(item_id, sha))",
@@ -765,7 +793,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
 
     // Not idempotent, like the others. sender_promo: the owner's choice per sender key (1 = Move to Promotions, 0 = Keep in my list); it wins over the AI-based rule.
     // items_sender serves the bank-name lookup of a short-code sender (an SMS notification merged by setSmsHash can have no conversation_key).
-    private val SCHEMA_V7 = listOf(
+    internal val SCHEMA_V7 = listOf(
       "CREATE TABLE sender_promo(sender_key TEXT PRIMARY KEY, promo INTEGER NOT NULL)",
       "CREATE INDEX items_sender ON items(sender_key)",
     )
@@ -777,6 +805,20 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
       "CREATE TABLE suggestions(id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, title TEXT NOT NULL, item_id INTEGER NOT NULL, due_at INTEGER, " +
         "dedupe_key TEXT NOT NULL, state TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)",
       "CREATE INDEX suggestions_state ON suggestions(state)",
+    )
+
+    // Not idempotent, like the others. health_daily: one row per local day of Health Connect numbers (NULL = no data for that metric), never raw samples; no other query reads it.
+    internal val SCHEMA_V9 = listOf(
+      "CREATE TABLE health_daily(day TEXT PRIMARY KEY, steps INTEGER, sleep_minutes INTEGER, hr_avg INTEGER, hr_low INTEGER, updated_at INTEGER NOT NULL)",
+    )
+
+    // Not idempotent, like the others. Medicines (times "HH:MM,...", days ISO weekdays "1,...,7"), their dose log (taken, skipped, missed) and the journal; no other query reads them.
+    internal val SCHEMA_V10 = listOf(
+      "CREATE TABLE medicines(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, dose TEXT NOT NULL, times TEXT NOT NULL, days TEXT NOT NULL, " +
+        "start_day TEXT NOT NULL, end_day TEXT, active INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL)",
+      "CREATE TABLE dose_log(medicine_id INTEGER NOT NULL, due_at INTEGER NOT NULL, status TEXT NOT NULL, marked_at INTEGER NOT NULL, PRIMARY KEY(medicine_id, due_at))",
+      "CREATE TABLE journal(id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, mood INTEGER NOT NULL, tags TEXT NOT NULL, note TEXT NOT NULL, created_at INTEGER NOT NULL)",
+      "CREATE INDEX journal_at ON journal(at)",
     )
 
     // Runs after SCHEMA_V6, in its transaction: the old names become the new ones (money out), and a money-in txn holding a name that is not a money-in category is cleared to be categorised again.
@@ -876,6 +918,8 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
           }
           if (db.version < 7) SCHEMA_V7.forEach(db::execSQL)
           if (db.version < 8) SCHEMA_V8.forEach(db::execSQL)
+          if (db.version < 9) SCHEMA_V9.forEach(db::execSQL)
+          if (db.version < 10) SCHEMA_V10.forEach(db::execSQL)
           db.version = SCHEMA_VERSION
           db.setTransactionSuccessful()
         } finally {

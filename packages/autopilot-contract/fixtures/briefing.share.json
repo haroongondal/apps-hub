@@ -1,0 +1,6 @@
+{
+  "authority": "com.haroon.inflow.autopilot",
+  "path": "briefing",
+  "columns": ["line_id", "kind", "text", "at", "personal"],
+  "maxRows": 20
+}

@@ -271,6 +271,116 @@ export interface PickableChat {
   app: string;
 }
 
+// One local day from Health Connect; null = no data for that metric. hrLow is the lowest 5-minute average with at least 2 readings, not a medical measure.
+export interface HealthDay {
+  day: string; // YYYY-MM-DD
+  steps: number | null;
+  sleepMinutes: number | null;
+  hrAvg: number | null;
+  hrLow: number | null;
+}
+
+export interface HealthStatus {
+  // missing: Health Connect is not on the phone; update: it needs an update first.
+  availability: 'available' | 'missing' | 'update';
+  steps: boolean;
+  sleep: boolean;
+  heartRate: boolean;
+}
+
+// Times are "HH:MM" local wall time, days ISO weekdays (Monday 1 to Sunday 7), dates YYYY-MM-DD. A stopped medicine (active false) keeps its history and has no new doses.
+export interface Medicine {
+  id: number;
+  name: string;
+  dose: string;
+  times: string[];
+  days: number[];
+  startDay: string;
+  endDay: string | null;
+  active: boolean;
+  createdAt: number;
+}
+
+// id null creates a new medicine.
+export interface MedicineInput {
+  id: number | null;
+  name: string;
+  dose: string;
+  times: string[];
+  days: number[];
+  startDay: string;
+  endDay: string | null;
+}
+
+// pending: due and still open to mark; upcoming: not due yet. A dose is open until 4 hours after it is due or the medicine's next dose (windowEnd).
+export type DoseStatus = 'taken' | 'skipped' | 'missed' | 'pending' | 'upcoming';
+
+export interface DoseRow {
+  medicineId: number;
+  dueAt: number;
+  windowEnd: number;
+  status: DoseStatus;
+  markedAt: number | null; // null until marked
+}
+
+// Counts only. percent = taken / (taken + skipped + missed), null when nothing counted yet; streak in days. medicineId null = all medicines.
+export interface AdherenceRow {
+  medicineId: number | null;
+  taken: number;
+  skipped: number;
+  missed: number;
+  percent: number | null;
+  streak: number;
+}
+
+export interface AdherenceReport {
+  period: 'week' | 'month';
+  fromDay: string;
+  toDay: string;
+  all: AdherenceRow;
+  medicines: AdherenceRow[];
+}
+
+export type JournalTag = 'headache' | 'tired' | 'stomach ache' | 'cough' | 'pain' | 'anxious' | 'low mood' | 'poor sleep' | 'dizzy' | 'nausea';
+
+export interface JournalEntry {
+  id: number;
+  at: number;
+  mood: number; // 1 to 5
+  tags: JournalTag[];
+  note: string; // at most 2000 characters
+}
+
+// id null creates a new entry.
+export interface JournalInput {
+  id: number | null;
+  at: number;
+  mood: number;
+  tags: JournalTag[];
+  note: string;
+}
+
+export interface DoctorInclude {
+  steps: boolean;
+  sleep: boolean;
+  heartRate: boolean;
+  medicines: boolean;
+  journal: boolean;
+}
+
+// text is exactly what doctorSummarize sends; error (plain words) when the range or the choice is not valid, then text and hash are null.
+export interface DoctorPreview {
+  text: string | null;
+  hash: string | null;
+  chars: number;
+  error: string | null;
+}
+
+export interface DoctorSummary {
+  summary: string | null;
+  error: string | null;
+}
+
 export interface InflowCoreApi {
   getStatus(): Status;
   openNotificationAccess(): void;
@@ -377,11 +487,59 @@ export interface InflowCoreApi {
   // The owner's Run: the text to tell them when it could not start, null once it did.
   runSuggestion(id: number): string | null;
   skipSuggestion(id: number): void;
+  // Pay with Deputy (Android; Inflow has no iOS build): hands a waiting bill to Deputy's draft screen. 'handed_over' = it is in Deputy's draft, 'cancelled' = the owner backed out, 'unavailable' = Deputy is not on this phone or is not the Deputy with our signature. Rejects with BILL_GONE when the bill is no longer waiting.
+  proposeToDeputy(suggestionId: number): Promise<'handed_over' | 'cancelled' | 'unavailable'>;
   autopilotSettings(): AutopilotSettings;
   // Bad values fall back to their defaults; a picked chat without a "|" is dropped.
   setAutopilotSettings(settings: AutopilotSettings): void;
   // Chats of messaging apps (not SMS or email, which already reach the AI), newest first, at most 200.
   pickableChats(): PickableChat[];
+  healthStatus(): Promise<HealthStatus>;
+  // Opens Health Connect's own screen; true when steps, sleep and heart rate are all allowed afterwards.
+  requestHealthPermissions(): Promise<boolean>;
+  // Reads the last `days` local days (clamped to 1..90; 30 is the usual) and replaces them in the store. days in the result = rows saved.
+  refreshHealth(days: number): Promise<{ ok: boolean; message: string | null; days: number }>;
+  // fromDay <= day <= toDay (YYYY-MM-DD), oldest first; days without data have no row.
+  healthDays(fromDay: string, toDay: string): HealthDay[];
+  // Stopped medicines last.
+  medicines(): Medicine[];
+  // Returns the problem in plain words, or null once saved. Works without the notification permission.
+  saveMedicine(m: MedicineInput): string | null;
+  stopMedicine(id: number): void;
+  // Also deletes its dose history.
+  deleteMedicine(id: number): void;
+  // fromDay <= day <= toDay (at most a year), oldest first: every logged dose plus the scheduled ones not logged yet.
+  dosesBetween(fromDay: string, toDay: string): DoseRow[];
+  // Also later, as a correction (a missed dose can become taken); up to an hour before it is due. Returns the problem in plain words, or null once saved.
+  markDose(medicineId: number, dueAt: number, status: 'taken' | 'skipped'): string | null;
+  // week = the last 7 days, month = the last 30, today included.
+  adherence(period: 'week' | 'month'): AdherenceReport;
+  // False when notifications (askNotifications asks) or the medicine reminders channel are off.
+  medicineRemindersAllowed(): boolean;
+  // Newest first, at < beforeAt (null for the first page), at most limit (200 at most).
+  journalList(beforeAt: number | null, limit: number): JournalEntry[];
+  // Returns the problem in plain words, or null once saved.
+  saveJournal(entry: JournalInput): string | null;
+  deleteJournal(id: number): void;
+  doctorPreview(fromDay: string, toDay: string, include: DoctorInclude): Promise<DoctorPreview>;
+  // R12: refuses (error) when the data no longer hashes to the previewed hash. The summary is untrusted model text: show it as plain text only.
+  doctorSummarize(fromDay: string, toDay: string, include: DoctorInclude, hash: string): Promise<DoctorSummary>;
+  // false = the owner closed the file picker.
+  saveDoctorPdf(summary: string, fromDay: string, toDay: string): Promise<boolean>;
+  healthInAsk(): boolean;
+  setHealthInAsk(on: boolean): void;
+  healthInBriefing(): boolean;
+  setHealthInBriefing(on: boolean): void;
+  briefingShare(): boolean;
+  setBriefingShare(on: boolean): void;
+  // The 08:00 and 20:00 summary notification; off by default. Turning it on or off arms or cancels the alarm.
+  digest(): boolean;
+  setDigest(on: boolean): void;
+  // Nexus alone may read messages (ask_items, ask_ids) and money out (debits) on this phone, each only while its switch is on; both off by default.
+  nexusAsk(): boolean;
+  setNexusAsk(on: boolean): void;
+  nexusDebits(): boolean;
+  setNexusDebits(on: boolean): void;
   addListener(event: 'onCaptured' | 'onSuggestions', listener: (e: { count: number }) => void): { remove(): void };
 }
 

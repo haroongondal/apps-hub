@@ -329,7 +329,7 @@ interface ReportStore {
 
 /** Makes the weekly and monthly reports. `notify` gets the id and headline of a report that just became ready on schedule (never a manual or partial one). */
 class ReportRun(
-  private val store: ReportStore, private val provider: () -> OpenAiCompatProvider?, private val spend: (AiReply) -> Unit,
+  private val store: ReportStore, private val provider: () -> TextAi?, private val spend: (AiReply) -> Unit,
   private val capReached: () -> Boolean, private val ownerName: () -> String?, private val accounts: () -> List<String>,
   private val now: () -> Long, private val zone: ZoneId, private val notify: (Long, String) -> Unit,
 ) {

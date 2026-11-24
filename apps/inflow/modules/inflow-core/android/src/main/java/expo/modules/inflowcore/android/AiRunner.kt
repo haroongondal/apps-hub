@@ -11,6 +11,7 @@ import expo.modules.inflowcore.core.AUTOPILOT_META
 import expo.modules.inflowcore.core.AutopilotSettings
 import expo.modules.inflowcore.core.Ask
 import expo.modules.inflowcore.core.FastPath
+import expo.modules.inflowcore.core.HealthForAsk
 import expo.modules.inflowcore.core.Period
 import expo.modules.inflowcore.core.ReportRun
 import expo.modules.inflowcore.core.ReportSchedule
@@ -87,7 +88,7 @@ object AiRunner {
       if (!AiConfig(store).on()) return
       val last = store.meta(AiMeta.LAST_RUN_AT)?.toLongOrNull()
       if (last == null || System.currentTimeMillis() - last >= DUE_MS) execute(ctx)
-      else runReports(ctx, store, AiConfig(store))   // Home opened between ticks: a report that came due still gets made
+      else runReports(ctx, store, AiConfig(store, ctx))   // Home opened between ticks: a report that came due still gets made
     } catch (e: Exception) {
       Log.w(TAG, "scheduled run failed: ${e.javaClass.simpleName}")
     }
@@ -102,7 +103,7 @@ object AiRunner {
     } catch (e: Exception) {
       Log.w(TAG, "expire failed: ${e.javaClass.simpleName}")
     }
-    val cfg = AiConfig(store)
+    val cfg = AiConfig(store, ctx)
     if (!cfg.on()) return AiRunResult(0, 0, false, null)
     val sms = StoreHolder.smsPackages(ctx)
     val result = try {
@@ -175,7 +176,7 @@ object AiRunner {
       val store = StoreHolder.get(ctx).getOrNull() ?: return@Callable false to FAILED
       try {
         val p = period(store, System.currentTimeMillis()) ?: return@Callable true to null
-        reportRun(ctx, store, AiConfig(store)).make(p, manual = true)
+        reportRun(ctx, store, AiConfig(store, ctx)).make(p, manual = true)
       } catch (e: Exception) {
         Log.w(TAG, "report failed: ${e.javaClass.simpleName}")
         false to FAILED
@@ -189,7 +190,7 @@ object AiRunner {
   fun test(ctx: Context, keyId: Long): String? {
     val store = StoreHolder.get(ctx).getOrNull() ?: return FAILED
     val cfg = AiConfig(store)
-    val provider = cfg.provider(keyId) ?: return NO_KEY
+    val provider = cfg.ownProvider(keyId) ?: return NO_KEY
     return try {
       cfg.spend(provider.complete("Reply with the single word OK.", "Test."))
       null
@@ -208,8 +209,10 @@ object AiRunner {
     val q = question.trim().take(1_000)
     if (q.isEmpty()) return reply(null, "Type a question first.")
     val store = StoreHolder.get(ctx).getOrNull() ?: return reply(null, FAILED)
-    val cfg = AiConfig(store)
-    val provider = cfg.provider() ?: return reply(null, NO_KEY)
+    val cfg = AiConfig(store, ctx)
+    // Health data must never reach AI hub (it may fall back to Gemini): with health in Ask on, the whole Ask, plan included, uses the own key.
+    val healthOn = HealthForAsk.on(store.meta(HealthForAsk.META))
+    val provider = (if (healthOn) cfg.ownProvider() else cfg.provider(foreground = true)) ?: return reply(null, NO_KEY)
     val zone = ZoneId.systemDefault()
     val now = System.currentTimeMillis()
     fun capReached() = cfg.capUsd()?.let { store.spentToday(cfg.today()) >= it } == true
@@ -228,7 +231,8 @@ object AiRunner {
       val since = store.enabledSince() ?: Long.MAX_VALUE
       val items = store.askItems(plan.from, plan.to, pkgs, since, Ask.MAX_ITEMS)
       val txns = if (plan.money) SqlLedgerStore(store.db).askTxns(plan.from, plan.to, Ask.MAX_TXNS) else emptyList()
-      val answer = provider.complete(Ask.answerSystem(), Ask.answerUser(q, items, txns, now, zone))
+      val health = HealthForAsk.context(healthOn, SqlHealthStore(store.db), SqlMedicineStore(store), plan.from, plan.to, now, zone)
+      val answer = provider.complete(Ask.answerSystem(health != null), Ask.answerUser(q, items, txns, now, zone, health))
       cfg.spend(answer)
       reply(answer.text.trim(), null, plan.from, plan.to, items.size, txns.size)
     } catch (e: AiError) {

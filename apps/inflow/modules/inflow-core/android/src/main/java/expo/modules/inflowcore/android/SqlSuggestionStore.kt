@@ -6,6 +6,7 @@ import expo.modules.inflowcore.core.SuggestionRules
 import expo.modules.inflowcore.core.SuggestionKind
 import expo.modules.inflowcore.core.SuggestionState
 import expo.modules.inflowcore.core.SuggestionStore
+import expo.modules.inflowcore.core.WaitingWatch
 import expo.modules.inflowcore.core.movableFrom
 import net.zetetic.database.sqlcipher.SQLiteDatabase
 
@@ -19,7 +20,7 @@ class SqlSuggestionStore(private val db: SQLiteDatabase) : SuggestionStore {
       st.bindString(5, s.dedupeKey); st.bindString(6, s.state.name); st.bindLong(7, s.createdAt); st.bindLong(8, s.updatedAt); st.bindLong(9, s.expiresAt)
       st.bindString(10, s.dedupeKey)
       st.executeInsert().takeIf { it > 0 }
-    }
+    }.also { if (it != null) noteWaiting() }
 
   override fun waiting(): List<Suggestion> = list(setOf(SuggestionState.WAITING), Int.MAX_VALUE)
 
@@ -37,14 +38,20 @@ class SqlSuggestionStore(private val db: SQLiteDatabase) : SuggestionStore {
     val from = state.movableFrom()
     if (from.isEmpty()) return false
     val marks = from.joinToString(",") { "?" }
-    return exec("UPDATE suggestions SET state = ?, updated_at = ? WHERE id = ? AND state IN ($marks)", state.name, now, id, *from.map { it.name }.toTypedArray()) > 0
+    return (exec("UPDATE suggestions SET state = ?, updated_at = ? WHERE id = ? AND state IN ($marks)", state.name, now, id, *from.map { it.name }.toTypedArray()) > 0).also { if (it) noteWaiting() }
   }
 
   override fun expire(now: Long): Int =
-    exec("UPDATE suggestions SET state = 'EXPIRED', updated_at = ? WHERE state IN ('WAITING', 'STARTED') AND expires_at <= ?", now, now)
+    exec("UPDATE suggestions SET state = 'EXPIRED', updated_at = ? WHERE state IN ('WAITING', 'STARTED') AND expires_at <= ?", now, now).also { if (it > 0) noteWaiting() }
 
   override fun closeReplies(pkg: String, conversationKey: String, now: Long): Int =
-    exec("UPDATE suggestions SET state = 'EXPIRED', updated_at = ? WHERE state = 'WAITING' AND kind = 'REPLY' AND dedupe_key = ?", now, SuggestionRules.replyKey(pkg, conversationKey))
+    exec("UPDATE suggestions SET state = 'EXPIRED', updated_at = ? WHERE state = 'WAITING' AND kind = 'REPLY' AND dedupe_key = ?", now, SuggestionRules.replyKey(pkg, conversationKey)).also { if (it > 0) noteWaiting() }
+
+  // Every change of state or insert ends here, so the ping to Halo is decided in one place: by the set of waiting ids, not by the write.
+  private fun noteWaiting() {
+    val watch = watch ?: return
+    watch.after(db.rawQuery("SELECT id FROM suggestions WHERE state = 'WAITING'").use { c -> buildList { while (c.moveToNext()) add(c.getLong(0)) } })
+  }
 
   private fun exec(sql: String, vararg args: Any): Int =
     db.compileStatement(sql).use { st ->
@@ -58,6 +65,8 @@ class SqlSuggestionStore(private val db: SQLiteDatabase) : SuggestionStore {
   )
 
   internal companion object {
+    @Volatile var watch: WaitingWatch? = null
+
     const val SELECT = "SELECT id, kind, title, item_id, due_at, dedupe_key, state, created_at, updated_at, expires_at FROM suggestions"
     // A WAITING or STARTED row with the same key blocks the insert; so does a DONE or SKIPPED bill or event (one suggestion per biller and due date).
     const val ADD_SQL = "INSERT INTO suggestions(kind, title, item_id, due_at, dedupe_key, state, created_at, updated_at, expires_at) " +

@@ -1,5 +1,6 @@
 package expo.modules.inflowcore.core
 
+import expo.modules.inflowcore.applink.SiblingPackages
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
 import org.junit.Assert.assertEquals
@@ -36,9 +37,33 @@ class ManifestTest {
   }
 
   @Test fun onlyTheKnownComponentsAreExported() {
-    val exported = listOf("activity", "service", "receiver", "provider").flatMap { tags(it) }.filter { it.attr("exported") == "true" }.map { it.attr("name").substringAfterLast('.') }
-    assertEquals(setOf("InflowListener", "SmsReceiver", "AutopilotProvider"), exported.toSet())
-    assertEquals(3, exported.size)
+    val exported = listOf("activity", "activity-alias", "service", "receiver", "provider").flatMap { tags(it) }.filter { it.attr("exported") == "true" }.map { it.attr("name").substringAfterLast('.') }
+    assertEquals(setOf("InflowListener", "SmsReceiver", "AutopilotProvider", "HealthRationaleActivity", "ViewPermissionUsageActivity", "AddTodoActivity"), exported.toSet())
+    assertEquals(6, exported.size)
+  }
+
+  @Test fun addTodoIsAnExportedScreenBehindThePermissionWithItsOwnActionOnly() {
+    val a = tags("activity").single { it.attr("name") == ".android.AddTodoActivity" }
+    assertEquals("true", a.attr("exported"))
+    assertEquals(permission, a.attr("permission"))
+    // a screen: not NoDisplay, not translucent; default launch mode
+    assertTrue(a.attr("theme"), a.attr("theme").let { it.isNotEmpty() && !it.contains("NoDisplay") && !it.contains("Translucent") })
+    assertEquals("", a.attr("launchMode"))
+    val actions = (0 until a.getElementsByTagName("action").length).map { (a.getElementsByTagName("action").item(it) as Element).attr("name") }
+    assertEquals(listOf(AddTodo.ACTION), actions)
+  }
+
+  @Test fun healthConnectIsReadOnlyWithTheRationaleScreen() {
+    val health = tags("uses-permission").map { it.attr("name") }.filter { it.startsWith("android.permission.health.") }
+    assertEquals(listOf("android.permission.health.READ_STEPS", "android.permission.health.READ_SLEEP", "android.permission.health.READ_HEART_RATE"), health)
+    assertTrue(tags("package").any { it.attr("name") == "com.google.android.apps.healthdata" })
+    val rationale = tags("activity").single { it.attr("name") == ".android.HealthRationaleActivity" }
+    assertEquals("androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE", (rationale.getElementsByTagName("action").item(0) as Element).attr("name"))
+    val alias = tags("activity-alias").single()
+    assertEquals(".android.HealthRationaleActivity", alias.attr("targetActivity"))
+    assertEquals("android.permission.START_VIEW_PERMISSION_USAGE", alias.attr("permission"))
+    assertEquals("android.intent.action.VIEW_PERMISSION_USAGE", (alias.getElementsByTagName("action").item(0) as Element).attr("name"))
+    assertEquals("android.intent.category.HEALTH_PERMISSIONS", (alias.getElementsByTagName("category").item(0) as Element).attr("name"))
   }
 
   @Test fun theSuggestionComponentsAreDeclaredAndNotExported() {
@@ -46,8 +71,45 @@ class ManifestTest {
     for (n in listOf("SuggestionRunActivity", "SuggestionSkipReceiver", "SuggestionReminderReceiver")) assertEquals(n, "false", names.getValue(n).attr("exported"))
   }
 
+  @Test fun medicineRemindersAddNoPermissionAndTheirReceiversAreNotExported() {
+    val names = tags("receiver").associateBy { it.attr("name").substringAfterLast('.') }
+    for (n in listOf("MedicineAlarmReceiver", "MedicineActionReceiver")) assertEquals(n, "false", names.getValue(n).attr("exported"))
+    val asked = tags("uses-permission").map { it.attr("name") }
+    for (p in listOf("SCHEDULE_EXACT_ALARM", "USE_EXACT_ALARM", "FOREGROUND_SERVICE")) assertTrue(p, asked.none { it.endsWith(p) })
+  }
+
+  // The 08:00 and 20:00 summary: exactly one new permission (the normal one that re-arms its alarm after a restart) and two receivers that nothing outside can start.
+  @Test fun theSummaryAddsOnlyItsTwoReceiversAndTheBootPermission() {
+    val receivers = tags("receiver").associateBy { it.attr("name").substringAfterLast('.') }
+    for (n in listOf("DigestAlarmReceiver", "DigestBootReceiver")) {
+      assertEquals(n, "false", receivers.getValue(n).attr("exported"))
+      assertEquals(n, "", receivers.getValue(n).attr("permission"))
+    }
+    assertEquals(0, receivers.getValue("DigestAlarmReceiver").getElementsByTagName("intent-filter").length)
+    val boot = receivers.getValue("DigestBootReceiver").getElementsByTagName("action")
+    assertEquals(listOf("android.intent.action.BOOT_COMPLETED"), (0 until boot.length).map { (boot.item(it) as Element).attr("name") })
+    val asked = tags("uses-permission").map { it.attr("name") }
+    assertEquals(1, asked.count { it == "android.permission.RECEIVE_BOOT_COMPLETED" })
+    assertEquals(
+      setOf(
+        "android.permission.READ_SMS", "android.permission.RECEIVE_SMS", "android.permission.READ_MEDIA_IMAGES", "android.permission.INTERNET", "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECEIVE_BOOT_COMPLETED", permission, "android.permission.health.READ_STEPS", "android.permission.health.READ_SLEEP", "android.permission.health.READ_HEART_RATE",
+      ),
+      asked.toSet(),
+    )
+  }
+
   @Test fun deputyIsVisibleToThePackageManager() {
-    assertTrue(tags("package").any { it.attr("name") == "com.haroon.deputy" })
+    val packages = tags("package").map { it.attr("name") }
+    // Every sibling Inflow reads or starts (and Halo, for the changed ping) is visible, or the AppLinkTarget checks answer "not installed".
+    for (p in listOf(SiblingPackages.HOMENET, SiblingPackages.STRONGROOM, SiblingPackages.DEPUTY, SiblingPackages.NEXUS, SiblingPackages.HALO)) assertTrue(p, p in packages)
     assertEquals(1, tags("queries").size)
+  }
+
+  @Test fun theBriefingSeesOnlyTheFourSharesItReads() {
+    val q = tags("queries").single().getElementsByTagName("provider")
+    val authorities = (0 until q.length).map { (q.item(it) as Element).attr("authorities") }
+    val read = listOf(BriefingReaders.HOME_URI, BriefingReaders.CARDS_URI, BriefingReaders.TASKS_URI, BriefingReaders.NEXUS_URI).map { it.removePrefix("content://").substringBefore('/') }
+    assertEquals(read, authorities)
   }
 }

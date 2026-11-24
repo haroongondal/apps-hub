@@ -42,7 +42,7 @@ internal object TxnFields {
 
 /** Gives every transaction without a category one, in batches, newest first. A txn the model skips is tried at most 3 times in all. */
 class TxnCategorize(
-  private val store: LedgerStore, private val provider: () -> OpenAiCompatProvider?, private val spend: (AiReply) -> Unit,
+  private val store: LedgerStore, private val provider: () -> TextAi?, private val spend: (AiReply) -> Unit,
   private val capReached: () -> Boolean, private val zone: ZoneId,
   private val atomic: ((() -> Unit) -> Unit) = { it() },
 ) {

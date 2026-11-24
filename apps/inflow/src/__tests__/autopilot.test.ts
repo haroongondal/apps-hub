@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { Kind, SuggestionRow } from '@apps-hub/autopilot-contract';
 import type { AutopilotSettings } from '../../modules/inflow-core/src/index.ts';
-import { formFromSettings, groupByState, kindLabel, runDoneMessage, settingsForSave, toggleChat, waitingSummary, type SettingsForm } from '../autopilot.ts';
+import { formFromSettings, groupByState, kindLabel, payWithDeputyMessage, runDoneMessage, settingsForSave, toggleChat, waitingSummary, type SettingsForm } from '../autopilot.ts';
 
 const row = (id: number, state: SuggestionRow['state'], created_at: number, expires_at: number, kind: Kind = 'reply'): SuggestionRow => ({
   id, kind, title: `t${id}`, item_id: id, due_at: null, state, created_at, expires_at,
@@ -120,4 +120,11 @@ test('toggleChat adds, removes, and never duplicates the id as given', () => {
   assert.deepEqual(toggleChat(['a|1', 'b|2'], 'a|1', true), ['a|1', 'b|2']);
   assert.deepEqual(toggleChat(['a|1', 'b|2'], 'a|1', false), ['b|2']);
   assert.deepEqual(toggleChat([], 'a|1', false), []);
+});
+
+test('payWithDeputyMessage: a quiet line for a hand-over and a missing Deputy, nothing for a cancel or an unknown answer', () => {
+  assert.deepEqual(payWithDeputyMessage('handed_over'), { tone: 'neutral', text: 'Sent to Deputy. Finish there.' });
+  assert.deepEqual(payWithDeputyMessage('unavailable'), { tone: 'neutral', text: "Deputy isn't installed on this phone." });
+  assert.equal(payWithDeputyMessage('cancelled'), null);
+  assert.equal(payWithDeputyMessage('nope' as 'cancelled'), null);
 });
