@@ -57,9 +57,10 @@ export const HUB_MAX_TOKENS = 8192; // the hub's cap; its default of 2048 would 
 // What the owner sees. The hub's own wording and error kinds never reach a screen.
 const PLAIN: Partial<Record<ErrorKind, AiError>> = {
   busy: new AiError('rate', 'AI hub is busy. Nexus tries again in a moment.'),
-  // The hub reports an offline phone as provider-error, so the two cannot be told apart. 'offline' is a pausing kind: the queue waits and tries again later without using up an attempt.
-  timeout: new AiError('offline', WAITING_LINE),
-  'provider-error': new AiError('offline', WAITING_LINE),
+  // The hub reports an offline phone and a failing service alike as provider-error. 'unanswered' pauses the queue without an attempt, but only for a few pauses per item (knowledge-core MAX_PAUSES): then it counts, so a request that never works ends as failed.
+  // A timeout is billed at the hub and must never be sent again, so it counts as an attempt like any failure (a recording is not uploaded again on every open).
+  timeout: new AiError('server', 'The AI service took too long. Nexus tries again.'),
+  'provider-error': new AiError('unanswered', WAITING_LINE),
   cancelled: new AiError('server', 'The request was stopped. Nexus tries again.'),
   'too-large': new AiError('bad_request', 'That is too big for the AI service to take at once.'),
   invalid: new AiError('bad_request', "Nexus sent a request the AI service couldn't use."),
@@ -120,9 +121,11 @@ export function hubAi({ hub, onState, onWorked }: HubAiOptions): NexusAi {
       run(async () => {
         const reply = await hub.embed({ texts, dimensions: EMBED_DIMS });
         // Another vector size or model would silently break search; the owner chooses the model in AI hub, so this waits for them instead of failing the item.
-        if (reply.dims !== EMBED_DIMS || reply.model !== EMBED_MODEL || reply.vectors.length !== texts.length) {
+        if (reply.dims !== EMBED_DIMS || reply.model !== EMBED_MODEL) {
           throw new AiError('auth', 'AI hub is using another Embeddings model. In AI hub, set Embeddings to gemini-embedding-001.');
         }
+        // A hub fault the owner cannot fix: it counts as an attempt instead of waiting for them.
+        if (reply.vectors.length !== texts.length) throw new AiError('bad_reply', 'AI hub sent the wrong number of embeddings. Nexus tries again.');
         if (reply.vectors.length > 0) onWorked?.();
         return reply.vectors.map(unit);
       }),

@@ -2,7 +2,7 @@ import { AiError, locatorLabel, type Job, type MinutesAction, type MinutesPoint,
 import type { ItemKind } from '@apps-hub/library-core';
 import type { Tone } from '@apps-hub/ui';
 
-import { HUB_COPY, type HubState } from './hub-state.ts';
+import { HUB_COPY, WAITING_LINE, type HubState } from './hub-state.ts';
 
 const MAX_TITLE = 80;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -39,7 +39,10 @@ export function jobLabel(
   if (keptOut) return { label: 'Not in Nexus', tone: 'neutral' };
   if (!job) return { label: 'Not processed yet', tone: 'neutral' };
   if (job.status === 'done') return { label: `${plural(found.ideas, 'idea')}, ${plural(found.links, 'link')}`, tone: 'ok' };
-  if (job.status === 'failed') return { label: `Couldn't process it: ${job.error ?? 'unknown error'}`, tone: 'danger' };
+  if (job.status === 'failed') {
+    const why = job.error === WAITING_LINE ? 'AI hub never answered. Check AI hub and your connection, then try again' : (job.error ?? 'unknown error');
+    return { label: `Couldn't process it: ${why}`, tone: 'danger' };
+  }
   if (ai !== 'ready') return { label: HUB_COPY[ai].title, tone: 'warn' };
   if (job.status === 'queued' && job.error) return { label: job.error, tone: 'warn' };
   return { label: `${WORKING[job.stage as Exclude<Job['stage'], 'done'>](kind)}…`, tone: 'accent' };
@@ -60,10 +63,10 @@ export function minutesDetail(p: MinutesPoint & Partial<Pick<MinutesAction, 'own
 
 export const seekTo = (p: MinutesPoint): number => p.cites[0].startSec;
 
-// The queue's own messages promise a later retry; minutes run only on a tap, so they say what to do instead.
-export function minutesError(err: unknown): string {
+// The queue's own messages promise a later retry; minutes, Ask and the CV maker run only on a tap, so they say what to do instead.
+export function actionError(err: unknown): string {
   if (err instanceof AiError && err.kind === 'rate') return 'AI hub is busy. Wait a minute, then try again.';
-  if (err instanceof AiError && err.kind === 'offline') return 'AI hub did not answer. Check your connection, then try again.';
+  if (err instanceof AiError && (err.kind === 'offline' || err.kind === 'unanswered')) return 'AI hub did not answer. Check your connection, then try again.';
   return err instanceof Error ? err.message : String(err);
 }
 

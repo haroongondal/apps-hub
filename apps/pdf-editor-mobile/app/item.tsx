@@ -19,7 +19,7 @@ import { HubNotice } from '../src/nexus/hub-notice';
 import type { HubState } from '../src/nexus/hub-state';
 import { saveNote } from '../src/nexus/capture';
 import { audioFile } from '../src/nexus/content';
-import { jobLabel, minutesDetail, minutesError, seekTo, sourceText } from '../src/nexus/labels';
+import { jobLabel, minutesDetail, actionError, seekTo, sourceText } from '../src/nexus/labels';
 import { isMakingMinutes, makeMinutes } from '../src/nexus/minutes';
 import { SendButtons } from '../src/nexus/send-buttons';
 import { dueFor, dueText, type QuickPick } from '../src/nexus/today';
@@ -125,7 +125,7 @@ function MinutesSection({ item, saved, making, ai, playFrom }: { item: Item; sav
   const [error, setError] = useState<string | null>(null);
   const make = () => {
     setError(null);
-    makeMinutes(item.id).catch((err) => setError(minutesError(err)));
+    makeMinutes(item.id).catch((err) => setError(actionError(err)));
   };
   const again = () =>
     confirmAction({

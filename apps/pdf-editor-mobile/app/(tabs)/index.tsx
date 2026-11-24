@@ -16,7 +16,7 @@ import { hubState } from '../../src/nexus/ai';
 import { HubNotice, WaitingNotice } from '../../src/nexus/hub-notice';
 import { WAITING_LINE, type HubState } from '../../src/nexus/hub-state';
 import { addNote, addPhoto, addRecording } from '../../src/nexus/capture';
-import { citationLabel, jobLabel } from '../../src/nexus/labels';
+import { actionError, citationLabel, jobLabel } from '../../src/nexus/labels';
 import { currentMeeting, meetingStatus, meetingSupported } from '../../src/nexus/meeting';
 import type { MeetingState } from '../../src/nexus/meeting-session';
 import { openCitation } from '../../src/nexus/open-citation';
@@ -118,12 +118,16 @@ function CaptureCard({ card, ai }: { card: Card; ai: HubState }) {
   );
 }
 
-function ExchangeView({ x }: { x: Exchange }) {
+function ExchangeView({ x, onRetry }: { x: Exchange; onRetry: () => void }) {
   const open = (c: Answer['citations'][number]) => openCitation(c).catch((err) => Alert.alert('Could not open it', errorMessage(err)));
   return (
     <View style={{ gap: space.sm }}>
       <Text variant="bodyStrong">{x.question}</Text>
-      {x.error ? <Notice tone="danger">{x.error}</Notice> : null}
+      {x.error ? (
+        <Notice tone="danger" action={<Button label="Try again" size="sm" variant="secondary" onPress={onRetry} />}>
+          {x.error}
+        </Notice>
+      ) : null}
       {x.answer ? <Text>{x.answer.text}</Text> : x.error ? null : <Text tone="muted">Thinking…</Text>}
       {x.answer?.citations.map((c) => (
         <Button key={c.n} label={citationLabel(c)} size="sm" variant="ghost" onPress={() => void open(c)} accessibilityHint="Opens the source" />
@@ -168,11 +172,16 @@ export default function StreamScreen() {
     }
     const id = Date.now();
     setThread((t) => [{ id, question: value, answer: null, error: null }, ...t]);
+    runAsk(id, value);
+  };
+
+  const runAsk = (id: number, value: string) => {
     const settle = (patch: Partial<Exchange>) => setThread((t) => t.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+    settle({ answer: null, error: null });
     openKnowledge()
       .then((kn) => kn.ask(value))
       .then((answer) => settle({ answer }))
-      .catch((err) => settle({ error: errorMessage(err) }));
+      .catch((err) => settle({ error: actionError(err) }));
   };
 
   const toggleRecording = async () => {
@@ -237,7 +246,7 @@ export default function StreamScreen() {
       <FlatList<Card | Exchange>
         data={mode === 'capture' ? cards : thread}
         keyExtractor={(row) => ('item' in row ? row.item.id : String(row.id))}
-        renderItem={({ item: row }) => ('item' in row ? <CaptureCard card={row} ai={ai} /> : <ExchangeView x={row} />)}
+        renderItem={({ item: row }) => ('item' in row ? <CaptureCard card={row} ai={ai} /> : <ExchangeView x={row} onRetry={() => runAsk(row.id, row.question)} />)}
         ItemSeparatorComponent={() => <View style={{ height: space.md }} />}
         ListEmptyComponent={empty}
         keyboardShouldPersistTaps="handled"

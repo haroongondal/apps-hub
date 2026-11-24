@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { AiError, EMBED_DIMS, IMAGE_PROMPT, PAUSING } from '@apps-hub/knowledge-core';
+import { AiError, BOUNDED_PAUSE, EMBED_DIMS, IMAGE_PROMPT, PAUSING } from '@apps-hub/knowledge-core';
 import { AiHubError, ERROR_KINDS, type ErrorKind } from 'ai-hub-client/src/contract.ts';
 
 import { HUB_MAX_IMAGE, HUB_MAX_TOKENS, hubAi, jsonPart, toAiError, type Hub } from '../nexus/hub-ai.ts';
@@ -76,8 +76,8 @@ test('no hub wording or error kind reaches the owner', () => {
 test('errors the owner cannot fix map to what the queue understands', async () => {
   const cases: [ErrorKind, AiError['kind']][] = [
     ['busy', 'rate'],
-    ['timeout', 'offline'],
-    ['provider-error', 'offline'],
+    ['timeout', 'server'],
+    ['provider-error', 'unanswered'],
     ['too-large', 'bad_request'],
     ['invalid', 'bad_request'],
   ];
@@ -88,13 +88,11 @@ test('errors the owner cannot fix map to what the queue understands', async () =
   }
 });
 
-test('an offline phone (the hub says provider-error) and a slow hub pause the queue; a real bad request still counts an attempt', () => {
-  for (const kind of ['provider-error', 'timeout'] as const) {
-    const err = toAiError(new AiHubError(kind, 'AI hub couldn\'t reach Groq. Check the phone\'s connection and try again.'));
-    assert.ok(PAUSING.includes(err.kind), `${kind} pauses`);
-    assert.equal(err.message, 'Waiting for AI hub to answer');
-  }
-  for (const kind of ['too-large', 'invalid', 'cancelled'] as const) assert.ok(!PAUSING.includes(toAiError(new AiHubError(kind, 'x')).kind), `${kind} counts`);
+test('a hub service that did not answer pauses the queue (bounded); a timeout is billed and counts, like a real bad request', () => {
+  const err = toAiError(new AiHubError('provider-error', 'AI hub couldn\'t reach Groq. Check the phone\'s connection and try again.'));
+  assert.ok(PAUSING.includes(err.kind) && BOUNDED_PAUSE.includes(err.kind), 'provider-error pauses, bounded');
+  assert.equal(err.message, 'Waiting for AI hub to answer');
+  for (const kind of ['timeout', 'too-large', 'invalid', 'cancelled'] as const) assert.ok(!PAUSING.includes(toAiError(new AiHubError(kind, 'x')).kind), `${kind} counts`);
   assert.ok(!PAUSING.includes(new AiError('bad_reply', 'x').kind));
 });
 
@@ -120,6 +118,11 @@ test('embed with another vector size or model pauses and tells the owner to set 
     const s = setup({ embed: (req) => ({ vectors: (req as { texts: string[] }).texts.map(() => vector(other.dims)), ...other }) });
     await assert.rejects(s.ai.embed(['a', 'b']), (e: unknown) => e instanceof AiError && e.kind === 'auth' && /set Embeddings to gemini-embedding-001/.test(e.message));
   }
+});
+
+test('the wrong number of vectors is a hub fault that counts attempts instead of waiting for the owner', async () => {
+  const s = setup({ embed: () => ({ vectors: [vector(EMBED_DIMS)], dims: EMBED_DIMS, model: 'gemini-embedding-001' }) });
+  await assert.rejects(s.ai.embed(['a', 'b']), (e: unknown) => e instanceof AiError && e.kind === 'bad_reply' && !PAUSING.includes(e.kind));
 });
 
 test('transcribe asks for segments and returns them with their times', async () => {

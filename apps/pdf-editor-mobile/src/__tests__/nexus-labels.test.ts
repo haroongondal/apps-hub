@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import { AiError, type Job } from '@apps-hub/knowledge-core';
 
-import { captureTitle, citationLabel, clockTime, jobLabel, minutesDetail, minutesError, noteTitle, seekTo, sourceText } from '../nexus/labels.ts';
+import { captureTitle, citationLabel, clockTime, jobLabel, minutesDetail, actionError, noteTitle, seekTo, sourceText } from '../nexus/labels.ts';
 
 const job = (over: Partial<Job>): Job => ({ itemId: 'x', stage: 'text', status: 'queued', attempts: 0, error: null, updatedAt: 0, ...over });
 const none = { ideas: 0, links: 0 };
@@ -56,11 +56,13 @@ test('a minutes line says who, when it is due and where it was said, and seeks t
 });
 
 test('a minutes failure says what happened and how to fix it', () => {
-  assert.match(minutesError(new AiError('rate', 'AI hub is busy. Nexus tries again in a moment.')), /wait a minute, then try again/i);
-  assert.equal(minutesError(new AiError('auth', 'Add a key in AI hub')), 'Add a key in AI hub');
-  assert.match(minutesError(new AiError('offline', 'Waiting for AI hub to answer')), /did not answer.*try again/i);
+  assert.match(actionError(new AiError('rate', 'AI hub is busy. Nexus tries again in a moment.')), /wait a minute, then try again/i);
+  assert.equal(actionError(new AiError('auth', 'Add a key in AI hub')), 'Add a key in AI hub');
+  assert.match(actionError(new AiError('unanswered', 'Waiting for AI hub to answer')), /did not answer.*try again/i);
+  assert.match(actionError(new AiError('offline', 'x')), /did not answer.*try again/i);
+  assert.match(jobLabel(job({ status: 'failed', error: 'Waiting for AI hub to answer' }), 'note', 'ready', none).label, /AI hub never answered/);
   assert.equal(jobLabel(job({ error: 'Waiting for AI hub to answer' }), 'note', 'ready', none).label, 'Waiting for AI hub to answer');
-  assert.equal(minutesError(new Error('This recording is too short to make minutes from.')), 'This recording is too short to make minutes from.');
+  assert.equal(actionError(new Error('This recording is too short to make minutes from.')), 'This recording is too short to make minutes from.');
 });
 
 const cite = (o: Partial<Parameters<typeof citationLabel>[0]>) => ({ n: 2, itemId: 'i', title: 'Message from Bank, 3 Nov', kind: 'note' as const, locator: null, text: 't', origin: null, ...o });

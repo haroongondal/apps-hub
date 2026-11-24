@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { Knowledge, pruneConcepts } from '../knowledge.ts';
-import { AiError } from '../types.ts';
+import { Knowledge, MAX_ATTEMPTS, pruneConcepts } from '../knowledge.ts';
+import { AiError, MAX_PAUSES } from '../types.ts';
 import { setup } from './helpers.ts';
 
 const graph = {
@@ -72,6 +72,43 @@ test('an offline-style pause waits without using up an attempt, while a real bad
   assert.equal(await kn.runNext(), 'ran');
   job = await kn.job(item.id);
   assert.deepEqual([job?.status, job?.attempts], ['queued', 1]);
+});
+
+test('a service that never answers pauses five times without an attempt, then counts attempts until the item fails', async () => {
+  const { kn, db, ai, add } = await setup();
+  const item = await add('Note', 'text');
+  await kn.runNext();
+  ai.fail = new AiError('unanswered', 'Waiting for AI hub to answer');
+  const state = async () => (await db.first('SELECT status, attempts, pauses FROM kn_jobs WHERE item_id = ?', [item.id])) as { status: string; attempts: number; pauses: number };
+  for (let i = 1; i <= MAX_PAUSES; i++) {
+    assert.equal(await kn.runNext(), 'paused');
+    assert.deepEqual(await state(), { status: 'queued', attempts: 0, pauses: i });
+  }
+  for (let attempt = 1; attempt < MAX_ATTEMPTS; attempt++) {
+    assert.equal(await kn.runNext(), 'ran');
+    assert.deepEqual(await state(), { status: 'queued', attempts: attempt, pauses: MAX_PAUSES });
+  }
+  assert.equal(await kn.runNext(), 'ran');
+  assert.deepEqual(await state(), { status: 'failed', attempts: MAX_ATTEMPTS, pauses: MAX_PAUSES });
+  assert.equal(await kn.runNext(), 'idle');
+});
+
+test('a success clears the pauses, so a later outage gets its five again; retry clears them too', async () => {
+  const { kn, db, ai, add } = await setup();
+  const item = await add('Note', 'text');
+  await kn.runNext();
+  ai.fail = new AiError('unanswered', 'x');
+  await kn.runNext();
+  await kn.runNext();
+  ai.fail = null;
+  await kn.runNext(); // embed works
+  assert.equal((await db.first('SELECT pauses FROM kn_jobs WHERE item_id = ?', [item.id]))?.pauses, 0);
+  ai.fail = new AiError('unanswered', 'x');
+  for (let i = 0; i < MAX_PAUSES + MAX_ATTEMPTS; i++) await kn.runNext();
+  assert.equal((await kn.job(item.id))?.status, 'failed');
+  ai.fail = null;
+  await kn.retry(item.id);
+  assert.equal((await db.first('SELECT pauses FROM kn_jobs WHERE item_id = ?', [item.id]))?.pauses, 0);
 });
 
 test('a stage that keeps failing stops after three attempts and can be retried', async () => {

@@ -86,11 +86,11 @@ Current apps:
   AI layer over the same Library. AI runs through AI hub (`com.haroon.aihub`) only: Nexus has no
   keys, no provider and no key settings of its own, and nothing leaves the phone without AI hub.
   Through the hub, Gemini embeds text and reads images, Groq transcribes, and chat (graph, Ask,
-  Minutes, CVs, receipts) goes to Groq, or to Gemini when Groq has no working key or the owner chose
-  Gemini in AI hub; no OpenAI. Without AI hub installed, Nexus says "AI needs AI hub" with a button
+  Minutes, CVs, receipts) goes to Groq or Gemini, whichever AI hub uses for chat; no OpenAI. Without AI hub installed, Nexus says "AI needs AI hub" with a button
   to the Store; if AI hub does not allow Nexus, "Allow Nexus in AI hub"; with no key there, "Add a
-  key in AI hub"; a hub that does not answer pauses the queue ("Waiting for AI hub to answer", with a
-  Stream notice) without using up attempts. Keys Nexus saved before are deleted from the phone only
+  key in AI hub"; a hub whose service fails or is offline pauses an item five times ("Waiting for AI hub to
+  answer", with a Stream notice) without using up attempts, then counts attempts until it fails; a
+  timeout always counts. Keys Nexus saved before are deleted from the phone only
   after the first successful hub chat or embed (a marker file records it).
   Logic is in `packages/knowledge-core`, glue in `apps/pdf-editor-mobile/src/nexus`. Design
   `docs/superpowers/specs/2026-11-18-nexus-design.md`, progress `docs/handoffs/nexus.md`.
@@ -108,9 +108,8 @@ Current apps:
   is "No restrictions". Voice notes set `shouldPlayInBackground` while recording; a voice note
   killed mid-recording is lost (use Meeting).
   Minutes: made by `composeMinutes` (`packages/knowledge-core/src/minutes.ts`) only when the owner
-  taps "Make minutes"; chat goes through AI hub (`ai.complete`; Groq gpt-oss-120b, or Gemini when
-  Groq has no working key or the owner chose it in the hub; the consent copy says so), so the timed
-  transcript lines are sent to Groq or Gemini. The transcript is untrusted (each segment `[seq] text` inside
+  taps "Make minutes"; chat goes through AI hub (`ai.complete`; Groq or Gemini, whichever AI hub
+  uses for chat; the consent copy says so), so the timed transcript lines are sent to Groq or Gemini. The transcript is untrusted (each segment `[seq] text` inside
   fences, delimiters neutralised); the model cites segment ids, the code keeps only ids it was
   shown and maps them to start times, uncited items are never stored; replies are validated and
   retried 3 times; long transcripts map-reduce over 10,000-character windows; stored in
@@ -152,7 +151,7 @@ Current apps:
   service, at most 50 new items per source per run), and keeps a copy in `library.db` as a
   source-tagged item (shown read-only, labelled 'From Inflow message, 3 Nov', no Delete, Keep out
   still works). The text goes to Gemini for embeddings and, when the owner asks, the matching
-  parts go to Groq (or Gemini when Groq has no working key), all through AI hub. Source items are
+  parts go to Groq or Gemini, whichever AI hub uses for chat, all through AI hub. Source items are
   embed-only (never graph extraction). All source text is untrusted and fenced in the Ask prompt.
   Never fetched: health data, one-time codes, Strongroom content. Turning a Nexus switch off
   deletes the items, chunks, vectors, search rows, graph, minutes and the read mark at once (a

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { View } from 'react-native';
 
 import { IconButton } from '../../src/library/icon-button';
-import { errorMessage } from '../../src/library/use-library';
+import { actionError } from '../../src/nexus/labels';
 import { generateBody } from '../../src/cv/generate';
 import { type TemplateId } from '../../src/cv/model';
 import { newCv, saveCv } from '../../src/cv/store';
@@ -31,7 +31,7 @@ export default function NewCvScreen() {
       saveCv(cv);
       router.replace({ pathname: '/cv/[id]', params: { id: cv.id } });
     } catch (err) {
-      setError(errorMessage(err));
+      setError(actionError(err));
     } finally {
       setBusy(false);
     }

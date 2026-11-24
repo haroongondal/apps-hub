@@ -12,6 +12,6 @@ export type { ChatText } from './prompts.ts';
 export { KNOWLEDGE_STEPS } from './schema.ts';
 export { cleanRow, dayLabel, looksLikeOneTimeCode, MAX_SOURCE_TEXT, sourceBody, sourceLabel, SourceSync, sourceTitle } from './sources.ts';
 export type { PagedSource, SnapshotSource, SourceProvider, SourceRow, SourceStatus, SwitchStore, SyncReport } from './sources.ts';
-export { AiError, PAUSING, RELATIONS } from './types.ts';
+export { AiError, BOUNDED_PAUSE, MAX_PAUSES, PAUSING, RELATIONS } from './types.ts';
 export type { AiErrorKind, AiPort, ConceptRelation, ContentPort, Extraction, Locator, Relation, Segment } from './types.ts';
 export { cosine, fromBlob, toBlob } from './vectors.ts';

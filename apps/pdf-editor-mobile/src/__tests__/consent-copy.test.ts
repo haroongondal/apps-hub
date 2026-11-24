@@ -23,10 +23,8 @@ test('every text that says where chat goes names Groq, Gemini and AI hub', () =>
   }
 });
 
-test('the chat texts say Gemini answers when Groq has no working key', () => {
-  for (const name of ['MINUTES_REPLACE', 'MINUTES_FOOTER', 'SETTINGS_LEAVES', 'ASK_KEEPS', 'RECEIPT_START', 'CV_NEW_HINT', 'CV_CHANGE_FOOTER'] as const) {
-    assert.match(CHAT_TEXTS[name], /Gemini when Groq has no working key/, name);
-  }
+test('the chat texts say AI hub decides between Groq and Gemini', () => {
+  for (const [name, text] of Object.entries(CHAT_TEXTS)) assert.match(text, /Groq or Gemini, whichever AI hub uses for chat/, name);
 });
 
 test('the consent texts name no key of the owner and no old provider', () => {
