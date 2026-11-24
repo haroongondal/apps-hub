@@ -118,7 +118,7 @@ export default function MakeAReel() {
   }
 
   async function askDeputy() {
-    const draft = deputyDraft(target, caption, app);
+    const draft = deputyDraft(target, caption, app, output?.name ?? '');
     if (!draft.ok) return setDeputy({ tone: 'danger', text: draft.reason });
     setAsking(true);
     try {

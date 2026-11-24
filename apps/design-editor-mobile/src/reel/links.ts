@@ -29,11 +29,13 @@ function fit(text: string, room: number): string {
 export type DeputyDraft = { ok: true; extras: { task: string; apps?: string[] } } | { ok: false; reason: string };
 
 // The task is only ever the owner's own typed words in Design Editor's sentence; the caption is shortened before the target ever is.
-export function deputyDraft(target: string, caption: string, app: string): DeputyDraft {
+export function deputyDraft(target: string, caption: string, app: string, fileName: string): DeputyDraft {
   const who = tidy(target);
+  const file = tidy(fileName);
+  if (!file) return { ok: false, reason: 'Make the reel first, then send it.' };
   if (!who) return { ok: false, reason: 'Type who to send it to, like the Family group on WhatsApp.' };
   if (who.length > TARGET_MAX) return { ok: false, reason: `Keep who to send it to under ${TARGET_MAX} letters.` };
-  const head = `Send the newest video from the Design Editor folder in Movies to ${who}.`;
+  const head = `Send the video ${file} from the Design Editor folder in Movies to ${who}.`;
   const words = tidy(caption);
   const task = words ? `${head} Caption: ${fit(words, TASK_MAX - head.length - ' Caption: '.length)}` : head;
   const extras = app ? { task, apps: [app] } : { task };

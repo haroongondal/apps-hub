@@ -10,8 +10,9 @@ const cases: Case[] = JSON.parse(readFileSync(FIXTURE, 'utf8'));
 const expand = (v: unknown): unknown =>
   Array.isArray(v) ? v.map(expand) : typeof v === 'object' && v !== null && 'repeat' in v ? (v as { repeat: string; n: number }).repeat.repeat((v as { n: number }).n) : v;
 
+const FILE = 'Reel 2.mp4';
 const draft = (target: string, caption = '', app = '') => {
-  const d = deputyDraft(target, caption, app);
+  const d = deputyDraft(target, caption, app, FILE);
   assert.ok(d.ok, `refused: ${!d.ok && d.reason}`);
   return d.extras;
 };
@@ -25,14 +26,22 @@ test('the contract fixture is the live PROPOSE_TASK spec, and each case gets its
 
 test('the task is Design Editor sentence with the owner words; context and ref are never sent', () => {
   assert.deepEqual(draft('the Family group on WhatsApp', 'Our weekend'), {
-    task: 'Send the newest video from the Design Editor folder in Movies to the Family group on WhatsApp. Caption: Our weekend',
+    task: 'Send the video Reel 2.mp4 from the Design Editor folder in Movies to the Family group on WhatsApp. Caption: Our weekend',
   });
-  assert.deepEqual(draft('  Sara  '), { task: 'Send the newest video from the Design Editor folder in Movies to Sara.' });
-  assert.deepEqual(draft('Sara', '', 'com.whatsapp'), { task: 'Send the newest video from the Design Editor folder in Movies to Sara.', apps: ['com.whatsapp'] });
+  assert.deepEqual(draft('  Sara  '), { task: 'Send the video Reel 2.mp4 from the Design Editor folder in Movies to Sara.' });
+  assert.deepEqual(draft('Sara', '', 'com.whatsapp'), { task: 'Send the video Reel 2.mp4 from the Design Editor folder in Movies to Sara.', apps: ['com.whatsapp'] });
+});
+
+test('the sentence names the reel by file name, not "the newest video", and holds no storage path', () => {
+  const { task } = draft('Sara');
+  assert.ok(task.includes(FILE));
+  assert.doesNotMatch(task, /newest|\/|file:/);
+  const none = deputyDraft('Sara', '', '', '  ');
+  assert.equal(none.ok, false);
 });
 
 test('line breaks and control characters become spaces, so the task stays one line', () => {
-  assert.equal(draft('Mum\nand Dad', 'Hi\u0000there\r\n').task, 'Send the newest video from the Design Editor folder in Movies to Mum and Dad. Caption: Hi there');
+  assert.equal(draft('Mum\nand Dad', 'Hi\u0000there\r\n').task, 'Send the video Reel 2.mp4 from the Design Editor folder in Movies to Mum and Dad. Caption: Hi there');
 });
 
 test('a long caption is shortened to fit 300, never in the middle of an emoji', () => {
@@ -47,10 +56,10 @@ test('a long caption is shortened to fit 300, never in the middle of an emoji', 
 });
 
 test('who to send it to is never cut: empty or too long is refused with a sentence', () => {
-  const empty = deputyDraft('   ', 'caption', '');
+  const empty = deputyDraft('   ', 'caption', '', FILE);
   assert.equal(empty.ok, false);
   assert.match(!empty.ok ? empty.reason : '', /Type who to send it to/);
-  const long = deputyDraft('x'.repeat(TARGET_MAX + 1), '', '');
+  const long = deputyDraft('x'.repeat(TARGET_MAX + 1), '', '', FILE);
   assert.equal(long.ok, false);
   assert.ok(draft('x'.repeat(TARGET_MAX)).task.includes('x'.repeat(TARGET_MAX)));
 });
