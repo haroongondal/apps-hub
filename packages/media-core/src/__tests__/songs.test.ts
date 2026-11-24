@@ -26,7 +26,10 @@ test('songs: an empty search lists the most downloaded songs', () => {
 
 test('songs: a page keeps only CC0 sounds with an https MP3 preview, and says whether more pages follow', () => {
   const page = parseSongPage(sample());
-  assert.deepEqual(page.hits, [{ id: 101, name: 'Calm loop', durationS: 92.4, previewUrl: 'https://cdn.freesound.org/previews/101/101_1-hq.mp3' }]);
+  assert.deepEqual(page.hits, [
+    { id: 101, name: 'Calm loop', durationS: 92.4, previewUrl: 'https://cdn.freesound.org/previews/101/101_1-hq.mp3' },
+    { id: 105, name: 'Named license', durationS: 30, previewUrl: 'https://cdn.freesound.org/previews/105/105_5-hq.mp3' },
+  ]);
   assert.equal(page.hasMore, true);
 });
 

@@ -21,6 +21,10 @@ export function songSearchUrl(query: string, token: string, page: number): strin
   return `${FREESOUND_SEARCH_URL}?${params.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&')}`;
 }
 
+// Freesound writes the license as a link (".../publicdomain/zero/1.0/"); older docs name it "Creative Commons 0".
+const isCc0 = (license: unknown) =>
+  typeof license === 'string' && (license === 'Creative Commons 0' || /^https?:\/\/creativecommons\.org\/publicdomain\/zero\//.test(license));
+
 export function parseSongPage(json: unknown): SongPage {
   if (typeof json !== 'object' || json === null) return { hits: [], hasMore: false };
   const body = json as { results?: unknown; next?: unknown };
@@ -33,7 +37,7 @@ export function parseSongPage(json: unknown): SongPage {
     const preview = previews['preview-hq-mp3'];
     const durationS = typeof s.duration === 'number' ? s.duration : NaN;
     if (typeof s.id !== 'number' || !Number.isInteger(s.id) || typeof s.name !== 'string') continue;
-    if (s.license !== 'Creative Commons 0' || !(durationS > 0)) continue;
+    if (!isCc0(s.license) || !(durationS > 0)) continue;
     if (typeof preview !== 'string' || !preview.startsWith('https://')) continue;
     hits.push({ id: s.id, name: s.name, durationS, previewUrl: preview });
   }

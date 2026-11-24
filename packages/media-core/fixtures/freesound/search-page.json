@@ -7,29 +7,36 @@
       "id": 101,
       "name": "Calm loop",
       "duration": 92.4,
-      "license": "Creative Commons 0",
+      "license": "http://creativecommons.org/publicdomain/zero/1.0/",
       "previews": { "preview-hq-mp3": "https://cdn.freesound.org/previews/101/101_1-hq.mp3", "preview-lq-mp3": "https://cdn.freesound.org/previews/101/101_1-lq.mp3" }
     },
     {
       "id": 102,
       "name": "Attributed piece",
       "duration": 120.0,
-      "license": "Attribution",
+      "license": "http://creativecommons.org/licenses/by/3.0/",
       "previews": { "preview-hq-mp3": "https://cdn.freesound.org/previews/102/102_2-hq.mp3" }
     },
     {
       "id": 103,
       "name": "No preview",
       "duration": 60.0,
-      "license": "Creative Commons 0",
+      "license": "http://creativecommons.org/publicdomain/zero/1.0/",
       "previews": {}
     },
     {
       "id": 104,
       "name": "Plain http preview",
       "duration": 45.0,
-      "license": "Creative Commons 0",
+      "license": "http://creativecommons.org/publicdomain/zero/1.0/",
       "previews": { "preview-hq-mp3": "http://cdn.freesound.org/previews/104/104_4-hq.mp3" }
+    },
+    {
+      "id": 105,
+      "name": "Named license",
+      "duration": 30.0,
+      "license": "Creative Commons 0",
+      "previews": { "preview-hq-mp3": "https://cdn.freesound.org/previews/105/105_5-hq.mp3" }
     }
   ]
 }
