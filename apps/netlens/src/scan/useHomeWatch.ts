@@ -7,14 +7,19 @@ import {
   MAX_SWEEP_PREFIX,
   hashNetworkId,
   homeWatchSnapshot,
+  readHomeRouter,
   type HomeWatchSettings,
   type HomeWatchStatus,
   type InterfaceInfo,
+  type NetLensNativeBinding,
   type ReconciledDevice,
 } from '@apps-hub/core';
 import { createHomeWatchBinding } from 'netlens-core';
 
 const SYNC_DELAY_MS = 2000;
+const NO_ROUTER_ID =
+  "Your router doesn't tell HomeNet its ID, so HomeNet can't tell your home Wi-Fi from another one that uses the same router address. " +
+  "Turn on UPnP in your router's settings, run a check, then try again.";
 
 export interface HomeWatch {
   status: HomeWatchStatus | null;
@@ -37,6 +42,8 @@ export function useHomeWatch(
   iface: InterfaceInfo | null,
   networkName: string | null,
   scanDone: boolean,
+  net: Pick<NetLensNativeBinding, 'tcpFetch'>,
+  locationsByIp: ReadonlyMap<string, string[]>,
 ): HomeWatch {
   const binding = useRef(createHomeWatchBinding()).current;
   const [status, setStatus] = useState<HomeWatchStatus | null>(null);
@@ -64,12 +71,22 @@ export function useHomeWatch(
   const watching = settings !== null && (settings.whoIsHome || settings.newDevices);
 
   useEffect(() => {
-    if (!settings || !onHome || !scanDone || !watching) return;
+    const saved = settings?.home;
+    if (!settings || !saved || !iface || !onHome || !scanDone || !watching) return;
+    let cancelled = false;
     const timer = setTimeout(() => {
-      const home = settings.home && networkName ? { ...settings.home, label: networkName } : settings.home;
-      binding.setHomeWatch({ ...settings, home }, homeWatchSnapshot(devices)).then(setStatus, () => undefined);
+      void readHomeRouter(net, iface, locationsByIp.get(saved.gatewayIp) ?? []).then((router) => {
+        // Another router at the same address is not home: nothing from this scan reaches the background checks.
+        if (cancelled || router === null || router.routerId !== saved.routerId) return;
+        // The router may announce its description on a new port after a restart.
+        const home = { ...saved, label: networkName ?? saved.label, routerUrl: router.routerUrl };
+        binding.setHomeWatch({ ...settings, home }, homeWatchSnapshot(devices)).then(setStatus, () => undefined);
+      });
     }, SYNC_DELAY_MS);
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [binding, devices, onHome, scanDone, watching]);
 
   const updateHomeWatch = useCallback(
@@ -79,21 +96,24 @@ export function useHomeWatch(
       if (!next.whoIsHome && !next.newDevices) next.home = null;
       else if (!prev.whoIsHome && !prev.newDevices) {
         const gatewayIp = iface?.gatewayIp ?? null;
-        if (gatewayIp === null || currentNetworkId === null || hashNetworkId(gatewayIp, MAX_SWEEP_PREFIX) !== currentNetworkId) {
+        if (iface === null || gatewayIp === null || currentNetworkId === null || hashNetworkId(gatewayIp, MAX_SWEEP_PREFIX) !== currentNetworkId) {
           return 'Run a check on your home Wi-Fi first, then turn this on.';
         }
-        next.home = { networkId: currentNetworkId, gatewayIp, label: networkName ?? 'your home Wi-Fi' };
+        const router = await readHomeRouter(net, iface, locationsByIp.get(gatewayIp) ?? []);
+        if (router === null) return NO_ROUTER_ID; // fail closed (my call): the router address alone is not home
+        next.home = { networkId: currentNetworkId, gatewayIp, label: networkName ?? 'your home Wi-Fi', ...router };
       }
       if (patch.newDevices) setNotificationsAllowed(await notificationsGranted(true).catch(() => false));
-      const sameNetwork = next.home !== null && next.home.networkId === currentNetworkId;
+      // Only a home pinned just now has a checked router; otherwise the post-scan sync sends the list once it has checked.
+      const pinned = next.home !== null && next.home !== prev.home;
       try {
-        setStatus(await binding.setHomeWatch(next, sameNetwork ? homeWatchSnapshot(devices) : null));
+        setStatus(await binding.setHomeWatch(next, pinned ? homeWatchSnapshot(devices) : null));
         return null;
       } catch (e: unknown) {
         return `HomeNet could not save this setting: ${e instanceof Error ? e.message : String(e)}`;
       }
     },
-    [binding, currentNetworkId, devices, iface, networkName, settings],
+    [binding, currentNetworkId, devices, iface, locationsByIp, net, networkName, settings],
   );
 
   const markDeviceMine = useCallback(

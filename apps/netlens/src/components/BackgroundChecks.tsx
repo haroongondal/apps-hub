@@ -53,8 +53,8 @@ export function BackgroundChecks() {
         title="Checks in the background"
         footer={
           s.home
-            ? `Runs only while this phone is on ${where}. Never on mobile data or another Wi-Fi.`
-            : 'Turn one on while this phone is on your home Wi-Fi. HomeNet then checks only that Wi-Fi.'
+            ? `Runs only while this phone is on ${where}, matched by your router: the same router address and the ID your router gives itself. Not on mobile data, and not on a Wi-Fi whose router gives another ID or none.`
+            : "Turn one on while this phone is on your home Wi-Fi. HomeNet remembers your router's ID and checks only while it answers. If your router gives no ID, these checks stay off."
         }
       >
         <SwitchRow

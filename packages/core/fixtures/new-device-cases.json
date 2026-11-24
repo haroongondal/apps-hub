@@ -56,12 +56,20 @@
     "expect": []
   },
   {
-    "name": "false positive: a device marked as mine stays known after the window",
+    "name": "false positive: a device marked as mine within the window stays known",
+    "ctx": { "selfIp": "192.168.1.10", "gatewayIp": "192.168.1.1", "now": 3000000000, "windowDays": 30 },
+    "alive": [{ "ip": "192.168.1.50", "port": 62078 }],
+    "known": [],
+    "alerts": [{ "ip": "192.168.1.50", "firstSeenAt": 408000000, "label": "iPhone or iPad", "acknowledged": true }],
+    "expect": []
+  },
+  {
+    "name": "a device marked as mine expires after the window like any report, so whatever holds that address now is new",
     "ctx": { "selfIp": "192.168.1.10", "gatewayIp": "192.168.1.1", "now": 3000000000, "windowDays": 30 },
     "alive": [{ "ip": "192.168.1.50", "port": 62078 }],
     "known": [],
     "alerts": [{ "ip": "192.168.1.50", "firstSeenAt": 5, "label": "iPhone or iPad", "acknowledged": true }],
-    "expect": []
+    "expect": ["192.168.1.50"]
   },
   {
     "name": "an old unacknowledged report expires and the device is new again",

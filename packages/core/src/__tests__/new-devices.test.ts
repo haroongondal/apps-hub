@@ -29,8 +29,8 @@ for (const c of cases) {
   });
 }
 
-test('the fixture has its eleven cases, seven of them false-positive guards', () => {
-  assert.equal(cases.length, 11);
+test('the fixture has its twelve cases, seven of them false-positive guards', () => {
+  assert.equal(cases.length, 12);
   assert.equal(cases.filter((c) => c.name.startsWith('false positive')).length, 7);
   assert.equal(NEW_DEVICE_WINDOW_DAYS, 30);
 });

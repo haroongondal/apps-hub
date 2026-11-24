@@ -28,7 +28,7 @@ export function NewDevices() {
                 label="This is mine"
                 variant="secondary"
                 size="sm"
-                accessibilityHint="HomeNet stops telling you about this device"
+                accessibilityHint="HomeNet stops telling you about this device for 30 days"
                 onPress={() => {
                   homeWatch.markDeviceMine(d.ip).then(
                     () => setProblem(null),

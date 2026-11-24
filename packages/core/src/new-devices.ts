@@ -38,7 +38,8 @@ export function findNewDevices(
   const since = ctx.now - ctx.windowDays * DAY_MS;
   const skip = new Set<string>([ctx.selfIp, ...(ctx.gatewayIp ? [ctx.gatewayIp] : [])]);
   for (const k of known) if (k.tagged || k.lastSeenAt >= since) skip.add(k.ip);
-  for (const a of alerts) if (a.acknowledged || a.firstSeenAt >= since) skip.add(a.ip);
+  // "This is mine" ages out with the report: an address alone cannot say it is still the same device.
+  for (const a of alerts) if (a.firstSeenAt >= since) skip.add(a.ip);
   const fresh: AliveHost[] = [];
   for (const host of alive) {
     if (skip.has(host.ip)) continue;

@@ -1,6 +1,10 @@
 // Background checks run natively (Android WorkManager) without JS, so the app hands native a
 // snapshot of its device list after each scan on the home network; iOS answers { supported: false }.
 import type { ReconciledDevice } from './device-repository.ts';
+import { MAX_XML } from './igd.ts';
+import { httpRequest, parseHttpUrl } from './lan-http.ts';
+import type { InterfaceInfo } from './model.ts';
+import type { NetLensNativeBinding } from './native-binding.ts';
 import type { KnownHost } from './new-devices.ts';
 
 export const NEW_DEVICE_HOURS = [3, 6, 12, 24] as const;
@@ -13,6 +17,9 @@ export interface HomeNetworkRef {
   networkId: string;
   gatewayIp: string;
   label: string;
+  /** The router's own UPnP ID and the description URL it came from; the background checks run only when both still match. */
+  routerId: string;
+  routerUrl: string;
 }
 
 export interface HomeWatchSettings {
@@ -97,6 +104,30 @@ export function homeWatchSnapshot(devices: readonly ReconciledDevice[]): HomeWat
   return { people: [...people.values()], known: [...known.values()].slice(0, MAX_KNOWN) };
 }
 
+const UDN = /<UDN>\s*(uuid:[^<>\s]{1,128})\s*<\/UDN>/i;
+const MAX_ROUTER_URLS = 8;
+
+/** The first UDN of a device description, the router itself. Twin of HomeRouter.routerId (Kotlin). */
+export function routerIdOf(description: string): string | null {
+  return UDN.exec(description)?.[1] ?? null;
+}
+
+/** The gateway's own ID from a description URL it announced; null when the router gives none. */
+export async function readHomeRouter(
+  binding: Pick<NetLensNativeBinding, 'tcpFetch'>,
+  iface: InterfaceInfo,
+  locations: readonly string[],
+): Promise<{ routerId: string; routerUrl: string } | null> {
+  for (const url of locations.slice(0, MAX_ROUTER_URLS)) {
+    const target = parseHttpUrl(url);
+    if (!target || target.ip !== iface.gatewayIp) continue;
+    const res = await httpRequest(binding, iface, target, { maxBytes: MAX_XML });
+    const routerId = res && res.status === 200 ? routerIdOf(res.body) : null;
+    if (routerId) return { routerId, routerUrl: url };
+  }
+  return null;
+}
+
 const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
 const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
 const list = (v: unknown): Record<string, unknown>[] =>
@@ -112,7 +143,13 @@ export function parseHomeWatchStatus(raw: unknown): HomeWatchStatus {
   const hours = num(s.newDeviceHours);
   const home =
     h && str(h.networkId) && str(h.gatewayIp)
-      ? { networkId: str(h.networkId)!, gatewayIp: str(h.gatewayIp)!, label: str(h.label) ?? '' }
+      ? {
+          networkId: str(h.networkId)!,
+          gatewayIp: str(h.gatewayIp)!,
+          label: str(h.label) ?? '',
+          routerId: str(h.routerId) ?? '',
+          routerUrl: str(h.routerUrl) ?? '',
+        }
       : null;
   return {
     supported: true,

@@ -7,7 +7,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class HomeWatchStoreTest {
-  private val home = mapOf("networkId" to "net_1", "gatewayIp" to "192.168.1.1", "label" to "Home")
+  private val home = mapOf(
+    "networkId" to "net_1", "gatewayIp" to "192.168.1.1", "label" to "Home",
+    "routerId" to "uuid:home-router-1", "routerUrl" to "http://192.168.1.1:5000/rootDesc.xml",
+  )
   private val on = mapOf<String, Any?>("whoIsHome" to true, "newDevices" to true, "newDeviceHours" to 12.0, "share" to false, "home" to home)
 
   @Test fun onlyPrivateAddressesFromTheAppAreKept() {
@@ -51,6 +54,24 @@ class HomeWatchStoreTest {
     val snapshot = mapOf<String, Any?>("people" to listOf(mapOf("label" to "sara", "ips" to listOf("192.168.1.20"), "seenNow" to true, "lastSeenAt" to 800.0)))
     val s = HomeWatchStore.applyFromApp(prev, on, snapshot)
     assertFalse(s.people.single().state.present)
+  }
+
+  @Test fun aHomeWithoutTheRouterIdOrWithItsDescriptionOffTheGatewayIsNotSaved() {
+    val saved = HomeWatchStore.applyFromApp(HomeWatchState(), on, null).settings.home
+    assertEquals(HomeNetwork("net_1", "192.168.1.1", "Home", "uuid:home-router-1", "http://192.168.1.1:5000/rootDesc.xml"), saved)
+    for (bad in listOf(
+      home - "routerId",
+      home + ("routerId" to ""),
+      home + ("routerId" to "not-a-uuid"),
+      home - "routerUrl",
+      home + ("routerUrl" to "http://192.168.1.7:5000/rootDesc.xml"),
+    )) {
+      assertNull(bad.toString(), HomeWatchStore.applyFromApp(HomeWatchState(), on + ("home" to bad), null).settings.home)
+    }
+    @Suppress("UNCHECKED_CAST")
+    val status = (HomeWatchStore.status(HomeWatchStore.applyFromApp(HomeWatchState(), on, null))["settings"] as Map<String, Any?>)["home"] as Map<String, Any?>
+    assertEquals("uuid:home-router-1", status["routerId"])
+    assertEquals("http://192.168.1.1:5000/rootDesc.xml", status["routerUrl"])
   }
 
   @Test fun privateCheck() {

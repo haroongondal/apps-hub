@@ -67,7 +67,7 @@ export function carryPersonTags(
   serviceNamesByIp?: ReadonlyMap<string, readonly string[]>,
 ): ReconciledDevice[] {
   const changed = new Map<number, ReconciledDevice>();
-  for (const c of carryMatches(devices, serviceNamesByIp)) {
+  for (const c of carryMatches(devices, serviceNamesByIp).filter((m) => !m.suggest)) {
     changed.set(c.to, { ...devices[c.to], person: devices[c.from].person });
     changed.set(c.from, { ...devices[c.from], person: null });
   }
@@ -85,12 +85,30 @@ export function personTagCarries(
   devices: readonly ReconciledDevice[],
   serviceNamesByIp?: ReadonlyMap<string, readonly string[]>,
 ): TagCarry[] {
-  return carryMatches(devices, serviceNamesByIp).map((c) => ({
-    person: tagOf(devices[c.from]),
-    from: { ...devices[c.from], person: null },
-    device: { ...devices[c.to], person: devices[c.from].person },
-    reason: c.reason,
-  }));
+  return tagMoves(devices, serviceNamesByIp, false);
+}
+
+/** Moves the owner should confirm: a row that only calls itself "<person>'s …" may be their laptop or a guest's phone. */
+export function personTagSuggestions(
+  devices: readonly ReconciledDevice[],
+  serviceNamesByIp?: ReadonlyMap<string, readonly string[]>,
+): TagCarry[] {
+  return tagMoves(devices, serviceNamesByIp, true);
+}
+
+function tagMoves(
+  devices: readonly ReconciledDevice[],
+  serviceNamesByIp: ReadonlyMap<string, readonly string[]> | undefined,
+  suggest: boolean,
+): TagCarry[] {
+  return carryMatches(devices, serviceNamesByIp)
+    .filter((c) => c.suggest === suggest)
+    .map((c) => ({
+      person: tagOf(devices[c.from]),
+      from: { ...devices[c.from], person: null },
+      device: { ...devices[c.to], person: devices[c.from].person },
+      reason: c.reason,
+    }));
 }
 
 export function ownerOfName(name: string | null): string | null {
@@ -103,13 +121,13 @@ export function ownerOfName(name: string | null): string | null {
 function carryMatches(
   devices: readonly ReconciledDevice[],
   serviceNamesByIp: ReadonlyMap<string, readonly string[]> = new Map(),
-): { from: number; to: number; reason: string }[] {
+): { from: number; to: number; reason: string; suggest: boolean }[] {
   const candidates = devices
     .map((d, i) => ({ d, i }))
     .filter(({ d }) => d.seenThisScan && !tagOf(d));
   const services = (d: ReconciledDevice): readonly string[] => serviceNamesByIp.get(d.lastIp) ?? [];
   const used = new Set<number>();
-  const found: { from: number; to: number; reason: string }[] = [];
+  const found: { from: number; to: number; reason: string; suggest: boolean }[] = [];
   devices.forEach((old, from) => {
     if (old.seenThisScan || !tagOf(old)) return;
     const host = matchKey(old.hostname);
@@ -132,15 +150,17 @@ function carryMatches(
         return name ? `It calls itself ${name}` : null;
       },
     ];
-    for (const step of steps) {
+    for (const [n, step] of steps.entries()) {
       const matches = candidates.flatMap(({ d, i }) => {
         const reason = step(d);
         return reason === null ? [] : [{ i, reason }];
       });
       if (matches.length === 0) continue;
       if (matches.length === 1 && !used.has(matches[0].i)) {
-        used.add(matches[0].i);
-        found.push({ from, to: matches[0].i, reason: matches[0].reason });
+        // The owner word is only a suggestion: it never moves the tag (and so never takes the row) by itself.
+        const suggest = n === steps.length - 1;
+        if (!suggest) used.add(matches[0].i);
+        found.push({ from, to: matches[0].i, reason: matches[0].reason, suggest });
       }
       return;
     }

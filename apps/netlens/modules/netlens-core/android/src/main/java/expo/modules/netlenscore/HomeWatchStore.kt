@@ -51,7 +51,11 @@ object HomeWatchStore {
     val home = (settings["home"] as? Map<*, *>)?.let { h ->
       val id = h["networkId"] as? String
       val gw = (h["gatewayIp"] as? String)?.takeIf(::isPrivateIpv4)
-      if (id.isNullOrBlank() || gw == null) null else HomeNetwork(id, gw, (h["label"] as? String).orEmpty().take(64))
+      val routerId = h["routerId"] as? String
+      val routerUrl = (h["routerUrl"] as? String)?.trim()
+      // No router ID, or a description URL off the gateway: no home, so nothing runs (fail closed).
+      if (id.isNullOrBlank() || gw == null || !HomeRouter.validId(routerId) || routerUrl == null || HomeRouter.target(routerUrl, gw) == null) null
+      else HomeNetwork(id, gw, (h["label"] as? String).orEmpty().take(64), routerId!!, routerUrl)
     }
     val hours = (settings["newDeviceHours"] as? Number)?.toInt()
     val nextSettings = HomeSettings(
@@ -85,7 +89,9 @@ object HomeWatchStore {
       "newDevices" to state.settings.newDevices,
       "newDeviceHours" to state.settings.newDeviceHours,
       "share" to state.settings.share,
-      "home" to state.settings.home?.let { mapOf("networkId" to it.networkId, "gatewayIp" to it.gatewayIp, "label" to it.label) },
+      "home" to state.settings.home?.let {
+        mapOf("networkId" to it.networkId, "gatewayIp" to it.gatewayIp, "label" to it.label, "routerId" to it.routerId, "routerUrl" to it.routerUrl)
+      },
     ),
     "people" to state.people.map { mapOf("label" to it.label, "present" to it.state.present, "lastSeenAt" to it.state.lastSeenAt) },
     "newDevices" to state.alerts.map {
@@ -107,7 +113,10 @@ object HomeWatchStore {
       .put("newDevices", s.settings.newDevices)
       .put("newDeviceHours", s.settings.newDeviceHours)
       .put("share", s.settings.share)
-      .put("home", s.settings.home?.let { JSONObject().put("networkId", it.networkId).put("gatewayIp", it.gatewayIp).put("label", it.label) } ?: JSONObject.NULL))
+      .put("home", s.settings.home?.let {
+        JSONObject().put("networkId", it.networkId).put("gatewayIp", it.gatewayIp).put("label", it.label)
+          .put("routerId", it.routerId).put("routerUrl", it.routerUrl)
+      } ?: JSONObject.NULL))
     .put("people", JSONArray(s.people.map {
       JSONObject().put("label", it.label).put("ips", JSONArray(it.ips))
         .put("present", it.state.present).put("misses", it.state.misses).put("lastSeenAt", it.state.lastSeenAt)
@@ -128,7 +137,9 @@ object HomeWatchStore {
         newDevices = s.optBoolean("newDevices"),
         newDeviceHours = s.optInt("newDeviceHours", HomeSettings.DEFAULT_NEW_DEVICE_HOURS),
         share = s.optBoolean("share"),
-        home = h?.let { HomeNetwork(it.optString("networkId"), it.optString("gatewayIp"), it.optString("label")) },
+        home = h?.let {
+          HomeNetwork(it.optString("networkId"), it.optString("gatewayIp"), it.optString("label"), it.optString("routerId"), it.optString("routerUrl"))
+        },
       ),
       people = objects(o.optJSONArray("people")).map { p ->
         val ips = p.optJSONArray("ips")

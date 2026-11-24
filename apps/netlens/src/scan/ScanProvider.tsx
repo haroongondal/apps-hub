@@ -16,6 +16,7 @@ import {
   hashNetworkId,
   normalizeNetworkName,
   personTagCarries,
+  personTagSuggestions,
   reconcileScan,
   sameInterface,
   resolveDeviceNames,
@@ -30,6 +31,7 @@ import {
   type ServiceEvent,
   type StoredNetwork,
   type SubnetPlan,
+  type TagCarry,
 } from '@apps-hub/core';
 import { createNetLensNativeBinding } from 'netlens-core';
 
@@ -76,6 +78,9 @@ export interface NetworkScan {
   homeWatch: HomeWatch;
   /** Why a person's tag moved to a device this session, in plain words, by device id. */
   tagReasons: ReadonlyMap<number, string>;
+  /** Rows that only call themselves "<person>'s …": the tag moves only when the owner confirms. */
+  tagSuggestions: TagCarry[];
+  moveTag(suggestion: TagCarry): void;
 }
 
 const ScanContext = createContext<NetworkScan | null>(null);
@@ -97,6 +102,7 @@ export function ScanProvider({ children }: { children: React.ReactNode }) {
   const locationsByIp = useRef<Map<string, string[]>>(new Map()).current;
   const serviceNamesByIp = useRef<Map<string, string[]>>(new Map());
   const [tagReasons, setTagReasons] = useState<ReadonlyMap<number, string>>(new Map());
+  const [tagSuggestions, setTagSuggestions] = useState<TagCarry[]>([]);
 
   const [store, setStore] = useState<(DeviceStore & SettingsStore) | null>(null);
   const [iface, setIfaceState] = useState<InterfaceInfo | null>(null);
@@ -155,10 +161,8 @@ export function ScanProvider({ children }: { children: React.ReactNode }) {
     };
   }, [bindingProxy, scanning, setIface]);
 
-  // Moves a person's tag to the same phone's new row; carryPersonTags returns only changed rows, so a second pass is empty.
-  const carryTags = useCallback(
-    (target: DeviceStore, generation: number): void => {
-      const carries = personTagCarries(devicesRef.current, serviceNamesByIp.current);
+  const applyTagMoves = useCallback(
+    (carries: TagCarry[], target: DeviceStore, generation: number): void => {
       const rows = carries.flatMap((c) => [c.from, c.device]).filter((row) => row.id !== null);
       if (rows.length === 0) return;
       setTagReasons((prev) => new Map([...prev, ...carries.map((c): [number, string] => [c.device.id ?? -1, c.reason])]));
@@ -172,6 +176,27 @@ export function ScanProvider({ children }: { children: React.ReactNode }) {
       }
     },
     [commitDevices],
+  );
+
+  // Moves a person's tag to the same phone's new row; carryPersonTags returns only changed rows, so a second pass is empty.
+  const carryTags = useCallback(
+    (target: DeviceStore, generation: number): void => {
+      applyTagMoves(personTagCarries(devicesRef.current, serviceNamesByIp.current), target, generation);
+      setTagSuggestions(personTagSuggestions(devicesRef.current, serviceNamesByIp.current));
+    },
+    [applyTagMoves],
+  );
+
+  const moveTag = useCallback(
+    (suggestion: TagCarry): void => {
+      // Rebuilt from the latest rows: names may have arrived since the suggestion was made.
+      const from = devicesRef.current.find((row) => row.id === suggestion.from.id);
+      const to = devicesRef.current.find((row) => row.id === suggestion.device.id);
+      if (!store || !from || !to || (from.person ?? '').trim() !== suggestion.person || (to.person ?? '').trim() !== '') return;
+      applyTagMoves([{ ...suggestion, from: { ...from, person: null }, device: { ...to, person: from.person } }], store, scanGeneration.current);
+      setTagSuggestions(personTagSuggestions(devicesRef.current, serviceNamesByIp.current));
+    },
+    [applyTagMoves, store],
   );
 
   const runScan = useCallback(async () => {
@@ -436,7 +461,7 @@ export function ScanProvider({ children }: { children: React.ReactNode }) {
     [commitDevices, currentNetworkId, store],
   );
 
-  const homeWatch = useHomeWatch(devices, currentNetworkId, iface, networkName, phase === 'done');
+  const homeWatch = useHomeWatch(devices, currentNetworkId, iface, networkName, phase === 'done', bindingProxy, locationsByIp);
 
   const value = useMemo<NetworkScan>(
     () => ({
@@ -462,11 +487,15 @@ export function ScanProvider({ children }: { children: React.ReactNode }) {
       binding: bindingProxy,
       homeWatch,
       tagReasons,
+      tagSuggestions,
+      moveTag,
     }),
     [
       bindingProxy,
       homeWatch,
       tagReasons,
+      tagSuggestions,
+      moveTag,
       currentNetworkId,
       devices,
       discovered,

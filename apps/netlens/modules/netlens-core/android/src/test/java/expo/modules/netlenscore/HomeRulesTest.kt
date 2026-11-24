@@ -13,6 +13,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -46,7 +47,7 @@ class HomeRulesTest {
 
   @Test fun newDevicesEqualEveryFixtureCase() {
     val cases = fixture("new-device-cases.json").jsonArray.map { it.jsonObject }
-    assertEquals(11, cases.size)
+    assertEquals(12, cases.size)
     for (c in cases) {
       val ctx = c.getValue("ctx").jsonObject
       val gateway = ctx.getValue("gatewayIp").let { if (it is JsonNull) null else it.jsonPrimitive.content }
@@ -132,5 +133,42 @@ class HomeRulesTest {
 
   @Test fun everyBackgroundSettingIsOffByDefault() {
     assertEquals(HomeSettings(false, false, 6, false, null), HomeSettings())
+  }
+
+  private val homeRouter = HomeNetwork("net_1", "192.168.1.1", "Home", "uuid:home-router-1", "http://192.168.1.1:5000/rootDesc.xml")
+  private fun description(udn: String) =
+    "HTTP/1.1 200 OK\r\n\r\n<root><device><UDN>$udn</UDN><deviceList><device><UDN>uuid:wan-1</UDN></device></deviceList></device></root>"
+
+  @Test fun theChecksRunOnlyWhenTheGatewayAndTheRouterIdBothMatch() {
+    assertTrue("same gateway, same router", HomeRouter.matches(homeRouter, "192.168.1.1", description("uuid:home-router-1")))
+    assertTrue("the ID is compared without case", HomeRouter.matches(homeRouter, "192.168.1.1", description("UUID:HOME-ROUTER-1")))
+    assertFalse("same gateway address, another router", HomeRouter.matches(homeRouter, "192.168.1.1", description("uuid:hotel-router")))
+    assertFalse("an embedded device ID is not the router's", HomeRouter.matches(homeRouter.copy(routerId = "uuid:wan-1"), "192.168.1.1", description("uuid:x")))
+    assertFalse("another gateway", HomeRouter.matches(homeRouter, "192.168.0.1", description("uuid:home-router-1")))
+    assertFalse("the router gave no ID now", HomeRouter.matches(homeRouter, "192.168.1.1", "HTTP/1.1 200 OK\r\n\r\n<root/>"))
+    assertFalse("the router did not answer", HomeRouter.matches(homeRouter, "192.168.1.1", null))
+    assertFalse("home saved without a router ID never runs", HomeRouter.matches(homeRouter.copy(routerId = ""), "192.168.1.1", description("")))
+  }
+
+  @Test fun theRouterDescriptionIsFetchedOnlyFromTheGateway() {
+    assertEquals(HomeRouter.Target("192.168.1.1", 5000, "/rootDesc.xml"), HomeRouter.target("http://192.168.1.1:5000/rootDesc.xml", "192.168.1.1"))
+    assertEquals(HomeRouter.Target("192.168.1.1", 80, "/"), HomeRouter.target("http://192.168.1.1", "192.168.1.1"))
+    assertNull(HomeRouter.target("http://192.168.1.7:5000/rootDesc.xml", "192.168.1.1"))
+    assertNull(HomeRouter.target("https://192.168.1.1/rootDesc.xml", "192.168.1.1"))
+    assertNull(HomeRouter.target("http://192.168.1.1:5000/a b", "192.168.1.1"))
+    assertNull(HomeRouter.target("http://192.168.1.1:70000/", "192.168.1.1"))
+    assertEquals(
+      "GET /rootDesc.xml HTTP/1.0\r\nHost: 192.168.1.1:5000\r\nConnection: close\r\n\r\n",
+      HomeRouter.request(HomeRouter.Target("192.168.1.1", 5000, "/rootDesc.xml")),
+    )
+  }
+
+  @Test fun theNewDeviceNotificationNeverShowsTheAddress() {
+    val alert = NewDevices.Alert("192.168.1.50", 1, "iPhone or iPad", acknowledged = false)
+    val words = listOf(NewDeviceNotice.PUBLIC_TITLE, NewDeviceNotice.title("Home"), NewDeviceNotice.text(alert))
+    assertFalse(words.toString(), words.any { it.contains("192.168.") })
+    assertEquals("iPhone or iPad. Tap to see your devices.", NewDeviceNotice.text(alert))
+    assertEquals("A new device joined your Wi-Fi", NewDeviceNotice.title(" "))
+    assertFalse("the lock-screen version names no network", NewDeviceNotice.PUBLIC_TITLE.contains("Home"))
   }
 }

@@ -26,7 +26,7 @@ export function lastSeenText(lastSeenAt: number, now: number): string {
 }
 
 export default function HomeScreen() {
-  const { phase, devices, errorNote, store, runScan, binding, homeWatch, tagReasons } = useNetworkScan();
+  const { phase, devices, errorNote, store, runScan, binding, homeWatch, tagReasons, tagSuggestions, moveTag } = useNetworkScan();
   const [override, setOverride] = useState<ReadonlySet<string>>(new Set());
   const [probing, setProbing] = useState(false);
   // True from the press until the scan it started reaches done or error.
@@ -146,6 +146,7 @@ export default function HomeScreen() {
             const reason = p.deviceIds.map((id) => tagReasons.get(id)).find((r) => r !== undefined);
             const seen = home ? null : lastSeenText(lastSeen(p), now);
             const subtitle = [seen, reason ? `Matched: ${reason}` : null].filter(Boolean).join('. ') || undefined;
+            const suggestion = home ? undefined : tagSuggestions.find((s) => s.person.toLowerCase() === p.person.toLowerCase());
             return (
               <Row
                 key={p.person}
@@ -153,7 +154,22 @@ export default function HomeScreen() {
                 subtitle={subtitle}
                 trailing={home ? <Pill label="Home" tone="ok" /> : undefined}
                 accessibilityLabel={`${p.person}, ${home ? 'home' : seen}${reason ? `, matched: ${reason}` : ''}`}
-              />
+              >
+                {suggestion ? (
+                  <View style={{ gap: space.sm }}>
+                    <Text variant="meta" tone="muted">
+                      {`Another device on your Wi-Fi answered. ${suggestion.reason}. Is it ${p.person}'s?`}
+                    </Text>
+                    <Button
+                      label={`Yes, it's ${p.person}'s`}
+                      variant="secondary"
+                      size="sm"
+                      accessibilityHint={`Moves ${p.person}'s tag to this device`}
+                      onPress={() => moveTag(suggestion)}
+                    />
+                  </View>
+                ) : null}
+              </Row>
             );
           })}
         </Group>

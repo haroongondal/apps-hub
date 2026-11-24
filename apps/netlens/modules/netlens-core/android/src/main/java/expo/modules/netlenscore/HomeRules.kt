@@ -46,7 +46,8 @@ object NewDevices {
     val skip = mutableSetOf(selfIp)
     if (gatewayIp != null) skip += gatewayIp
     known.filter { it.tagged || it.lastSeenAt >= since }.mapTo(skip) { it.ip }
-    alerts.filter { it.acknowledged || it.firstSeenAt >= since }.mapTo(skip) { it.ip }
+    // "This is mine" ages out with the report: an address alone cannot say it is still the same device.
+    alerts.filter { it.firstSeenAt >= since }.mapTo(skip) { it.ip }
     return alive.filter { skip.add(it.ip) }
   }
 
@@ -70,6 +71,15 @@ object NewDevices {
     known.map { if (it.ip in aliveIps) it.copy(lastSeenAt = maxOf(it.lastSeenAt, now)) else it }
 }
 
+/** New-device notification words: no address, and only the public title on the lock screen or to other apps' listeners. */
+object NewDeviceNotice {
+  const val PUBLIC_TITLE = "New device on your Wi-Fi"
+
+  fun title(networkLabel: String): String = "A new device joined ${networkLabel.ifBlank { "your Wi-Fi" }}"
+
+  fun text(alert: NewDevices.Alert): String = "${alert.label}. Tap to see your devices."
+}
+
 object HomeSubnet {
   private fun octets(ip: String): List<Int>? =
     ip.trim().split('.').takeIf { it.size == 4 }?.map { it.toIntOrNull() ?: return null }?.takeIf { o -> o.all { it in 0..255 } }
@@ -87,7 +97,40 @@ object HomeSubnet {
   }
 }
 
-data class HomeNetwork(val networkId: String, val gatewayIp: String, val label: String)
+data class HomeNetwork(
+  val networkId: String,
+  val gatewayIp: String,
+  val label: String,
+  val routerId: String = "",
+  val routerUrl: String = "",
+)
+
+// 192.168.1.1 is on many Wi-Fis: home is the gateway address AND the router's own UPnP ID (first UDN of its description); no ID, no run.
+object HomeRouter {
+  const val TIMEOUT_MS = 2_000
+  const val MAX_BYTES = 262_144
+  private val UDN = Regex("""<UDN>\s*(uuid:[^<>\s]{1,128})\s*</UDN>""", RegexOption.IGNORE_CASE)
+  private val ID = Regex("""^uuid:[^<>\s]{1,128}$""", RegexOption.IGNORE_CASE)
+  private val URL = Regex("""^http://(\d{1,3}(?:\.\d{1,3}){3})(?::(\d{1,5}))?(/[\x21-\x7e]*)?$""", RegexOption.IGNORE_CASE)
+
+  data class Target(val ip: String, val port: Int, val path: String)
+
+  fun routerId(description: String?): String? = description?.let { UDN.find(it)?.groupValues?.get(1) }
+
+  fun validId(id: String?): Boolean = id != null && ID.matches(id)
+
+  fun target(url: String, gatewayIp: String): Target? {
+    val m = URL.matchEntire(url.trim()) ?: return null
+    val port = m.groupValues[2].ifEmpty { "80" }.toInt()
+    if (m.groupValues[1] != gatewayIp || port !in 1..65535) return null
+    return Target(gatewayIp, port, m.groupValues[3].ifEmpty { "/" })
+  }
+
+  fun request(t: Target): String = "GET ${t.path} HTTP/1.0\r\nHost: ${t.ip}:${t.port}\r\nConnection: close\r\n\r\n"
+
+  fun matches(home: HomeNetwork, gatewayIp: String?, description: String?): Boolean =
+    gatewayIp == home.gatewayIp && validId(home.routerId) && routerId(description).equals(home.routerId, ignoreCase = true)
+}
 
 data class HomeSettings(
   val whoIsHome: Boolean = false,

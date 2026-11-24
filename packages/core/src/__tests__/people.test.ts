@@ -4,7 +4,15 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 import { cleanMdnsInstanceName } from '../device-names.ts';
-import { carryPersonTags, isGenericDeviceName, ownerOfName, peopleStatus, personTagCarries, probeHome } from '../people.ts';
+import {
+  carryPersonTags,
+  isGenericDeviceName,
+  ownerOfName,
+  peopleStatus,
+  personTagCarries,
+  personTagSuggestions,
+  probeHome,
+} from '../people.ts';
 import type { ReconciledDevice } from '../device-repository.ts';
 import type { ProbeOutcome } from '../model.ts';
 
@@ -273,14 +281,33 @@ test('carry: a generic "iPhone" row moves to the new row that announces the same
   assert.deepEqual(carryPersonTags([old, fresh], names).map((d) => [d.id, d.person]), [[old.id, null], [fresh.id, 'Sara']]);
 });
 
-test('carry: an "android" phone whose Bonjour name has the owner word of the tag takes the tag', () => {
+test('suggest, no carry: an "android" phone whose Bonjour name has the owner word of the tag is only suggested', () => {
   const old = dev({ person: 'haroon', hostname: 'android' });
   const fresh = dev({ seenThisScan: true, hostname: 'android' });
   const names = new Map([[fresh.lastIp, ['Haroon’s Pixel']]]);
-  const carries = personTagCarries([old, fresh], names);
-  assert.equal(carries.length, 1);
-  assert.equal(carries[0].reason, 'It calls itself Haroon’s Pixel');
-  assert.equal(carries[0].device.person, 'haroon');
+  assert.deepEqual(personTagCarries([old, fresh], names), []);
+  assert.deepEqual(carryPersonTags([old, fresh], names), []);
+  const [s] = personTagSuggestions([old, fresh], names);
+  assert.equal(s.reason, 'It calls itself Haroon’s Pixel');
+  assert.equal(s.from.id, old.id);
+  assert.equal(s.device.id, fresh.id);
+  assert.equal(s.device.person, 'haroon');
+});
+
+test('no carry: a sleeping tagged phone keeps its tag when the owner’s laptop calls itself Sara’s MacBook Pro', () => {
+  const phone = dev({ person: 'Sara', hostname: 'android' });
+  const laptop = dev({ seenThisScan: true, mdnsName: 'Sara’s MacBook Pro' });
+  assert.deepEqual(carryPersonTags([phone, laptop]), []);
+  assert.deepEqual(personTagCarries([phone, laptop]), []);
+  assert.deepEqual(personTagSuggestions([phone, laptop]).map((s) => [s.from.id, s.device.id]), [[phone.id, laptop.id]]);
+});
+
+test('no carry: a guest device announcing “Sara’s iPhone” does not take the tag', () => {
+  const phone = dev({ person: 'Sara', hostname: 'iPhone' });
+  const guest = dev({ seenThisScan: true });
+  const names = new Map([[guest.lastIp, ['Sara’s iPhone']]]);
+  assert.deepEqual(carryPersonTags([phone, guest], names), []);
+  assert.deepEqual(personTagCarries([phone, guest], names), []);
 });
 
 test('no carry: the owner word belongs to someone else', () => {

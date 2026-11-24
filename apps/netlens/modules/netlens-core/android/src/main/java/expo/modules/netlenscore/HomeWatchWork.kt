@@ -91,17 +91,22 @@ object HomeWatch {
     }
   }
 
-  /** The Wi-Fi network whose default gateway is the saved home gateway; null on mobile data or any other Wi-Fi. */
+  /** The Wi-Fi network whose gateway is the saved home gateway AND answers with the saved router ID (HomeRouter); else null. */
   @Suppress("DEPRECATION") // allNetworks: a one-shot lookup from a worker, same as PlatformNetwork.lanNetwork
-  fun homeLan(context: Context, gatewayIp: String): HomeLan? {
+  suspend fun homeLan(context: Context, home: HomeNetwork): HomeLan? {
     val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return null
+    val target = HomeRouter.target(home.routerUrl, home.gatewayIp) ?: return null
     for (network in cm.allNetworks) {
       val caps = cm.getNetworkCapabilities(network) ?: continue
       if (!caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) continue
       val link = cm.getLinkProperties(network) ?: continue
       val gateway = link.routes.firstOrNull { it.isDefaultRoute && it.gateway is Inet4Address }?.gateway?.hostAddress
       val localIp = link.linkAddresses.map { it.address }.firstOrNull { it is Inet4Address && !it.isLoopbackAddress }?.hostAddress
-      if (gateway == gatewayIp && localIp != null) return HomeLan(network, localIp)
+      if (gateway != home.gatewayIp || localIp == null) continue
+      val description = NameProbes.tcpFetch(target.ip, target.port, HomeRouter.request(target), HomeRouter.TIMEOUT_MS, HomeRouter.MAX_BYTES) {
+        network.socketFactory.createSocket()
+      }
+      if (HomeRouter.matches(home, gateway, description)) return HomeLan(network, localIp)
     }
     return null
   }
@@ -121,7 +126,7 @@ object HomeWatch {
     val state = HomeWatchStore.load(context)
     val home = state.settings.home ?: return
     if (!state.settings.whoIsHome) return
-    val lan = homeLan(context, home.gatewayIp) ?: return
+    val lan = homeLan(context, home) ?: return
     val ips = state.people.flatMap { it.ips }.filter { HomeSubnet.sameSlash24(it, lan.localIp) }.distinct()
     val alive = sweep(lan, ips)
     val now = System.currentTimeMillis()
@@ -150,7 +155,7 @@ object HomeWatch {
     val state = HomeWatchStore.load(context)
     val home = state.settings.home ?: return
     if (!state.settings.newDevices) return
-    val lan = homeLan(context, home.gatewayIp) ?: return
+    val lan = homeLan(context, home) ?: return
     val alive = sweep(lan, HomeSubnet.sweepHosts(lan.localIp))
     val now = System.currentTimeMillis()
     val ordered = HomeSubnet.sweepHosts(lan.localIp).mapNotNull { alive[it] }.map { NewDevices.Alive(it.ip, it.winningPort) }
@@ -191,11 +196,16 @@ object HomeWatch {
       Intent(context, ThisIsMineReceiver::class.java).putExtra(EXTRA_IP, alert.ip),
       PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
-    val where = networkLabel.ifBlank { "your Wi-Fi" }
+    val public = (if (Build.VERSION.SDK_INT >= 26) Notification.Builder(context, CHANNEL) else @Suppress("DEPRECATION") Notification.Builder(context))
+      .setSmallIcon(android.R.drawable.ic_dialog_info)
+      .setContentTitle(NewDeviceNotice.PUBLIC_TITLE)
+      .build()
     val notification = builder
       .setSmallIcon(android.R.drawable.ic_dialog_info)
-      .setContentTitle("A new device joined $where")
-      .setContentText("${alert.label} at ${alert.ip}. Tap to see your devices.")
+      .setContentTitle(NewDeviceNotice.title(networkLabel))
+      .setContentText(NewDeviceNotice.text(alert))
+      .setVisibility(Notification.VISIBILITY_PRIVATE)
+      .setPublicVersion(public)
       .setAutoCancel(true)
       .setContentIntent(open)
       .addAction(Notification.Action.Builder(Icon.createWithResource(context, android.R.drawable.ic_dialog_info), "This is mine", mine).build())

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import type { ReconciledDevice } from '../device-repository.ts';
-import { DEFAULT_HOME_WATCH_SETTINGS, homeWatchSnapshot, parseHomeWatchStatus } from '../home-watch.ts';
+import { DEFAULT_HOME_WATCH_SETTINGS, homeWatchSnapshot, parseHomeWatchStatus, readHomeRouter, routerIdOf } from '../home-watch.ts';
 
 let nextId = 1;
 function dev(over: Partial<ReconciledDevice> = {}): ReconciledDevice {
@@ -59,7 +59,14 @@ test('parse: anything but supported true is "not supported on this platform"', (
 test('parse: a well-formed Android status passes through', () => {
   const raw = {
     supported: true,
-    settings: { whoIsHome: true, newDevices: false, newDeviceHours: 12, share: true, home: { networkId: 'net_1', gatewayIp: '192.168.1.1', label: 'Home' } },
+    settings: { whoIsHome: true, newDevices: false, newDeviceHours: 12, share: true, home: {
+        networkId: 'net_1',
+        gatewayIp: '192.168.1.1',
+        label: 'Home',
+        routerId: 'uuid:home-router-1',
+        routerUrl: 'http://192.168.1.1:5000/rootDesc.xml',
+      },
+    },
     people: [{ label: 'Sara', present: true, lastSeenAt: 9 }],
     newDevices: [{ ip: '192.168.1.50', firstSeenAt: 4, label: 'Computer', acknowledged: false }],
   };
@@ -79,4 +86,49 @@ test('parse: bad fields fall back to safe values, never to "on"', () => {
     people: [{ label: 'Ali', present: false, lastSeenAt: 0 }],
     newDevices: [{ ip: '192.168.1.9', firstSeenAt: 0, label: 'Unknown device', acknowledged: false }],
   });
+});
+
+// The saved home is the router itself, not only its address (twin: HomeRouter in Kotlin, HomeRulesTest).
+
+const lan = { localIp: '192.168.1.20', cidrPrefix: 24, gatewayIp: '192.168.1.1' };
+const desc = (udn: string): string =>
+  `<root><device><UDN>${udn}</UDN><deviceList><device><UDN>uuid:wan-1</UDN></device></deviceList></device></root>`;
+
+function routerBinding(bodies: Record<string, string | null>) {
+  const asked: string[] = [];
+  return {
+    asked,
+    async tcpFetch(ip: string, port: number, request: string): Promise<string | null> {
+      const key = `${ip}:${port}${request.split(' ')[1]}`;
+      asked.push(key);
+      const body = bodies[key];
+      return body == null ? null : `HTTP/1.1 200 OK\r\nContent-Type: text/xml\r\n\r\n${body}`;
+    },
+  };
+}
+
+test('routerIdOf: the first UDN is the router; none means no ID', () => {
+  assert.equal(routerIdOf(desc('uuid:home-router-1')), 'uuid:home-router-1');
+  assert.equal(routerIdOf('<root><device><friendlyName>x</friendlyName></device></root>'), null);
+  assert.equal(routerIdOf('<UDN>not-a-uuid</UDN>'), null);
+});
+
+test('readHomeRouter: reads the ID from a description on the gateway only', async () => {
+  const b = routerBinding({
+    '192.168.1.7:80/d.xml': desc('uuid:printer'),
+    '192.168.1.1:1900/none.xml': '<root/>',
+    '192.168.1.1:5000/rootDesc.xml': desc('uuid:home-router-1'),
+  });
+  const urls = ['http://192.168.1.7/d.xml', 'http://192.168.1.1:1900/none.xml', 'http://192.168.1.1:5000/rootDesc.xml'];
+  assert.deepEqual(await readHomeRouter(b, lan, urls), {
+    routerId: 'uuid:home-router-1',
+    routerUrl: 'http://192.168.1.1:5000/rootDesc.xml',
+  });
+  assert.deepEqual(b.asked, ['192.168.1.1:1900/none.xml', '192.168.1.1:5000/rootDesc.xml']);
+});
+
+test('readHomeRouter: a router that gives no ID (or no description) is null, so home is not saved', async () => {
+  assert.equal(await readHomeRouter(routerBinding({ '192.168.1.1:80/d.xml': '<root/>' }), lan, ['http://192.168.1.1/d.xml']), null);
+  assert.equal(await readHomeRouter(routerBinding({}), lan, ['http://192.168.1.1/d.xml']), null);
+  assert.equal(await readHomeRouter(routerBinding({}), lan, []), null);
 });
