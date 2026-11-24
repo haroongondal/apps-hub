@@ -188,3 +188,23 @@ dependencies {
         implementation jscFlavor
     }
 }
+
+// Reanimated's CMake reads libworklets.so from Worklets' cmake/release/obj, which Android's build links from cxx/RelWithDebInfo
+// only on some machines; on others the file is missing and Reanimated's link fails. Put it there if it is missing or differs.
+// Delete before copy: copying onto the hard link of the same file empties it (what #65's step did). Upgrade: remove once Worklets and Reanimated agree on the path.
+rootProject.subprojects { sub ->
+  if (sub.name == 'react-native-worklets') {
+    sub.tasks.matching { it.name == 'externalNativeBuildRelease' }.configureEach { task ->
+      task.doLast {
+        sub.fileTree(dir: "${sub.buildDir}/intermediates/cxx/RelWithDebInfo", include: '*/obj/*/libworklets.so').each { so ->
+          def dest = new File("${sub.buildDir}/intermediates/cmake/release/obj/${so.parentFile.name}/libworklets.so")
+          if (!dest.exists() || dest.length() != so.length() || dest.lastModified() != so.lastModified()) {
+            dest.parentFile.mkdirs()
+            dest.delete()
+            java.nio.file.Files.copy(so.toPath(), dest.toPath(), java.nio.file.StandardCopyOption.COPY_ATTRIBUTES)
+          }
+        }
+      }
+    }
+  }
+}
