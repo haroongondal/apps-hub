@@ -37,12 +37,14 @@ export function FreeSongs({ onPick }: { onPick: (song: PickedSong) => Promise<vo
   });
 
   const search = (next: number) => run(async () => {
-    if (!query.trim()) throw new Error('Type what you are looking for.');
     const got = await searchSongs(query, token ?? '', next);
     setHits(next === 1 ? got.hits : [...hits, ...got.hits]);
     setPage(next);
     setHasMore(got.hasMore);
   });
+
+  // With a key saved, open on the most popular songs instead of an empty list.
+  useEffect(() => { if (token) search(1); }, [token]);
 
   const add = (hit: SongHit) => run(async () => onPick(await downloadSong(hit)));
 
@@ -57,7 +59,7 @@ export function FreeSongs({ onPick }: { onPick: (song: PickedSong) => Promise<vo
     );
   }
   return (
-    <Group title="Free songs" footer="Only songs with no credit needed (Creative Commons 0) are listed.">
+    <Group title="Free songs" footer="Popular songs are listed first. Type words to search. Only songs with no credit needed (Creative Commons 0) are listed.">
       <Field label="Search songs" value={query} onChangeText={setQuery} returnKeyType="search" onSubmitEditing={() => search(1)} />
       <Button label="Search" variant="secondary" busy={busy} onPress={() => search(1)} accessibilityHint="Finds free songs that match the words" />
       {error ? <Notice tone="warn">{error}</Notice> : null}
