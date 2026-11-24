@@ -188,23 +188,3 @@ dependencies {
         implementation jscFlavor
     }
 }
-
-// shortcut: react-native-reanimated's CMake reads libworklets.so from cmake/release, but this release build writes it under
-// cxx/RelWithDebInfo. Copy it after Worklets' native build. Upgrade: remove once Reanimated and Worklets agree on the output path.
-rootProject.subprojects { sub ->
-  if (sub.name == 'react-native-worklets') {
-    def copyWorklets = {
-      sub.tasks.matching { it.name == 'externalNativeBuildRelease' }.configureEach { task ->
-        task.doLast {
-          sub.fileTree(dir: "${sub.buildDir}/intermediates/cxx/RelWithDebInfo", include: '*/obj/*/libworklets.so').each { so ->
-            sub.copy {
-              from so
-              into "${sub.buildDir}/intermediates/cmake/release/obj/${so.parentFile.name}"
-            }
-          }
-        }
-      }
-    }
-    if (sub.state.executed) copyWorklets() else sub.afterEvaluate { copyWorklets() }
-  }
-}
