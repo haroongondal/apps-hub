@@ -333,7 +333,7 @@ These lift parts of the list above; the owner's message is the yes. They are the
 1. Put a clip on a design and export the design as MP4 (needs a timeline and an encoder path from
    the canvas).
 2. Animated WebP output (Mac first; libwebp on Android).
-3. "Share to Design Editor" from the gallery's share sheet on Android.
+3. "Share to Design Editor" from the gallery's share sheet on Android. (Built 2026-11-23, ecosystem E3: JPEG, PNG and video, copied into the app first, an "Add to Design Editor" screen before anything is queued; see `docs/handoffs/design-editor-media.md`.)
 4. Merge clips with the same codecs losslessly (LosslessCut does this).
 5. A "compress PDF to fit" in PDF Editor reusing `media-core`'s presets and fit check.
 

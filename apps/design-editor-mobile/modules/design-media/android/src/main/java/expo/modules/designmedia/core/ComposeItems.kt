@@ -1,12 +1,15 @@
 package expo.modules.designmedia.core
 
-data class ItemSpec(val uri: String, val startUs: Long, val endUs: Long, val keepAudio: Boolean, val volume: Float = 1f)
+data class ItemSpec(val uri: String, val startUs: Long, val endUs: Long, val keepAudio: Boolean, val volume: Float = 1f, val still: Boolean = false)
 
 // startUs and endUs are times in the audio file; gapBeforeUs is the silence since the previous piece (the first counts from 0).
 data class MusicSpec(val uri: String, val startUs: Long, val endUs: Long, val gapBeforeUs: Long, val volume: Float)
 
 fun composeItems(plan: ComposePlan): List<ItemSpec> =
-  plan.clips.map { ItemSpec(it.uri, microseconds(it.inS), microseconds(it.outS), it.hasAudio, it.volume.toFloat()) }
+  plan.clips.map {
+    if (it.still) ItemSpec(it.uri, 0, microseconds(it.outS) - microseconds(it.inS), false, 1f, true)
+    else ItemSpec(it.uri, microseconds(it.inS), microseconds(it.outS), it.hasAudio, it.volume.toFloat())
+  }
 
 fun musicItems(plan: ComposePlan): List<MusicSpec> {
   var endUs = 0L

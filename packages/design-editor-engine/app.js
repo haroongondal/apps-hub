@@ -511,6 +511,38 @@ function renderBrand() {
   }
 }
 $('#brandAdd').onclick = () => { const c = $('#brandPick').value; if (!brand.colors.includes(c)) brand.colors.push(c); saveBrand(); renderBrand(); };
+// Colours from a picked image, read here on the device and never sent anywhere
+$('#brandImg').onchange = async e => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const found = extractPalette(downsample(bitmap), { count: 6 });
+    bitmap.close();
+    showFoundColors(found);
+  } catch { toast("Couldn't read this image. Try another one."); }
+};
+function showFoundColors(found) {
+  const box = $('#brandFound');
+  if (!found.length) { box.replaceChildren(); return toast('This image has no visible colours.'); }
+  const rows = found.map(({ hex, share }) => {
+    const c = contrastOf(hex), row = document.createElement('label');
+    row.className = 'row';
+    row.innerHTML = `<input type="checkbox" ${brand.colors.includes(hex) ? '' : 'checked'} aria-label="Add ${hex}">
+      <span style="background:${hex};color:${c.text};width:44px;height:30px;border-radius:6px;display:grid;place-items:center;font-weight:600;border:1px solid rgba(0,0,0,.15)">Aa</span>
+      <span style="flex:1">${hex}, ${Math.round(share * 100)}%<br><small class="hint">${c.text === '#ffffff' ? 'White' : 'Black'} text ${c.aa ? 'reads well' : 'is hard to read'}</small></span>`;
+    return row;
+  });
+  const add = document.createElement('button');
+  add.textContent = 'Add ticked colours'; add.style.width = '100%';
+  add.onclick = () => {
+    const picked = found.filter((f, i) => rows[i].querySelector('input').checked && !brand.colors.includes(f.hex)).map(f => f.hex);
+    brand.colors.push(...picked); saveBrand(); renderBrand(); box.replaceChildren();
+    toast(picked.length ? `Added ${picked.length} ${picked.length === 1 ? 'colour' : 'colours'} to the brand kit` : 'Nothing new to add');
+  };
+  box.replaceChildren(...rows, add);
+}
 $('#brandHeading').onchange = e => { brand.heading = e.target.value; saveBrand(); };
 $('#brandBody').onchange = e => { brand.body = e.target.value; saveBrand(); };
 function applyColor(c) {
@@ -520,9 +552,8 @@ function applyColor(c) {
   canvas.requestRenderAll(); record(); inspect();
 }
 
-// a 128 px RGBA copy of the unfiltered source: enough for colours and levels, fast on a 4000 px photo
-function smallPixels(img) {
-  const src = img._originalElement || img.getElement();
+// a 128 px RGBA copy of an image element or bitmap: enough for colours and levels, fast on a 4000 px photo
+function downsample(src) {
   const sw = src.naturalWidth || src.width, sh = src.naturalHeight || src.height;
   const k = Math.min(1, 128 / Math.max(sw, sh));
   const c = document.createElement('canvas');
@@ -531,6 +562,8 @@ function smallPixels(img) {
   ctx.drawImage(src, 0, 0, c.width, c.height);
   return ctx.getImageData(0, 0, c.width, c.height).data;
 }
+// of the unfiltered source
+const smallPixels = img => downsample(img._originalElement || img.getElement());
 // keyed by the source element: Remove background sets a new one, so it gets a fresh palette
 const paletteCache = new WeakMap();
 function paletteOf(img) {

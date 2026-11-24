@@ -112,4 +112,76 @@ function upscaleEstimate(w, h, scale) {
   return { inW, inH, outW: 4 * inW, outH: 4 * inH, tiles, seconds, label };
 }
 
-if (typeof module === 'object') module.exports = { paletteFromPixels, enhanceValues, upscaleEstimate };
+// The dominant colours of an RGBA image the caller already shrank (<= 128 px a side): median cut over
+// 5-bit-per-channel buckets, so the same pixels always give the same answer. Pixels with alpha < 128
+// are skipped. Returns [{ hex, share }], biggest first, shares summing to 1; fewer than `count` when the
+// image has fewer distinct colours, and [] when nothing is visible. Colours closer than 24 (RGB distance)
+// merge into the bigger one.
+function extractPalette(px, { count = 6, width, height } = {}) {
+  if (width && height && px.length !== width * height * 4) throw new RangeError('pixels do not match width and height');
+  const buckets = new Map();
+  let total = 0;
+  for (let i = 0; i < px.length; i += 4) {
+    if (px[i + 3] < 128) continue;
+    const key = ((px[i] >> 3) << 10) | ((px[i + 1] >> 3) << 5) | (px[i + 2] >> 3);
+    const b = buckets.get(key) || { key, n: 0, sum: [0, 0, 0] };
+    b.n++; b.sum[0] += px[i]; b.sum[1] += px[i + 1]; b.sum[2] += px[i + 2];
+    buckets.set(key, b);
+    total++;
+  }
+  if (!total) return [];
+  const mean = (b, ch) => b.sum[ch] / b.n;
+  const size = (box) => box.reduce((s, b) => s + b.n, 0);
+  const boxes = [[...buckets.values()].sort((a, b) => a.key - b.key)];
+  const widest = (box) => {
+    const spans = [0, 1, 2].map((ch) => Math.max(...box.map((b) => mean(b, ch))) - Math.min(...box.map((b) => mean(b, ch))));
+    return spans.indexOf(Math.max(...spans));
+  };
+  while (boxes.length < count) {
+    let at = -1;
+    boxes.forEach((box, i) => { if (box.length > 1 && (at < 0 || size(box) > size(boxes[at]))) at = i; });
+    if (at < 0) break;
+    const box = boxes[at], ch = widest(box);
+    box.sort((a, b) => mean(a, ch) - mean(b, ch) || a.key - b.key);
+    let seen = 0, cut = 0;
+    while (cut < box.length - 1 && seen + box[cut].n <= size(box) / 2) seen += box[cut++].n;
+    cut = Math.max(1, cut);
+    boxes.splice(at, 1, box.slice(0, cut), box.slice(cut));
+  }
+  const hexOf = (rgb) => '#' + rgb.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
+  const found = boxes.map((box) => {
+    const n = size(box);
+    return { n, rgb: [0, 1, 2].map((ch) => box.reduce((s, b) => s + b.sum[ch], 0) / n) };
+  }).sort((a, b) => b.n - a.n || hexOf(a.rgb).localeCompare(hexOf(b.rgb)));
+  const kept = [];
+  for (const c of found) {
+    const near = kept.find((k) => Math.hypot(...c.rgb.map((v, i) => v - k.rgb[i])) < 24);
+    if (near) near.n += c.n; else kept.push({ ...c });
+  }
+  return kept
+    .map((c) => ({ hex: hexOf(c.rgb), share: c.n / total, n: c.n }))
+    .sort((a, b) => b.n - a.n || a.hex.localeCompare(b.hex))
+    .map(({ hex, share }) => ({ hex, share }));
+}
+
+// WCAG 2.x contrast ratio (1 to 21) of two "#rrggbb" colours.
+function contrastRatio(a, b) {
+  const lum = (hex) => {
+    const [r, g, bl] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+      .map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
+  };
+  const [hi, lo] = [lum(a), lum(b)].sort((p, q) => q - p);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+// How readable text is on a colour: the ratio with white and with black, the better of the two, and
+// whether it reaches 4.5 (WCAG AA for body text). Ties go to black.
+function contrastOf(hex) {
+  const white = contrastRatio(hex, '#ffffff'), black = contrastRatio(hex, '#000000');
+  const useWhite = white > black;
+  const ratio = useWhite ? white : black;
+  return { white, black, text: useWhite ? '#ffffff' : '#000000', ratio, aa: ratio >= 4.5 };
+}
+
+if (typeof module === 'object') module.exports = { paletteFromPixels, enhanceValues, upscaleEstimate, extractPalette, contrastRatio, contrastOf };

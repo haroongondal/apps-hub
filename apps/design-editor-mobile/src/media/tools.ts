@@ -16,6 +16,9 @@ export const TOOLS: { key: ToolKey; title: string; about: string; accept: ('vide
   { key: 'image', title: 'Shrink an image', about: 'Make a PNG or JPEG file smaller without changing how it looks.', accept: ['image'] },
 ];
 
+// These work on one file; the rest take a list.
+export const isSingle = (key: ToolKey) => key === 'trim' || key === 'gif' || key === 'picture';
+
 export const toolTitle = (key: string | undefined) => TOOLS.find(t => t.key === key)?.title;
 
 // The title a finished or running job shows, from the plan's tool.

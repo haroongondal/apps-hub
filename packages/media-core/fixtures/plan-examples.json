@@ -233,6 +233,45 @@
    "plannedBytes": 11222400,
    "ext": "mp4"
   },
+  "composeReel": {
+   "tool": "compose",
+   "clips": [
+    {
+     "uri": "content://media/external/images/media/7",
+     "name": "Photo 1",
+     "inS": 0,
+     "outS": 3,
+     "hasAudio": false,
+     "volume": 1,
+     "still": true
+    },
+    {
+     "uri": "content://media/external/images/media/9",
+     "name": "Photo 2",
+     "inS": 0,
+     "outS": 3,
+     "hasAudio": false,
+     "volume": 1,
+     "still": true
+    }
+   ],
+   "music": [
+    {
+     "uri": "content://media/s",
+     "name": "s.m4a",
+     "inS": 0,
+     "outS": 6,
+     "startS": 0,
+     "volume": 1
+    }
+   ],
+   "width": 720,
+   "height": 1280,
+   "fps": 30,
+   "videoBps": 2764800,
+   "plannedBytes": 2217600,
+   "ext": "mp4"
+  },
   "imagePng": {
    "tool": "image",
    "format": "png",

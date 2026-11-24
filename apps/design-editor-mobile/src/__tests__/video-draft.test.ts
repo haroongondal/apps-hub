@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
 import { addClip, addMusic, emptyProject, splitAt, type AudioSource, type Source } from '@apps-hub/media-core';
@@ -85,4 +86,9 @@ test('isBlank: only a project with no clips and no music counts as nothing to ke
   assert.equal(isBlank(emptyProject()), true);
   assert.equal(isBlank(JSON.parse(draft('a'))), false);
   assert.equal(isBlank({ ...emptyProject(), music: withMusic(['a'], ['s']).music }), false);
+});
+
+test('the Video screen shows the free songs panel when Free songs is open', () => {
+  const screen = readFileSync(new URL('../../app/video.tsx', import.meta.url), 'utf8');
+  assert.match(screen, /\{songsOpen \? <FreeSongs onPick=\{addFreeSong\} \/> : null\}/);
 });
