@@ -32,6 +32,15 @@ object AodScreen {
   /** Some proximity sensors report only 0 or their max range, others a distance in cm. */
   fun near(distance: Float, maxRange: Float) = distance < minOf(maxRange, NEAR_CM)
 
+  /**
+   * onStop while the screen is on (Home gesture) means the always-on screen is no longer in front, so the keyguard's
+   * screen-off must not read as a power press; onStop because the screen went off keeps it, so that screen-off still does.
+   */
+  fun clearCloseOnStop(interactive: Boolean) = interactive
+
+  /** end() marks "ended until unlock" only for a screen still up over the lock; a finishing one or an unlocked phone (the unlock race) must not. */
+  fun markTimedOut(isFinishing: Boolean, keyguardLocked: Boolean) = !isFinishing && keyguardLocked
+
   /** The theme to switch to when a time slot changed while showing; null keeps the current one. */
   fun switchTheme(aod: SettingsAod, themes: List<Theme>, minuteOfDay: Int, currentId: String): Theme? =
     Themes.resolve(aod, themes, minuteOfDay).takeIf { it.id != currentId }

@@ -76,15 +76,15 @@ What 0.5.0 contains: aod/themes settings, AodPolicy, restart-on-app-open fix (th
 background photo, real always-on screen (music card, icon row, edge lights, pocket, double tap, notification wake), Always-on + Theme
 screens, tabs Home/Lights/Alerts/Always-on. Reviews: whole-stage review (opus) + security re-check (opus) + scoped re-review of the
 fix: findings and rulings in docs/handoffs/halo-sdd-ledger.md under "Task 4.7".
-Deferred (0.5.1 candidates, both Minor): (m1) Home gesture on the always-on screen then no unlock → the keyguard's screen-off is read as a
-power press → always-on stays off until next unlock (fix: onStop clears aodClose only while PowerManager.isInteractive; onResume re-sets it);
-(m2) AodActivity.end() calls onTimedOut() without isFinishing/keyguard-locked check (narrow race around unlock).
+Fixed on eco/halo (commit 0f60b826 on eco/halo; JVM-tested via AodScreen.clearCloseOnStop and AodScreen.markTimedOut, phone check not run): (m1) Home gesture
+on the always-on screen then no unlock: AodActivity.onStop clears aodClose only while PowerManager.isInteractive, onResume sets it again, so the keyguard's
+screen-off is no longer read as a power press; (m2) AodActivity.end() calls onTimedOut() only when not isFinishing and the keyguard is locked.
 Also open: AOSP "Viewing full screen" hint may appear once (check HyperOS); AOD EdgeView also writes HaloService.frameP95Ms; photo refresh on
 ThemeScreen after changing a photo was not checked on a device; reminder wake only compiled.
 NEXT STEP 1 (owner present): phone check of 0.5.0 (Task 4.7 Step 2): claim device:49kjmnuwonkffqzh with coord, owner installs 0.5.0 via the
 Store app; check each starter theme (night, pulse, glass, mono), Never stop for ~1 h (battery % before/after, burn-in movement visible),
 pocket (ends after 3 s), power button on the always-on screen (turns it off), double tap, notification wake (incl. off hours), music card
-controls, music trigger with lights off, time slot switch, Home-gesture case (m1), photo pick/remove. Record results in this file and the
+controls, music trigger with lights off, time slot switch, Home-gesture case (m1) and lock-then-timeout case (m2), photo pick/remove. Record results in this file and the
 spec §13; fix what fails (a 0.5.1) via parallel-agents-coord.
 NEXT STEP 2: Stage 5 (extras, 0.6.0): only an outline exists (plan "Stage 5 — extras", 5.1-5.6: charging + low battery events, call glow,
 Quick Settings tiles, music overlay, theme export/import incl. NaN-safe decode, battery-exemption prompt + boot polish). Write its detailed
@@ -100,3 +100,95 @@ Unanswered question put to the owner: which Muviz patterns/screens they use day 
 Next step: ask that one question, then lay out approaches, write the design doc at
 docs/superpowers/specs/2026-11-17-edge-visualizer-design.md, get approval, then superpowers:writing-plans, then build.
 Open naming: app name, package (com.haroon.<name>), Store release id, @apps-hub/ui brand key — propose one, owner confirms.
+
+## C6: progress ring on the pill (2026-11-23, branch eco/halo)
+- What: while another app's ongoing notification carries progress, a ring around the camera hole in the folded pill fills
+  with it (indeterminate: a short arc spins at about 15 fps, `ProgressRing.SPIN_FRAME_MS` = 66 ms, the same cap as the
+  always-on edge). Open card unchanged: the existing progress card still shows title, app and bar.
+- Model: `notch-island` `core/ProgressRing.kt` (JVM-tested in `ProgressRingTest`, 17 tests). Most recently updated wins
+  (ties by key); max <= 0 ignored unless indeterminate; Halo's own, secret-visibility and not-ongoing notifications never
+  ring; removal clears at once; a ring at 100% holds 2.5 s from when it got there, then clears, even if the notification
+  stays or is removed. Fraction clamped to 0..1.
+- Feed: `NotchFeed.ringPosted` in the one listener (HaloListener), no second listener. Hold expiry re-publishes via a
+  main-thread Handler. Drawing: `android/RingView.kt`, redraws only when the whole-degree sweep, the spin state or the
+  accent changes; the spin stops while the card is open (ring at alpha 0) and when the screen is off (no draws). Hidden
+  during a call (the call timer owns the pill).
+- Setting: `progressRing` (TS `src/island/settings.ts`, Kotlin `NotchSettings`), default ON (my call: the comparable
+  progress and alarm cards default on; message peek is off only because it reads text). Switch "Progress ring" under
+  the progress card switch in Island settings.
+- Notification data (for Halo's AGENTS.md paragraph): for the ring, only while its switch is on, the listener reads the
+  package name, isOngoing, whether visibility is secret, the post time, the notification key and EXTRA_PROGRESS,
+  EXTRA_PROGRESS_MAX and EXTRA_PROGRESS_INDETERMINATE; kept in memory only, never text. The ring shows a fraction only,
+  so it obeys the lock-screen text rule; secret notifications never ring.
+- Not checked on the phone: ring position around the real hole (the cutout rect's vertical centre is assumed to be the
+  hole's centre), look on the tinted pill, indeterminate spin cost. Steps: start a Design Editor export (or any app's
+  download), watch the folded pill while unlocked and on the lock screen; let it finish (100% holds ~2.5 s then clears);
+  open the card (ring hides); turn off "Progress ring" (ring gone).
+
+## P3: other apps on the edge and the always-on screen (2026-11-24, branch eco/halo)
+- What: Autopilot stage 2 (Halo side), B1 briefing rows and the B4 red pulse. A new "Your other apps" screen (Home tab) holds six
+  switches, all OFF by default (`links` in the settings document, TS `settings.ts` and Kotlin `Settings.kt`, fixture cases added):
+  red pulse (`shieldPulse`), waiting pulse (`waitingPulse`), waiting on the always-on screen (`waitingAod`), waiting bubble
+  (`bubble`), briefing on the always-on screen (`briefing`), private briefing lines (`briefingPrivate`, shown only while briefing is on).
+- Reads (only for switches that are on; `android/Links.kt`, ContentResolver on a background thread, 2 s timeout per share, any
+  failure = no data): TunnelWall `shield` + its `health` row (red pulse), HomeNet `new_devices` (red pulse), HomeNet `who_is_home`
+  (count only, only with the private switch), Inflow `suggestions` + Deputy `waiting` (waiting pulse, row, bubble), Inflow `briefing`.
+  Readers are pure and tolerant (`core/LinkShares.kt`: bad rows skipped, extra columns ignored, maxRows cap, text cleaned of control
+  and direction characters and cut to 60). Share definitions live in a test-only TS module (`src/__tests__/link-shares.ts`, copied
+  from the owner branches) bound to `modules/halo-engine/fixtures/link-shares.json`, which `LinkSharesTest` reads; sample rows in
+  `fixtures/link-rows.sample.json` (valid, invalid, bad flags) are run by both sides. `@apps-hub/app-link-contract` is a devDependency
+  only, so Metro never resolves it.
+- Inflow `briefing` column: the brief said `private`, but `defineShare` refuses that name, so Halo reads `personal` (my call; Inflow's
+  P2 must use the same name or tell Halo). Inflow has not declared the share on eco/inflow yet.
+- AppLinkTarget (2026-11-24, replaces `ProviderTrust`): `applink/AppLinkTarget.kt` (canonical copy, `SiblingPackages`) and its test are copied in;
+  `core/ShareOwners.kt` maps each share authority to its `SiblingPackages` owner (HomeNet, TunnelWall, Deputy, Inflow) and `Links.query` calls
+  `AppLinkTarget.trustedProvider(ctx, authority, owner)` before every query through `ShareOwners.read` (the trust check is a parameter, so
+  `ShareOwnersTest` feeds it Spoofed, NotInstalled and unknown-authority decisions). The waiting bubble calls
+  `AppLinkTarget.trustedActivity(ctx, launchIntent, requireLinkPermission = false)` before it opens Inflow or Deputy (a launcher activity is not a link
+  action); false does nothing, like the old quiet failure. No `<queries>`: Halo holds QUERY_ALL_PACKAGES.
+- When Halo re-reads (`core/LinkTiming.kt` RereadGate): a CHANGED ping reads 5 s after the first ping of a burst; app open (getStatus)
+  and service start read at once; never two reads within a minute; the always-on screen re-reads only data older than 15 minutes when
+  it opens (my call: this replaces a 15-minute worker, so there is no timer and no wake-up).
+- CHANGED receiver: `android/ChangedReceiver.kt`, exported, `android:permission` AUTOPILOT, action only, reads no extras (JVM test reads
+  its source); module manifest declares the signature `<permission>` and `<uses-permission>`.
+- Surfaces (pure decisions in `core/LinkSurfaces.kt`, timing in `core/LinkTiming.kt`):
+  - Red pulse (edge, not the pill; my call: the edge flash path already honours the hide rules, the always-on edge and quiet hours):
+    Shields on AND (untrusted network that is fresh OR an unacknowledged HomeNet device first seen in the last 24 h). Fresh = TunnelWall's
+    `since` or its health `last_seen_at` within 2 h and not more than 5 min in the future (my calls); stale = quiet. Red #EF4444, at
+    once then every 5 min while true.
+  - Waiting pulse: amber #F5A524 every 10 min while anything waits (Inflow suggestions in state waiting and not expired; Deputy
+    `waiting_for_ok` not past its time, and `draft`; Deputy `scheduled` rows do not count: they need no one, my call). Red goes first.
+    Both pulses skip quiet hours and a dark screen, and run without the notification-flash switch (`HaloService.pulse`).
+  - Always-on rows (`AodContent`, model `LinkSurfaces.aod(snapshot, links, locked, now)`). Lock screen fails CLOSED (security finding,
+    replaces the first build's money regex, which failed open and is removed): while locked (the real always-on screen always counts
+    as locked; the in-app preview reads `KeyguardManager.isKeyguardLocked`) Halo shows only its own phrases built from counts:
+    "1 thing is waiting" / "N things are waiting" and "Briefing ready" (only when a non-private line exists). No text column from
+    another app (Inflow titles and briefing lines, Deputy labels, HomeNet names) ever reaches the locked screen, and the private switch
+    does not change that. Unlocked (preview): the count, up to 3 titles, "Briefing" plus up to 4 lines; private lines (medicine, steps)
+    and the people-at-home count only with "Show private briefing lines" (off by default), names never. `LinkSurfacesTest` runs every
+    switch combination locked and unlocked against hostile lines ("Pay Ali rupees 4,200", no-break and figure spaces, names, a
+    direction override) and proves no source text reaches the locked output. Practical effect: the always-on screen shows counts only.
+  - Bubble (`android/WaitingBubble.kt`): a 48 dp touchable overlay with the count only, draggable; a tap opens Inflow when one of its
+    suggestions waits, else Deputy. No list, no Run or Skip in Halo (my call: Halo stays a reader and never writes to Inflow or starts a
+    Deputy run; Run and Skip stay in Inflow). Position kept in memory only.
+  - Daily digest: Inflow's job (spec 8.4), nothing in Halo.
+- Health row: `HaloLinkProvider` on `com.haroon.halo.applink`, path `health`, exported, read/write permission AUTOPILOT,
+  `AppLinkCaller.allowed` first; canonical guard copies in `applink/` (copies.test passes). accessibility = Notch service in
+  Settings.Secure `enabled_accessibility_services` (`serviceEnabled`, full or short form), listener =
+  `isNotificationListenerAccessGranted(HaloListener)`, ai_source `none`, `last_seen_at` = heartbeat written on service start and app
+  open (SharedPreferences `applink`); a query never writes. `HaloHealthTest` binds it to `app-health.share.json`.
+- Battery: no new loops; the pulse timer exists only while a pulse is wanted; the always-on rows redraw only when the snapshot changes.
+- Gates (2026-11-24): halo-engine JVM 206 (165), notch-island 128 (127), assembleDebug ok, merged manifest `auditManifest` = [];
+  halo ts 137 (127), typecheck clean, app-link-contract 133. Mutations checked: private filter, freshness, receiver extras, settle
+  time, guard copy drift, share fixture drift, the provider signer check and the locked gate all fail their tests.
+- Not checked on the phone (needs Store-signed builds of Halo, TunnelWall, HomeNet, Inflow and Deputy; debug builds refuse each other):
+  1. Halo: with every switch in Your other apps off, the Diagnostics event log shows no `links read` line; turn one on and one appears.
+  2. TunnelWall Shields on, join a Wi-Fi not in the trusted list: within ~5 s of its ping the edge pulses red, again after 5 min;
+     join a trusted Wi-Fi: the pulse stops. Force-stop TunnelWall on an untrusted network and wait 2 h: the pulse stops.
+  3. HomeNet: let its background check find a new device: red pulse; mark it as yours: stops after the next ping.
+  4. Inflow with a waiting suggestion: amber pulse every 10 min, the bubble shows the count; tap opens Inflow; drag moves it.
+  5. Always-on screen with waiting and briefing on: only "N things are waiting" and "Briefing ready", never a title, line or name,
+     whatever the private switch says. Preview from Halo (unlocked): titles and lines; medicine and steps only with the private switch.
+  6. `adb shell content query --uri content://com.haroon.halo.applink/health` must fail with a permission denial; the Store's
+     health screen shows Halo's row (accessibility, listener, last seen).
+  7. `adb shell am broadcast -a com.haroon.autopilot.CHANGED -p com.haroon.halo` must be refused (shell lacks the permission).

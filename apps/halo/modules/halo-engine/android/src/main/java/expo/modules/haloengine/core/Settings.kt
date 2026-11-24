@@ -113,6 +113,19 @@ data class Theme(
   val brightness: Double = 0.02,
 )
 
+/** Surfaces fed by the owner's other apps. Each switch also decides which shares Halo reads; all off by default. */
+data class SettingsLinks(
+  val shieldPulse: Boolean = false,
+  val waitingPulse: Boolean = false,
+  val waitingAod: Boolean = false,
+  val bubble: Boolean = false,
+  val briefing: Boolean = false,
+  val briefingPrivate: Boolean = false,
+)
+
+val SettingsLinks.readsWaiting: Boolean get() = waitingPulse || waitingAod || bubble
+val SettingsLinks.any: Boolean get() = shieldPulse || readsWaiting || briefing
+
 data class Settings(
   val enabled: Boolean = true,
   val pattern: String = "pulse-ring",
@@ -123,10 +136,11 @@ data class Settings(
   val rules: SettingsRules = SettingsRules(),
   val aod: SettingsAod = SettingsAod(),
   val themes: List<Theme> = STARTER_THEMES,
+  val links: SettingsLinks = SettingsLinks(),
 )
 
 /** The foreground service is needed for the lights, the always-on screen (its screen-off receiver) or notification wakes. */
-val Settings.serviceWanted: Boolean get() = enabled || aod.enabled || notify.enabled
+val Settings.serviceWanted: Boolean get() = enabled || aod.enabled || notify.enabled || links.shieldPulse || links.waitingPulse || links.bubble
 
 val STARTER_THEMES: List<Theme> = listOf(
   Theme("night", "Night", "big-digits", colours = SettingsColors(ColorSource.WALLPAPER, listOf("#FFFFFF")), edge = ThemeEdge(on = false)),
@@ -188,6 +202,17 @@ object SettingsCodec {
       rules = decodeRules(root.obj("rules")),
       aod = decodeAod(root.obj("aod")),
       themes = decodeThemes(root["themes"]),
+      links = root.obj("links").let { l ->
+        val d = D.links
+        SettingsLinks(
+          shieldPulse = l.bool("shieldPulse", d.shieldPulse),
+          waitingPulse = l.bool("waitingPulse", d.waitingPulse),
+          waitingAod = l.bool("waitingAod", d.waitingAod),
+          bubble = l.bool("bubble", d.bubble),
+          briefing = l.bool("briefing", d.briefing),
+          briefingPrivate = l.bool("briefingPrivate", d.briefingPrivate),
+        )
+      },
     )
   }
 
@@ -418,6 +443,14 @@ object SettingsCodec {
           put("brightness", t.brightness)
         })
       }
+    })
+    put("links", buildJsonObject {
+      put("shieldPulse", s.links.shieldPulse)
+      put("waitingPulse", s.links.waitingPulse)
+      put("waitingAod", s.links.waitingAod)
+      put("bubble", s.links.bubble)
+      put("briefing", s.links.briefing)
+      put("briefingPrivate", s.links.briefingPrivate)
     })
   }.toString()
 

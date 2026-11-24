@@ -21,6 +21,7 @@ object SettingsStore {
     ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit().putString(KEY, SettingsCodec.encode(s)).apply()
     HaloService.applySettings(s)
     NotifyFlash.settingsChanged()
+    Links.settingsChanged(ctx)
     // Switching something on from the app starts the service; switching everything off is handled by the service itself.
     if (s.serviceWanted && !HaloService.running) HaloService.start(ctx, HaloService.MEDIA_PLAYBACK, "settings")
   }

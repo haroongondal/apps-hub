@@ -15,6 +15,9 @@
     <uses-permission
         android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
+    <!-- Same definition in every app that takes part in the links, so install order doesn't matter. -->
+    <permission android:name="com.haroon.permission.AUTOPILOT" android:protectionLevel="signature" />
+    <uses-permission android:name="com.haroon.permission.AUTOPILOT" />
     <application>
         <service
             android:name="expo.modules.haloengine.android.HaloService"
@@ -55,5 +58,21 @@
             android:exported="false"
             android:excludeFromRecents="true"
             android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
+        <!-- Only same-key apps may send the data-free "something changed" ping; Halo then re-reads the shares. -->
+        <receiver
+            android:name="expo.modules.haloengine.android.ChangedReceiver"
+            android:exported="true"
+            android:permission="com.haroon.permission.AUTOPILOT">
+            <intent-filter>
+                <action android:name="com.haroon.autopilot.CHANGED" />
+            </intent-filter>
+        </receiver>
+        <!-- Halo's health row for the Store; read-only, same-key apps only. -->
+        <provider
+            android:name="expo.modules.haloengine.android.HaloLinkProvider"
+            android:authorities="com.haroon.halo.applink"
+            android:exported="true"
+            android:readPermission="com.haroon.permission.AUTOPILOT"
+            android:writePermission="com.haroon.permission.AUTOPILOT" />
     </application>
 </manifest>

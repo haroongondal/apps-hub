@@ -8,13 +8,17 @@ import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
+import android.os.Handler
+import android.os.Looper
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import expo.modules.notchisland.core.AlarmCard
 import expo.modules.notchisland.core.AlarmSnapshot
 import expo.modules.notchisland.core.MessagePeek
 import expo.modules.notchisland.core.Progress
+import expo.modules.notchisland.core.ProgressRing
 import expo.modules.notchisland.core.ProgressSnapshot
+import expo.modules.notchisland.core.RingNote
 import expo.modules.notchisland.core.callActions
 import expo.modules.notchisland.core.sampleSize
 
@@ -27,6 +31,9 @@ import expo.modules.notchisland.core.sampleSize
  * notification key (an id, used only to match removal).
  * For progress cards, only while that switch is on: isOngoing, category, the style name, the
  * progress numbers and EXTRA_TITLE, kept in memory for the card.
+ * For the progress ring, only while that switch is on: the package name, isOngoing, whether the
+ * visibility is secret, the post time and EXTRA_PROGRESS, EXTRA_PROGRESS_MAX and
+ * EXTRA_PROGRESS_INDETERMINATE, kept in memory for the pill. No text.
  * For a ringing alarm, only while the alarm card switch is on: category, isOngoing, whether it
  * has a full-screen intent, `when`, EXTRA_TITLE, and each action's title and semantic flag
  * (matched, never kept) and PendingIntent.
@@ -40,6 +47,9 @@ class NotchFeed(private val service: NotificationListenerService) {
   private val sessionsChanged = MediaSessionManager.OnActiveSessionsChangedListener { onSessions(it) }
   private var tracked: List<MediaController> = emptyList()
   private val progress = mutableMapOf<String, ProgressSnapshot>()
+  private val ring = ProgressRing(service.packageName)
+  private val main = Handler(Looper.getMainLooper())
+  private val ringExpired = Runnable { publishRing() }
   private val alarms = mutableMapOf<String, AlarmInfo>()
   private val sessionCallback = object : MediaController.Callback() {
     override fun onMetadataChanged(metadata: MediaMetadata?) = refresh()
@@ -69,6 +79,9 @@ class NotchFeed(private val service: NotificationListenerService) {
     NotchMedia.call = null
     progress.clear()
     NotchMedia.progress = null
+    ring.clear()
+    main.removeCallbacks(ringExpired)
+    NotchMedia.ring = null
     alarms.clear()
     NotchMedia.alarm = null
     NotchMedia.message = null
@@ -126,6 +139,7 @@ class NotchFeed(private val service: NotificationListenerService) {
       clearCall()
     }
     progressPosted(sbn, n)
+    ringPosted(sbn, n)
     alarmPosted(sbn, n)
     messagePosted(sbn, n)
   }
@@ -133,6 +147,10 @@ class NotchFeed(private val service: NotificationListenerService) {
   fun removed(sbn: StatusBarNotification?) {
     if (sbn != null && NotchMedia.call?.key == sbn.key) clearCall()
     if (sbn != null && progress.remove(sbn.key) != null) publishProgress()
+    if (sbn != null) {
+      ring.removed(sbn.key, System.currentTimeMillis())
+      publishRing()
+    }
     if (sbn != null && alarms.remove(sbn.key) != null) publishAlarm()
     if (sbn != null && NotchMedia.message?.snap?.key == sbn.key) setMessage(null)
   }
@@ -165,6 +183,27 @@ class NotchFeed(private val service: NotificationListenerService) {
     val next = Progress.newest(progress.values)
     if (next == NotchMedia.progress) return
     NotchMedia.progress = next
+    NotchMedia.changed()
+  }
+
+  private fun ringPosted(sbn: StatusBarNotification, n: Notification) {
+    val note = runCatching {
+      if (!NotchPrefs.load(service).progressRing) return@runCatching null
+      val x = n.extras
+      RingNote(sbn.key, sbn.packageName, x.getInt(Notification.EXTRA_PROGRESS, 0), x.getInt(Notification.EXTRA_PROGRESS_MAX, 0), x.getBoolean(Notification.EXTRA_PROGRESS_INDETERMINATE), sbn.postTime)
+    }.getOrNull()
+    val now = System.currentTimeMillis()
+    if (note == null) ring.removed(sbn.key, now) else ring.posted(note, sbn.isOngoing, n.visibility == Notification.VISIBILITY_SECRET, now)
+    publishRing()
+  }
+
+  private fun publishRing() {
+    val now = System.currentTimeMillis()
+    val next = ring.shown(now)
+    main.removeCallbacks(ringExpired)
+    ring.nextExpiry(now)?.let { main.postDelayed(ringExpired, it - now) }
+    if (next == NotchMedia.ring) return
+    NotchMedia.ring = next
     NotchMedia.changed()
   }
 

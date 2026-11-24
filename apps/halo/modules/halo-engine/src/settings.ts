@@ -76,6 +76,22 @@ export interface Aod {
   wakeOnCharge: boolean;
 }
 
+/** Surfaces fed by the owner's other apps; each switch also decides which of their shares Halo reads. All off by default. */
+export interface Links {
+  /** Red pulse while TunnelWall's Shields sees an untrusted network or HomeNet a new device. */
+  shieldPulse: boolean;
+  /** A slow pulse while something waits in Inflow or Deputy. */
+  waitingPulse: boolean;
+  /** The count of what waits on the always-on screen; titles only in the in-app preview. */
+  waitingAod: boolean;
+  /** A small bubble with the count over other apps; a tap opens the app it came from. */
+  bubble: boolean;
+  /** "Briefing ready" on the always-on screen; the lines only in the in-app preview. */
+  briefing: boolean;
+  /** Also show private briefing lines (medicine, steps) and how many people are home, in the in-app preview only. */
+  briefingPrivate: boolean;
+}
+
 export interface Settings {
   version: 1;
   enabled: boolean;
@@ -96,6 +112,7 @@ export interface Settings {
   rules: Rules;
   aod: Aod;
   themes: Theme[]; // max 20; empty or missing gives the starter themes
+  links: Links;
 }
 
 const FACE_OPTIONS: FaceOptions = { size: 'm', position: 'centre', h24: true, date: true, battery: true, alarm: false, seconds: false };
@@ -146,6 +163,7 @@ export const DEFAULT_SETTINGS: Settings = {
     wakeOnCharge: true,
   },
   themes: STARTER_THEMES,
+  links: { shieldPulse: false, waitingPulse: false, waitingAod: false, bubble: false, briefing: false, briefingPrivate: false },
 };
 
 const PKG = /^[a-zA-Z0-9_.]{1,200}$/;
@@ -305,6 +323,19 @@ function normalizeThemes(raw: unknown): Theme[] {
   return JSON.parse(JSON.stringify(out.length > 0 ? out.slice(0, MAX_THEMES) : STARTER_THEMES));
 }
 
+function normalizeLinks(raw: unknown): Links {
+  const d = DEFAULT_SETTINGS.links;
+  const l = obj(raw);
+  return {
+    shieldPulse: bool(l.shieldPulse, d.shieldPulse),
+    waitingPulse: bool(l.waitingPulse, d.waitingPulse),
+    waitingAod: bool(l.waitingAod, d.waitingAod),
+    bubble: bool(l.bubble, d.bubble),
+    briefing: bool(l.briefing, d.briefing),
+    briefingPrivate: bool(l.briefingPrivate, d.briefingPrivate),
+  };
+}
+
 /** Any input becomes a valid Settings: wrong types fall back, numbers clamp, unknown fields drop. Never throws. */
 export function normalize(raw: unknown): Settings {
   const d = DEFAULT_SETTINGS;
@@ -340,5 +371,6 @@ export function normalize(raw: unknown): Settings {
     rules: normalizeRules(r.rules),
     aod: normalizeAod(r.aod),
     themes: normalizeThemes(r.themes),
+    links: normalizeLinks(r.links),
   };
 }

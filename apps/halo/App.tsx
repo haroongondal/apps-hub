@@ -13,10 +13,11 @@ import AppPicker from './src/AppPicker.tsx';
 import RulesScreen from './src/RulesScreen.tsx';
 import ThemeScreen from './src/ThemeScreen.tsx';
 import IslandScreen from './src/IslandScreen.tsx';
+import LinksScreen from './src/LinksScreen.tsx';
 import { useSettings } from './src/useSettings.ts';
 
 type Tab = 'home' | 'lights' | 'notch' | 'notifications' | 'aod';
-type Route = 'tabs' | 'edges' | 'diagnostics' | 'rules' | 'appPicker' | 'colours' | 'theme';
+type Route = 'tabs' | 'edges' | 'diagnostics' | 'rules' | 'appPicker' | 'colours' | 'theme' | 'links';
 
 const TABS: ReadonlyArray<{ key: Tab; label: string }> = [
   { key: 'home', label: 'Home' },
@@ -69,6 +70,7 @@ function Main() {
   if (route === 'colours') return <ColoursScreen settings={settings} update={update} onBack={back} />;
   if (route === 'theme') return <ThemeScreen key={themeId} settings={settings} update={update} themeId={themeId} onBack={back} />;
   if (route === 'diagnostics') return <DiagnosticsScreen onBack={back} />;
+  if (route === 'links') return <LinksScreen settings={settings} update={update} onBack={back} />;
 
   return (
     <>
