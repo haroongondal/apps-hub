@@ -80,6 +80,17 @@ class ComposeTest {
     assertEquals(1, ComposeBuilder.effects(plan, preview = true).videoEffects.size)
   }
 
+  // Found on the phone 2026-11-25: exporting a reel failed with GL error 0x506 in the frame-drop shader (ERROR_CODE_VIDEO_FRAME_PROCESSING_FAILED, both attempts).
+  // A photo already has its frame rate from setFrameRate, so only video items get the cap.
+  @Test
+  fun photosAreFittedButNeverFrameDroppedInTheExport() {
+    val photo = ComposeBuilder.pictureFor(still = true, plan, preview = false)
+    assertEquals(0, photo.count { it is FrameDropEffect })
+    assertEquals(1, photo.size)
+    assertEquals(1, ComposeBuilder.pictureFor(still = false, plan, preview = false).count { it is FrameDropEffect })
+    assertEquals(0, ComposeBuilder.pictureFor(still = false, plan, preview = true).count { it is FrameDropEffect })
+  }
+
   @Test
   fun silenceIsAddedWhenSomeClipHasSoundOrThereIsMusic() {
     assertTrue(forceAudio(plan))
