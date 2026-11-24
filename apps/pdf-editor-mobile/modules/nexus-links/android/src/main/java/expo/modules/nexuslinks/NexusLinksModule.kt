@@ -3,6 +3,7 @@ package expo.modules.nexuslinks
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.PackageManager
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
@@ -10,6 +11,7 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.nexuslinks.android.LinkReader
 import expo.modules.nexuslinks.applink.AppLinkTarget
 import expo.modules.nexuslinks.core.Links
+import expo.modules.nexuslinks.core.Opens
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicReference
 
@@ -54,6 +56,26 @@ class NexusLinksModule : Module() {
         Links.Result(Links.FAILED)
       }
       if (failed != null) pending.getAndSet(null)?.resolve(failed.toMap())
+    }.runOnQueue(Queues.MAIN)
+
+    // Opens the Store or AI hub for the owner to install, allow or set up AI. Never an implicit intent: the launch component must be that package, signed like Nexus.
+    AsyncFunction("openApp") { app: String, promise: Promise ->
+      val pkg = Opens.packageOf(app) ?: return@AsyncFunction promise.resolve(Links.Result(Links.FAILED, "unknown_app").toMap())
+      val activity = appContext.currentActivity
+      if (activity == null || activity.isFinishing) return@AsyncFunction promise.resolve(Links.Result(Links.UNAVAILABLE).toMap())
+      val pm = activity.packageManager
+      val launch = pm.getLaunchIntentForPackage(pkg) ?: return@AsyncFunction promise.resolve(Links.Result(Links.UNAVAILABLE).toMap())
+      val signed = runCatching { pm.checkSignatures(activity.packageName, pkg) == PackageManager.SIGNATURE_MATCH }.getOrDefault(false)
+      if (!Opens.trusted(pkg, launch.component?.packageName, signed)) return@AsyncFunction promise.resolve(Links.Result(Links.UNAVAILABLE).toMap())
+      val result = try {
+        activity.startActivity(launch)
+        Links.Result(Links.DONE)
+      } catch (_: ActivityNotFoundException) {
+        Links.Result(Links.UNAVAILABLE)
+      } catch (_: Exception) {
+        Links.Result(Links.FAILED)
+      }
+      promise.resolve(result.toMap())
     }.runOnQueue(Queues.MAIN)
 
     OnActivityResult { _, payload ->

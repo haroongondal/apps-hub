@@ -83,9 +83,12 @@ Current apps:
   `packages/library-core`, app glue in `apps/pdf-editor-mobile/src/library`. Scan
   and Reader build on it; specs `docs/pdf-editor/`, progress `docs/handoffs/pdf-editor-scan.md`.
   The mobile app is named **Nexus** since N2 (package id and Store id unchanged): an opt-in
-  AI layer over the same Library through the owner's Gemini and Groq keys (Gemini embeds text
-  and reads images, Groq transcribes and answers with Gemini as chat fallback, several keys per
-  service in expo-secure-store; no OpenAI; fully offline without a key), with
+  AI layer over the same Library. AI runs through AI hub (`com.haroon.aihub`) only: Nexus has no
+  keys, no provider and no key settings of its own, and nothing leaves the phone without AI hub.
+  Through the hub, Gemini embeds text and reads images and Groq transcribes and answers; no OpenAI.
+  Without AI hub installed, Nexus says "AI needs AI hub" with a button to the Store; if AI hub does
+  not allow Nexus, "Allow Nexus in AI hub"; with no key there, "Add a key in AI hub". Keys Nexus
+  saved before are deleted from the phone only after the first successful hub chat or embed. With
   logic in `packages/knowledge-core` and glue in `apps/pdf-editor-mobile/src/nexus`. Design
   `docs/superpowers/specs/2026-11-18-nexus-design.md`, progress `docs/handoffs/nexus.md`.
   Long recordings: over 25 MB is planned by `planSource` into pieces under 90% of the upload

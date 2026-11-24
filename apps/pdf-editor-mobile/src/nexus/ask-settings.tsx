@@ -33,7 +33,7 @@ const SOURCES: Record<SourceApp, { title: string; about: string; hint: string }>
 };
 
 const KEEPS =
-  'When a switch is on, Nexus keeps a copy of that text inside Nexus. It sends the text to Gemini to make it searchable, and sends the parts that match to Groq when you ask about it (through AI hub when AI hub is installed). Nothing is sent while a switch is off. One-time codes, health data and Strongroom are never read. Turning a switch off deletes what Nexus kept.';
+  'When a switch is on, Nexus keeps a copy of that text inside Nexus. It sends the text to Gemini to make it searchable, and sends the parts that match to Groq when you ask about it, both through AI hub. Nothing is sent while a switch is off. One-time codes, health data and Strongroom are never read. Turning a switch off deletes what Nexus kept.';
 
 const plural = (n: number) => `${n} ${n === 1 ? 'item' : 'items'}`;
 

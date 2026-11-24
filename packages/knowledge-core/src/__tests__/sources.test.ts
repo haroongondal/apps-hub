@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import type { SourceApp, SqlPort } from '@apps-hub/library-core';
 
 import { Knowledge } from '../knowledge.ts';
-import { answerMessages, SOURCES_CLOSE, SOURCES_OPEN } from '../openai.ts';
+import { answerMessages, SOURCES_CLOSE, SOURCES_OPEN } from '../prompts.ts';
 import {
   cleanRow,
   dayLabel,

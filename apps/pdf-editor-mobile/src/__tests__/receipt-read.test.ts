@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import type { ImageFile } from '../nexus/hub-first.ts';
+import type { ImageFile } from '../nexus/hub-ai.ts';
 import { RECEIPT_PROMPT } from '../nexus/receipt-parse.ts';
 import { readReceipt, readScanReceipt } from '../nexus/receipt-read.ts';
 
 const NOW = new Date(2026, 10, 24, 10).getTime();
-const file: ImageFile = { uri: 'file:///x.jpg', size: 10, base64: async () => '' };
+const file: ImageFile = { uri: 'file:///x.jpg', size: 10 };
 
 function fake(reply: string) {
   const calls: { read: ImageFile[]; complete: { system: string; user: string; json: boolean }[] } = { read: [], complete: [] };

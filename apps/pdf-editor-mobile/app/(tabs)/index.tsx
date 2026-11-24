@@ -12,7 +12,9 @@ import { addPdf } from '../../src/library/files';
 import { IconButton } from '../../src/library/icon-button';
 import { openItem } from '../../src/library/open-item';
 import { errorMessage } from '../../src/library/use-library';
-import { aiReady } from '../../src/nexus/ai';
+import { hubState } from '../../src/nexus/ai';
+import { HubNotice } from '../../src/nexus/hub-notice';
+import type { HubState } from '../../src/nexus/hub-state';
 import { addNote, addPhoto, addRecording } from '../../src/nexus/capture';
 import { citationLabel, jobLabel } from '../../src/nexus/labels';
 import { currentMeeting, meetingStatus, meetingSupported } from '../../src/nexus/meeting';
@@ -40,7 +42,7 @@ interface Exchange {
 
 function useCards() {
   const [cards, setCards] = useState<Card[]>([]);
-  const [hasKey, setHasKey] = useState(true);
+  const [ai, setAi] = useState<HubState>('ready');
   const [meeting, setMeeting] = useState<MeetingState>('none');
   const load = useCallback(async () => {
     currentMeeting()
@@ -62,7 +64,7 @@ function useCards() {
         });
       }
       setCards(next);
-      setHasKey(await aiReady());
+      setAi(await hubState());
     } catch (err) {
       console.warn('Stream did not load', err);
     }
@@ -73,13 +75,13 @@ function useCards() {
     }, [load]),
   );
   useEffect(() => onQueueChange(() => void load()), [load]);
-  return { cards, hasKey, meeting, load };
+  return { cards, ai, meeting, load };
 }
 
-function CaptureCard({ card, hasKey }: { card: Card; hasKey: boolean }) {
+function CaptureCard({ card, ai }: { card: Card; ai: HubState }) {
   const { c } = useTheme();
   const [open, setOpen] = useState(false);
-  const status = jobLabel(card.job, card.item.kind, hasKey, card.found, card.keptOut);
+  const status = jobLabel(card.job, card.item.kind, ai, card.found, card.keptOut);
   const retry = async () => {
     const kn = await openKnowledge();
     await kn.retry(card.item.id);
@@ -132,7 +134,7 @@ function ExchangeView({ x }: { x: Exchange }) {
 
 export default function StreamScreen() {
   const { c } = useTheme();
-  const { cards, hasKey, meeting, load } = useCards();
+  const { cards, ai, meeting, load } = useCards();
   const [mode, setMode] = useState<'capture' | 'ask'>('capture');
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -235,19 +237,15 @@ export default function StreamScreen() {
       <FlatList<Card | Exchange>
         data={mode === 'capture' ? cards : thread}
         keyExtractor={(row) => ('item' in row ? row.item.id : String(row.id))}
-        renderItem={({ item: row }) => ('item' in row ? <CaptureCard card={row} hasKey={hasKey} /> : <ExchangeView x={row} />)}
+        renderItem={({ item: row }) => ('item' in row ? <CaptureCard card={row} ai={ai} /> : <ExchangeView x={row} />)}
         ItemSeparatorComponent={() => <View style={{ height: space.md }} />}
         ListEmptyComponent={empty}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ padding: space.lg }}
         ListHeaderComponent={
           <View style={{ gap: space.lg, paddingBottom: space.lg }}>
-            <Header title="Stream" trailing={<IconButton icon="key-outline" label="AI settings" onPress={() => router.push('/settings')} />} />
-            {!hasKey ? (
-              <Notice tone="accent" title="AI is off" action={<Button label="Add your key" size="sm" onPress={() => router.push('/settings')} />}>
-                Add your Gemini and Groq keys, or turn on Nexus in AI hub, to transcribe, find ideas and ask questions. Until then nothing leaves this phone.
-              </Notice>
-            ) : null}
+            <Header title="Stream" trailing={<IconButton icon="settings-outline" label="AI settings" onPress={() => router.push('/settings')} />} />
+            <HubNotice state={ai} />
             {meeting === 'recording' ? (
               <Notice tone="danger" title="Recording a meeting" action={<Button label="Open" size="sm" onPress={() => router.push('/meeting')} />}>
                 It keeps recording until you stop it.

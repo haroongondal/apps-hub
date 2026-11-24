@@ -7,7 +7,9 @@ import { View } from 'react-native';
 import { IconButton } from '../../src/library/icon-button';
 import { itemFile } from '../../src/library/paths';
 import { readDebits, startLink } from '../../src/links/readers';
-import { ai, aiReady } from '../../src/nexus/ai';
+import { ai, aiReady, hubState } from '../../src/nexus/ai';
+import { HubNotice } from '../../src/nexus/hub-notice';
+import type { HubState } from '../../src/nexus/hub-state';
 import { outcomeText } from '../../src/nexus/action-links';
 import { getScanService } from '../../src/scan/service';
 import { candidateLine, dayText, matchLine, readAllDebits, readLine } from '../../src/nexus/receipt-debits';
@@ -32,6 +34,7 @@ export default function ReceiptScreen() {
   const [busy, setBusy] = useState<'match' | 'remind' | null>(null);
   const [reminded, setReminded] = useState<string | null>(null);
   const [keptOut, setKeptOut] = useState<boolean | null>(null);
+  const [hub, setHub] = useState<HubState | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -61,6 +64,7 @@ export default function ReceiptScreen() {
         setKeptOut(true);
         return setPhase({ kind: 'start' });
       }
+      if (result.kind === 'no-ai') setHub(await hubState());
       if (result.kind !== 'ready') return setPhase(result);
       const { amountMinor, date, merchant, warrantyEnd } = result.receipt;
       setFields({ amount: amountText(amountMinor), date, merchant, warrantyEnd: warrantyEnd ?? '' });
@@ -113,15 +117,13 @@ export default function ReceiptScreen() {
 
       {phase.kind === 'start' ? (
         <Notice tone="neutral" action={<Button label="Read receipt" size="sm" disabled={keptOut !== false} onPress={() => void read()} />}>
-          Nexus sends this photo to your AI service to read it.
+          Nexus sends this photo to Gemini through AI hub to read it.
         </Notice>
       ) : null}
       {keptOut ? <Text tone="muted">{KEPT_OUT_LINE}</Text> : null}
       {phase.kind === 'reading' ? <Text tone="muted" accessibilityLiveRegion="polite">Reading the receipt...</Text> : null}
       {phase.kind === 'no-ai' ? (
-        <Notice tone="warn" title="Nexus needs an AI service" action={<Button label="Open settings" size="sm" variant="secondary" onPress={() => router.push('/settings')} />}>
-          Add your AI keys in Settings, or turn on Nexus in AI hub, to read a receipt.
-        </Notice>
+        <HubNotice state={hub} />
       ) : null}
       {phase.kind === 'failed' ? (
         <Notice tone="danger" title="Couldn't read the receipt" action={<Button label="Try again" size="sm" variant="secondary" onPress={() => void read()} />}>

@@ -13,7 +13,9 @@ import { openLibrary } from '../src/library/open-library';
 import { itemFile } from '../src/library/paths';
 import { errorMessage, useDebounced } from '../src/library/use-library';
 import { addTodoExtras, proposeTaskExtras } from '../src/nexus/action-links';
-import { aiReady } from '../src/nexus/ai';
+import { hubState } from '../src/nexus/ai';
+import { HubNotice } from '../src/nexus/hub-notice';
+import type { HubState } from '../src/nexus/hub-state';
 import { saveNote } from '../src/nexus/capture';
 import { audioFile } from '../src/nexus/content';
 import { jobLabel, minutesDetail, minutesError, seekTo, sourceText } from '../src/nexus/labels';
@@ -33,7 +35,7 @@ interface Loaded {
   ideas: { text: string; locator: Segment['locator'] }[];
   segments: Segment[];
   related: Item[];
-  hasKey: boolean;
+  ai: HubState;
   places: PlaceReminder[];
   keptOut: boolean;
   minutes: SavedMinutes | null;
@@ -118,7 +120,7 @@ function DueRow({ due, onPick }: { due: number | null; onPick: (dueAt: number | 
   );
 }
 
-function MinutesSection({ item, saved, making, playFrom }: { item: Item; saved: SavedMinutes | null; making: boolean; playFrom: (sec: number) => void }) {
+function MinutesSection({ item, saved, making, ai, playFrom }: { item: Item; saved: SavedMinutes | null; making: boolean; ai: HubState; playFrom: (sec: number) => void }) {
   const [error, setError] = useState<string | null>(null);
   const make = () => {
     setError(null);
@@ -127,7 +129,7 @@ function MinutesSection({ item, saved, making, playFrom }: { item: Item; saved: 
   const again = () =>
     confirmAction({
       title: 'Replace these minutes?',
-      message: 'Nexus sends the transcript to Groq or Gemini again and replaces the minutes you have now.',
+      message: 'Nexus sends the transcript to Groq through AI hub again and replaces the minutes you have now.',
       confirmLabel: 'Replace',
       onConfirm: make,
     });
@@ -160,7 +162,7 @@ function MinutesSection({ item, saved, making, playFrom }: { item: Item; saved: 
         footer={
           saved
             ? undefined
-            : 'Nexus sends this transcript to Groq or Gemini to write a summary, the decisions and the action items, each with the time it was said. To make the minutes searchable, it sends them to Gemini when a Gemini key is set or AI hub is on.'
+            : 'Nexus sends this transcript to Groq, through AI hub, to write a summary, the decisions and the action items, each with the time it was said. To make the minutes searchable, it sends them to Gemini, also through AI hub. Nexus has no keys of its own.'
         }
       >
         {saved ? <Row title={<Text>{saved.minutes.summary}</Text>} /> : null}
@@ -170,7 +172,8 @@ function MinutesSection({ item, saved, making, playFrom }: { item: Item; saved: 
           </Row>
         ) : null}
       </Group>
-      {error ? (
+      <HubNotice state={ai} />
+      {error && ai === 'ready' ? (
         <Notice tone="warn" title="Couldn't make the minutes">
           {error}
         </Notice>
@@ -186,7 +189,7 @@ function MinutesSection({ item, saved, making, playFrom }: { item: Item; saved: 
       {making ? null : saved ? (
         <Button label="Make minutes again" variant="secondary" onPress={again} />
       ) : (
-        <Button label="Make minutes" onPress={make} accessibilityHint="Sends the transcript to Groq or Gemini" />
+        <Button label="Make minutes" onPress={make} accessibilityHint="Sends the transcript to Groq through AI hub" />
       )}
     </>
   );
@@ -266,7 +269,7 @@ export default function ItemScreen() {
       ideas: await kn.ideas(item.id),
       segments: item.kind === 'note' && !source ? [] : await kn.segmentsOf(item.id),
       related: (await kn.related(item.id)).map((r) => r.item),
-      hasKey: await aiReady(),
+      ai: await hubState(),
       places: await kn.lib.listReminders(item.id),
       keptOut: await kn.isExcluded(item.id),
       minutes: item.kind === 'audio' ? await kn.minutes(item.id) : null,
@@ -291,7 +294,7 @@ export default function ItemScreen() {
   }
   if (!data) return <Screen>{null}</Screen>;
   const { item, job } = data;
-  const status = jobLabel(job, item.kind, data.hasKey, data.found, data.keptOut);
+  const status = jobLabel(job, item.kind, data.ai, data.found, data.keptOut);
   const retry = async () => {
     await (await openKnowledge()).retry(item.id);
     await kick();
@@ -362,7 +365,7 @@ export default function ItemScreen() {
           at={Number.isFinite(at) ? at : null}
           minutes={
             data.segments.length && !data.keptOut
-              ? (playFrom) => <MinutesSection item={item} saved={data.minutes} making={data.makingMinutes} playFrom={playFrom} />
+              ? (playFrom) => <MinutesSection item={item} saved={data.minutes} making={data.makingMinutes} ai={data.ai} playFrom={playFrom} />
               : undefined
           }
         />

@@ -14,5 +14,6 @@
     <package android:name="com.haroon.inflow" />
     <package android:name="com.haroon.deputy" />
     <package android:name="com.haroon.clipboard" />
+    <package android:name="com.haroon.store" />
   </queries>
 </manifest>

@@ -1,4 +1,4 @@
-import type { ImageFile, NexusAi } from './hub-first.ts';
+import type { ImageFile, NexusAi } from './hub-ai.ts';
 import { parseReceiptReply, receiptMessages, type Receipt, type ReceiptResult } from './receipt-parse.ts';
 
 export type ReceiptReader = Pick<NexusAi, 'readImage' | 'complete'>;

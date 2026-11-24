@@ -1,10 +1,10 @@
 import type { PagedSource, SnapshotSource, SourceProvider, SourceStatus } from '@apps-hub/knowledge-core';
 import type { SourceApp } from '@apps-hub/library-core';
-import type { DebitRow, LinkAction, LinkExtras, LinkResult, LinkStatus, NexusLinksModule, ReaderId, ReadResult, ReadStatus } from 'nexus-links';
+import type { DebitRow, LinkAction, LinkExtras, LinkResult, LinkStatus, NexusLinksModule, OpenableApp, ReaderId, ReadResult, ReadStatus } from 'nexus-links';
 
 export type { DebitRow, LinkAction, LinkExtras, LinkResult, LinkStatus };
 
-export type Native = Pick<NexusLinksModule, 'readShare' | 'startLink'> | null;
+export type Native = Pick<NexusLinksModule, 'readShare' | 'startLink'> & Partial<Pick<NexusLinksModule, 'openApp'>> | null;
 
 const READ_STATUSES: readonly string[] = ['ok', 'missing', 'refused', 'failed'];
 const LINK_STATUSES: readonly string[] = ['done', 'cancelled', 'failed', 'unavailable', 'refused'];
@@ -133,6 +133,17 @@ export async function startLink<A extends LinkAction>(native: Native, action: A,
     if (!isObject(r) || typeof r.status !== 'string' || !LINK_STATUSES.includes(r.status)) return { status: 'failed' };
     const status = r.status as LinkStatus;
     return typeof r.code === 'string' && CODE.test(r.code) ? { status, code: r.code } : { status };
+  } catch {
+    return { status: 'failed' };
+  }
+}
+
+/** Opens the Store or AI hub; `unavailable` when this phone cannot (no native side, not installed, not signed like Nexus). */
+export async function openApp(native: Native, app: OpenableApp): Promise<LinkResult> {
+  if (!native?.openApp) return { status: 'unavailable' };
+  try {
+    const r: unknown = await native.openApp(app);
+    return isObject(r) && typeof r.status === 'string' && LINK_STATUSES.includes(r.status) ? { status: r.status as LinkStatus } : { status: 'failed' };
   } catch {
     return { status: 'failed' };
   }

@@ -4,7 +4,7 @@ import { AppState } from 'react-native';
 import { newId } from '../library/ids';
 import { openLibrary } from '../library/open-library';
 
-import { ai, aiReady } from './ai';
+import { ai, aiReady, recheckHub } from './ai';
 import { content } from './content';
 
 const WORKERS = 3;
@@ -34,7 +34,7 @@ export const emit = () => listeners.forEach((l) => l());
 
 async function work(kn: Knowledge) {
   try {
-    // Stops on idle, on a pause (no key, offline, rate limit) and when the app leaves the foreground.
+    // Stops on idle, on a pause (AI hub needs the owner, offline, rate limit) and when the app leaves the foreground.
     while ((await kn.runNext()) === 'ran' && AppState.currentState === 'active') emit();
   } catch (err) {
     console.warn('Nexus worker stopped', err);
@@ -44,7 +44,7 @@ async function work(kn: Knowledge) {
   }
 }
 
-/** Without a key nothing leaves the phone: queued items wait until one is saved. */
+/** Without AI hub ready nothing leaves the phone: queued items wait until it is. */
 export function kick(): Promise<void> {
   return inTurn(async () => {
     if (!(await aiReady())) return emit();
@@ -74,6 +74,7 @@ export async function takeBack(itemId: string): Promise<void> {
 
 export function startWorker(): () => void {
   const resume = async () => {
+    recheckHub(); // the owner may have installed, allowed or added a key in AI hub while Nexus was away
     try {
       // With none of our workers running, every 'running' row belongs to a dead process.
       await inTurn(async () => {
