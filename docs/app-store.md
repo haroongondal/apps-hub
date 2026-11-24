@@ -134,7 +134,15 @@ changelog with `[branch build <short sha>]`. CI is not affected: it builds a pus
   Your own tree is never touched.
 - **`--dry-run`** prints `app`, `from` (commit and versionCode), `to commit`, `new versionCode` and `target` (Store
   host) and exits before any worktree, build or upload. It only reads the manifest.
-- Rolling back replaces what every phone gets from the Store, so run it only on the owner's go.
+- **Old code meets the newer database.** A rollback installs old code over the phone's newer on-device
+  database. Android accepts the install because the `versionCode` is higher, but `SQLiteOpenHelper`'s default
+  `onDowngrade` throws, so an app whose database schema version was raised after the target commit crashes on
+  start until a forward release ships. Examples on the ecosystem branches: Clipboard (`ClipStore`, `clips.db`,
+  version 1 to 2 added `pinned_at`) and Strongroom (`Schema.VERSION` in `SqliteRecordStore.kt`; neither overrides
+  `onDowngrade`). Check the diff between the target and the current release for a schema version bump before a
+  rollback.
+- `pnpm release <app> --rollback` without `--dry-run` builds and publishes. It replaces what every phone gets
+  from the Store, so run it only on the owner's go.
 
 ```bash
 pnpm release netlens --rollback --dry-run                 # see the plan
