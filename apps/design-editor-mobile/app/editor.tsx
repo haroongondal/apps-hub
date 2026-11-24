@@ -11,7 +11,7 @@ import WebView, { type WebViewMessageEvent, type WebViewNavigation } from 'react
 
 import DesignMedia from 'design-media';
 import { createImagePicker, type ImagePickDeps } from '../src/editor/image-pick';
-import { aiHasKey, aiKeys, aiRemoveKey, aiRequest, aiSetKey } from '../src/editor/ai';
+import { aiRequest } from '../src/editor/ai';
 import TextOcr, { allText, pickLine } from 'text-ocr';
 import { injectCommand, parseMessage, replyError, replyOk, type PageEvent } from '../src/editor/bridge';
 import { createVisionHost, type VisionHost } from '../src/editor/vision-host';
@@ -149,20 +149,11 @@ export default function EditorScreen() {
             injectCommand(webRef, replyOk(msg.reqId, true));
             break;
           }
-          case 'aiHasKey':
-            injectCommand(webRef, replyOk(msg.reqId, await aiHasKey()));
-            break;
-          case 'aiKeys':
-            injectCommand(webRef, replyOk(msg.reqId, await aiKeys()));
-            break;
-          case 'aiRemoveKey':
-            injectCommand(webRef, replyOk(msg.reqId, await aiRemoveKey(msg.index)));
-            break;
-          case 'aiSetKey':
-            injectCommand(webRef, replyOk(msg.reqId, await aiSetKey(msg.key)));
-            break;
           case 'aiRequest':
             injectCommand(webRef, replyOk(msg.reqId, await aiRequest(msg.body)));
+            break;
+          case 'aiOpen':
+            injectCommand(webRef, replyOk(msg.reqId, typeof msg.target === 'string' ? await DesignMedia.openApp(msg.target) : 'refused'));
             break;
           case 'recognizeText': {
             const r = await TextOcr.recognizeBase64(msg.base64);

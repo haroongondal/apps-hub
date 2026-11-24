@@ -62,6 +62,9 @@ export interface DesignMediaModule {
   // Hand-offs: each opens a screen in the other app, where the owner decides. Deputy's answer is one of handed_over, cancelled, not_installed, refused, busy.
   proposeDeputyTask(task: string, apps: string[]): Promise<'handed_over' | 'cancelled' | 'not_installed' | 'refused' | 'busy'>;
   sendToNexus(uris: string[]): Promise<'sent' | 'not_installed'>; // 1 to 10 gallery photos, read-only grants, Nexus asks before it adds them
+  // Design with AI's two buttons: opens the Store or AI hub's own screen, nothing is sent. target is 'store' or 'aihub'; any other word is refused.
+  // 'refused' also covers an app on the phone that is not signed with the owner's key.
+  openApp(target: string): Promise<'opened' | 'not_installed' | 'refused'>;
   // Clean up: groups from the photo index. A photo leaves the gallery only through Android's own trash dialog.
   cleanupGroups(options?: { blurThreshold?: number; lookalikeCosine?: number }): Promise<CleanupResult>; // photos still in the gallery only
   trashPhotos(uris: string[]): Promise<{ moved: number; uris: string[]; noted: boolean }>; // opens Android's dialog; 0 and [] when the owner says no; uris: the ones sent, for Undo; noted false: in Android's trash but not in Recently removed

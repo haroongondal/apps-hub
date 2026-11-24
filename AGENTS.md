@@ -190,11 +190,14 @@ Current apps:
   what other apps send (JPEG, PNG, video; at most 20 items of 2 GB each) is copied into the app's
   own folder and checked by its real bytes, nothing is sent anywhere, and nothing is queued or
   changed until the person opens a tool on the "Add to Design Editor" screen. Design with AI (the
-  layout chat) goes to AI hub first, so the app needs no key of its own once the owner has
-  allowed it there; if the hub is missing, not allowed, too old, has no key, or the request cannot
-  be carried (extra fields, image parts, over 512 KB), the app uses its own Groq or Gemini key as
-  before. Other hub failures (busy, timeout, provider error) are shown as errors and do not retry
-  on the own key. Nothing else in the app uses AI. App links: it serves only the `health` row at
+  layout chat) runs through AI hub only (`com.haroon.aihub`): the phone app has no AI key, no key
+  screen and no provider of its own, and the hub holds the Groq or Gemini keys. What leaves the
+  phone is the typed description and the page size, sent by the hub to the same Groq or Gemini
+  service as before; the app never sees a key. When the hub is not installed, the app says "AI needs
+  AI hub" with a button that opens the Store; when the owner has not allowed Design Editor there,
+  "Allow Design Editor in AI hub" opens the hub; when the hub has no key, "Add a key in AI hub".
+  Busy, timeout and other failures are plain messages. Keys an older build saved are deleted once
+  the hub has answered on that phone. The Mac app `apps/design-editor` keeps its own keys. Nothing else in the app uses AI. App links: it serves only the `health` row at
   `com.haroon.designeditor.applink` (exported, AUTOPILOT permission for read and write,
   `AppLinkCaller.allowed` first, read-only, declared in
   `apps/design-editor-mobile/modules/design-media/android/src/main/AndroidManifest.xml`;

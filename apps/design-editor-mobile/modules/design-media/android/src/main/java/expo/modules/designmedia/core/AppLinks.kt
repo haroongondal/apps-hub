@@ -30,6 +30,22 @@ object TrustedStart {
   }
 }
 
+// Design with AI's two buttons start the Store or AI hub on their own screen. The Store is not in SiblingPackages (nothing is
+// sent to it), so this checks the package and the owner's signature itself. Nothing but these two packages can be opened.
+object OpenApp {
+  const val STORE = "com.haroon.store"
+  private val TARGETS = mapOf("store" to STORE, "aihub" to SiblingPackages.AI_HUB)
+
+  fun packageFor(target: String): String? = TARGETS[target]
+
+  fun outcome(pkg: String?, launchable: Boolean, signaturesMatch: Boolean): String = when {
+    pkg == null -> "refused"
+    !launchable -> "not_installed"
+    !signaturesMatch -> "refused"
+    else -> "opened"
+  }
+}
+
 object DeputyProposal {
   const val ACTION = "com.haroon.deputy.action.PROPOSE_TASK"
   const val DEPUTY_PACKAGE = SiblingPackages.DEPUTY

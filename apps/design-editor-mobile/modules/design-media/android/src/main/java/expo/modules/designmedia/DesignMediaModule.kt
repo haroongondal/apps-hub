@@ -169,6 +169,8 @@ class DesignMediaModule : Module() {
 
     AsyncFunction("sendToNexus") { uris: List<String> -> Handoffs.sendToNexus(appContext.currentActivity, context, uris) }.runOnQueue(Queues.MAIN)
 
+    AsyncFunction("openApp") { target: String -> Handoffs.openApp(appContext.currentActivity, context, target) }.runOnQueue(Queues.MAIN)
+
     AsyncFunction("cleanupGroups") { options: Map<String, Any?>? -> CleanupTool.groups(context, options) }.runOnQueue(readScope)
 
     AsyncFunction("trashPhotos") { uris: List<String>, promise: Promise ->
