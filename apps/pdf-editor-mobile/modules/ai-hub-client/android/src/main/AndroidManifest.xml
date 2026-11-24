@@ -1,0 +1,8 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The hub's signature permission: only apps signed with the shared release key hold it. -->
+    <uses-permission android:name="com.haroon.permission.AI_HUB" />
+    <!-- Android 11+ hides other apps unless the manifest names them. -->
+    <queries>
+        <package android:name="com.haroon.aihub" />
+    </queries>
+</manifest>

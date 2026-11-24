@@ -46,6 +46,7 @@ The app is named Nexus (N2). Logic is `packages/knowledge-core` (job queue, grap
 
 - Keys are lists per service; `openai.ts` rotates through a service's keys, and `nexusPort` hands chat (`extract`, `answer`, `complete`) from Groq to Gemini when Groq fails or has no key.
 - The CV maker is the CV tab with `app/cv/`. `src/cv/` is pure TypeScript (model, the three templates, the PDF writer, AI prompts) and is tested by this app's `test` script; `store.ts` is the Expo file glue.
+- The CV maker's AI goes through the AI hub app, not Nexus's own keys: `modules/ai-hub-client` (Kotlin binder client, a copy of the hub's two AIDL files that must stay identical to `apps/ai-hub`'s) and `src/nexus/hub-port.ts` (pure, tested; `hub.ts` is the Expo glue). Only the CV calls use it; the graph, Ask and transcription still use the keys in AI settings. The hub's chat has no JSON mode, so `hubComplete` pulls the JSON object out of the reply.
 
 - Tabs: Stream (`app/(tabs)/index.tsx`, capture + Ask) and Library (`app/(tabs)/library.tsx`). A folder opens as `/folder` (same screen) so Back works.
 - `openKnowledge()` (`src/nexus/worker.ts`) opens `Knowledge` on the Library's connection; `startWorker()` in the root layout runs up to 3 `runNext` loops while the app is in the foreground. Nothing is sent without a key (`src/nexus/ai.ts`, expo-secure-store).

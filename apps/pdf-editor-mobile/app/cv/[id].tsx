@@ -9,7 +9,7 @@ import { editBody } from '../../src/cv/generate';
 import type { Cv, TemplateId } from '../../src/cv/model';
 import { deleteCv, exportCv, loadCv, saveCv } from '../../src/cv/store';
 import { TEMPLATE_LIST, TEMPLATES } from '../../src/cv/templates';
-import { ai } from '../../src/nexus/ai';
+import { hubAi } from '../../src/nexus/hub';
 
 export default function CvEditorScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -44,7 +44,7 @@ export default function CvEditorScreen() {
     setBusy('ai');
     setError(null);
     try {
-      const body = await editBody(cv, instruction, ai.complete);
+      const body = await editBody(cv, instruction, hubAi);
       change({ ...cv, ...body });
       setInstruction('');
     } catch (err) {
@@ -103,7 +103,7 @@ export default function CvEditorScreen() {
           />
         ))}
       </Group>
-      <Group title="Change with AI" footer="AI changes the text, adds or removes sections, and keeps the rest as it is. It sends the whole CV to Groq or Gemini, whichever answers.">
+      <Group title="Change with AI" footer="AI changes the text, adds or removes sections, and keeps the rest as it is. It sends the whole CV to AI hub, which asks Groq or Gemini.">
         <View style={{ padding: space.lg, gap: space.md }}>
           <Field
             label="What should change?"

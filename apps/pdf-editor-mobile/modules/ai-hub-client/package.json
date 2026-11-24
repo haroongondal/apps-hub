@@ -1,0 +1,11 @@
+{
+  "name": "ai-hub-client",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Binder client for the AI hub app (com.haroon.aihub): sends chat requests and reads its status (Expo local module)",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "expo-modules-core": "~3.0.30"
+  }
+}

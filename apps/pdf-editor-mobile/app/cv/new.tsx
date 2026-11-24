@@ -9,18 +9,19 @@ import { generateBody } from '../../src/cv/generate';
 import { type TemplateId } from '../../src/cv/model';
 import { newCv, saveCv } from '../../src/cv/store';
 import { TEMPLATE_LIST, TEMPLATES } from '../../src/cv/templates';
-import { ai, hasKeys } from '../../src/nexus/ai';
+import { checkHub, hubAi } from '../../src/nexus/hub';
+import type { HubStatus } from '../../src/nexus/hub-port';
 
 export default function NewCvScreen() {
   const [profile, setProfile] = useState('');
   const [role, setRole] = useState('');
   const [template, setTemplate] = useState<TemplateId>('classic');
-  const [keys, setKeys] = useState<boolean | null>(null);
+  const [hub, setHub] = useState<HubStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    void hasKeys().then(setKeys);
+    void checkHub().then(setHub);
   }, []);
 
   const create = async () => {
@@ -28,7 +29,7 @@ export default function NewCvScreen() {
     setBusy(true);
     setError(null);
     try {
-      const cv = newCv(await generateBody(profile, role, ai.complete), template);
+      const cv = newCv(await generateBody(profile, role, hubAi), template);
       saveCv(cv);
       router.replace({ pathname: '/cv/[id]', params: { id: cv.id } });
     } catch (err) {
@@ -41,9 +42,9 @@ export default function NewCvScreen() {
   return (
     <Screen scroll>
       <Header title="New CV" trailing={<IconButton icon="close" label="Close" onPress={() => router.back()} />} />
-      {keys === false ? (
-        <Notice tone="accent" title="AI is off" action={<Button label="Add your keys" size="sm" onPress={() => router.push('/settings')} />}>
-          Nexus writes CVs with your Gemini and Groq keys. Add them in AI settings first.
+      {hub?.ok === false ? (
+        <Notice tone="accent" title="AI hub isn't ready">
+          {hub.message}
         </Notice>
       ) : null}
       <View style={{ gap: space.md }}>
@@ -56,7 +57,7 @@ export default function NewCvScreen() {
           style={{ minHeight: 160 }}
           placeholder="Jobs with dates and what you did, education, skills, languages, certifications. Write it however it comes to you."
           error={error}
-          hint="Nexus uses only what you write here and sends it to Groq or Gemini, whichever answers."
+          hint="Nexus uses only what you write here and sends it to AI hub, which asks Groq or Gemini."
         />
         <Field label="Target role (optional)" value={role} onChangeText={setRole} placeholder="Data analyst" />
         <Segmented
@@ -66,7 +67,7 @@ export default function NewCvScreen() {
           onChange={setTemplate}
         />
         <Text tone="muted">{TEMPLATES[template].blurb}</Text>
-        <Button label="Create CV" busy={busy} disabled={keys === false} onPress={() => void create()} />
+        <Button label="Create CV" busy={busy} disabled={hub?.ok === false} onPress={() => void create()} />
       </View>
     </Screen>
   );
