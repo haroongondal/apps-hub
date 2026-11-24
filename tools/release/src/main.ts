@@ -13,6 +13,7 @@ import {
   type StoreManifest,
 } from '@apps-hub/store-manifest';
 import { APPS } from './apps.ts';
+import { makeUploader } from './upload.ts';
 import { applyAppsHubGradle, assembleRelease, inspectApk, sha256File } from './android.ts';
 
 const ROOT = resolve(import.meta.dirname, '../../..');
@@ -50,14 +51,7 @@ async function fetchManifest(): Promise<StoreManifest> {
   return StoreManifestSchema.parse(await res.json());
 }
 
-async function upload(key: string, body: Buffer | string, contentType: string): Promise<void> {
-  const res = await fetch(`${API}/admin/${key}`, {
-    method: 'PUT',
-    headers: { ...auth, 'content-type': contentType },
-    body: typeof body === 'string' ? body : new Uint8Array(body),
-  });
-  if (!res.ok) throw new Error(`PUT ${key}: ${res.status} ${await res.text()}`);
-}
+const upload = makeUploader(API, TOKEN);
 
 async function releaseAndroid(id: string, manifest: StoreManifest): Promise<StoreManifest> {
   const app = APPS[id];

@@ -6,9 +6,21 @@ interface StoredObject {
   httpMetadata?: { contentType?: string };
 }
 
+export interface UploadedPart {
+  partNumber: number;
+  etag: string;
+}
+
+interface MultipartUpload {
+  uploadPart(partNumber: number, value: ReadableStream): Promise<UploadedPart>;
+  complete(parts: UploadedPart[]): Promise<unknown>;
+}
+
 export interface Bucket {
   get(key: string): Promise<StoredObject | null>;
   put(key: string, value: ReadableStream, options?: { httpMetadata?: { contentType?: string } }): Promise<unknown>;
+  createMultipartUpload(key: string, options?: { httpMetadata?: { contentType?: string } }): Promise<MultipartUpload & { uploadId: string }>;
+  resumeMultipartUpload(key: string, uploadId: string): MultipartUpload;
 }
 
 export interface Env {
@@ -104,14 +116,43 @@ export async function handle(req: Request, env: Env, now = Date.now()): Promise<
     return serve(env, key);
   }
 
-  if (req.method === 'PUT' && path.startsWith('/admin/')) {
+  if (path.startsWith('/admin/')) {
     if (!(await authorized(req, env, env.RELEASE_TOKEN))) return status(401, 'unauthorized');
     const key = path.slice('/admin/'.length);
-    if (!isKey(key) || !req.body) return status(400, 'bad request');
-    await env.BUCKET.put(key, req.body, {
-      httpMetadata: { contentType: req.headers.get('content-type') ?? 'application/octet-stream' },
-    });
-    return new Response(null, { status: 204 });
+    if (!isKey(key)) return status(400, 'bad request');
+    const uploadId = url.searchParams.get('uploadId');
+
+    // One request body is capped near 100 MB on Cloudflare, so a big APK goes up in parts:
+    // POST ?uploads starts it, PUT ?uploadId&part=N sends a part, POST ?uploadId with {parts} finishes it.
+    if (req.method === 'POST' && url.searchParams.has('uploads')) {
+      const upload = await env.BUCKET.createMultipartUpload(key, {
+        httpMetadata: { contentType: req.headers.get('content-type') ?? 'application/octet-stream' },
+      });
+      return Response.json({ uploadId: upload.uploadId });
+    }
+    if (req.method === 'PUT' && uploadId) {
+      const part = Number(url.searchParams.get('part'));
+      if (!Number.isInteger(part) || part < 1 || part > 10_000 || !req.body) return status(400, 'bad part');
+      return Response.json(await env.BUCKET.resumeMultipartUpload(key, uploadId).uploadPart(part, req.body));
+    }
+    if (req.method === 'POST' && uploadId) {
+      const body = (await req.json().catch(() => ({}))) as { parts?: unknown };
+      const parts = body.parts;
+      const valid =
+        Array.isArray(parts) &&
+        parts.length > 0 &&
+        parts.every((p) => Number.isInteger(p?.partNumber) && p.partNumber >= 1 && typeof p?.etag === 'string');
+      if (!valid) return status(400, 'bad parts');
+      await env.BUCKET.resumeMultipartUpload(key, uploadId).complete(parts as UploadedPart[]);
+      return new Response(null, { status: 204 });
+    }
+    if (req.method === 'PUT' && req.body) {
+      await env.BUCKET.put(key, req.body, {
+        httpMetadata: { contentType: req.headers.get('content-type') ?? 'application/octet-stream' },
+      });
+      return new Response(null, { status: 204 });
+    }
+    return status(400, 'bad request');
   }
 
   return status(404, 'not found');
