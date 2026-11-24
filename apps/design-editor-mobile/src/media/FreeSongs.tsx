@@ -51,7 +51,8 @@ export function FreeSongs({ onPick }: { onPick: (song: PickedSong) => Promise<vo
   if (token === null) return null;
   if (!token) {
     return (
-      <Group title="Free songs" footer="Free songs come from Freesound. Get a free key at freesound.org, then paste it here. It stays on this phone.">
+      <Group title="Free songs" footer="Free songs come from Freesound. The key stays on this phone.">
+        <Notice tone="accent">No songs show until you add a free key. Make a free account at freesound.org, open its key page, copy your key and paste it below. Then the songs appear here.</Notice>
         <Field label="Freesound key" value={keyDraft} onChangeText={setKeyDraft} autoCapitalize="none" autoCorrect={false} secureTextEntry />
         <Button label="Save key" variant="secondary" busy={busy} onPress={saveKey} />
         {error ? <Notice tone="warn">{error}</Notice> : null}
