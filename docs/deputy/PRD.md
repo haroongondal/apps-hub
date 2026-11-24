@@ -142,10 +142,12 @@ These seven job types are the owner's choice and become the eval set
   - Screens and screenshots aren't stored unless the owner turns that on.
 - **FR-9: Saved tasks and automations.**
   - A saved task is a name, a task text and an optional list of apps it may use.
-  - A **schedule** runs a saved task at a time (daily or weekly). By default it
-    posts a "Tap to run" notification, because the phone may be locked and the
-    owner should be present. Auto-run is opt-in per schedule and only runs on an
-    unlocked, awake phone.
+  - A **repeating task** (schedule) runs a task at a time on chosen days (every
+    day, weekdays or some days). It starts by itself only on an unlocked, awake
+    phone with no other task running; otherwise that time is skipped, recorded with
+    the reason, and a notification offers Run now. It stops at the same gate as any
+    run and never runs a backlog. (Changed 2026-11-23, C2: auto-start replaces the
+    "Tap to run" default.)
   - A **notification rule** runs a saved task when a notification matches an app
     (and optionally a sender or title pattern). It may use only the apps its rule
     lists, and every gate in it pauses until the owner answers.

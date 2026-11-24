@@ -7,6 +7,7 @@ import expo.modules.deputyagent.core.AgentLoop
 import expo.modules.deputyagent.core.Gate
 import expo.modules.deputyagent.core.Gates
 import expo.modules.deputyagent.core.Guard
+import expo.modules.deputyagent.core.LiveGate
 import expo.modules.deputyagent.core.Msgs
 import expo.modules.deputyagent.core.ObservationBuilder
 import expo.modules.deputyagent.core.OpenAiCompatProvider
@@ -15,6 +16,7 @@ import expo.modules.deputyagent.core.Prompt
 import expo.modules.deputyagent.core.ProviderError
 import expo.modules.deputyagent.core.RunEvent
 import expo.modules.deputyagent.core.RunResult
+import expo.modules.deputyagent.core.RunStatus
 import expo.modules.deputyagent.core.RunStore
 import expo.modules.deputyagent.core.TrustLevel
 import java.io.File
@@ -39,6 +41,7 @@ object AgentRuntime {
   private val events = ArrayList<RunEvent>()
   @Volatile private var job: Job? = null
   @Volatile private var runId: String? = null
+  @Volatile private var task: String? = null
   @Volatile var listener: ((RunEvent) -> Unit)? = null
   private val scope = CoroutineScope(
     SupervisorJob() + Dispatchers.Default + CoroutineExceptionHandler { _, e -> Notifier.finished(app, "Deputy stopped after an internal error: ${e.message}") },
@@ -55,11 +58,17 @@ object AgentRuntime {
       it.closeInterrupted()
       it.prune()
     }
+    Schedules.sync(app)
   }
 
   @Synchronized
   fun start(
-    context: Context, task: String, allowedApps: Set<String>?, untrusted: List<String> = emptyList(), onEnd: (RunResult) -> Unit = {},
+    context: Context,
+    task: String,
+    allowedApps: Set<String>?,
+    untrusted: List<String> = emptyList(),
+    trigger: String = "on_demand",
+    onEnd: (runId: String, RunResult) -> Unit = { _, _ -> },
   ): String {
     init(context)
     check(!active) { "Deputy is already doing a task. Stop it first." }
@@ -85,19 +94,22 @@ object AgentRuntime {
     )
     synchronized(events) { events.clear() }
     runId = id
-    store.start(id, task, settings.model, "on_demand")
+    this.task = task
+    store.start(id, task, settings.model, trigger)
     runCatching { app.startForegroundService(Intent(app, RunService::class.java)) }
     StopChip.show(service)
     job = scope.launch {
+      var result = RunResult(RunStatus.STOPPED, "Stopped by the owner.")
       try {
         // Off the JS thread: recall reads every kept run. The new run has no end line yet, so it is never recalled.
-        val result = loop.run(task, if (untrusted.isEmpty()) store.recall(task, blockedLabels()) else null, untrusted)
-        runCatching { onEnd(result) }
+        result = loop.run(task, if (untrusted.isEmpty()) store.recall(task, blockedLabels()) else null, untrusted)
       } finally {
+        runCatching { onEnd(id, result) }
         app.stopService(Intent(app, RunService::class.java))
         StopChip.hide()
         Notifier.clearGate(app)
         store.prune()
+        OwnerStore.heartbeat(app)
       }
     }
     return id
@@ -120,8 +132,16 @@ object AgentRuntime {
     return accepted
   }
 
+  fun liveRunId(): String? = runId.takeIf { active }
+
   /** The gate waiting now, so a rebound service can show its card again (overlays go with the old connection). */
   fun pendingGate(): Gate? = gates.pending()
+
+  fun liveGate(): LiveGate? {
+    val gate = gates.pending() ?: return null
+    val id = liveRunId() ?: return null
+    return LiveGate(id, task.orEmpty(), gate.expiresAt)
+  }
 
   fun snapshot(): Map<String, Any?> = mapOf(
     "runId" to runId,
@@ -165,6 +185,7 @@ object AgentRuntime {
   fun clearHistory(context: Context) {
     init(context)
     store!!.clear()
+    Schedules.clearHistory(app)
     if (!active) {
       synchronized(events) { events.clear() }
       runId = null

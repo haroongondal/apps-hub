@@ -212,7 +212,39 @@ Built, reviewed, gated and **installed on the phone by adb** (0.2.6,
 versionCode 13, owner's request); photos allowed; both phone tests ran (above).
 Still **uncommitted** in the worktree. `make_video` itself works; what fails is
 the agent around it. Owner to choose: (1) commit on `deputy-make-video`;
-(2) Store release (gets versionCode 14); (3) follow-ups seen in test 2, none
-built: retry a 429 with a short wait instead of failing the run; when a run
-ends on an error, still say a video was saved; stop re-downloading a file
-already downloaded this run (no memory of done steps, as in the spike).
+(2) Store release (gets versionCode 14); (3) follow-ups seen in test 2, now done (below).
+
+### Follow-ups from test 2: done (verified 2026-11-23, branch eco/deputy)
+
+All three shipped in `fc4c08db` (#23); several-key 429 hand-over in `ad3ca8f3`
+(#57 line). Verified in code and by JVM tests; none exercised on the phone since.
+
+- Wait and retry a 429 instead of failing: `OpenAiCompatProvider.step`
+  (`Provider.kt`): 10/20/30 s floors, `retry-after` and Gemini `retryDelay`
+  only lengthen, wait capped at 60 s; with several keys the next key is tried
+  at once and the wait comes only once every key is limited (no double wait).
+  Gap fixed in `1eef0a8b`: `Retry-After` as an HTTP date was ignored (only
+  seconds were read); `core/RetryAfter.kt` parses both. Tests:
+  `RetryAfterTest` (4), `aRateLimitWithNoHintWaitsOutAWholeMinute`,
+  `aServerHintOnlyEverLengthensARateLimitWait`,
+  `aRateLimitWaitsAsLongAsTheServerSaysUpToAMinute`,
+  `aKeyAtItsLimitHandsOverToTheNextKeyAtOnce`,
+  `whenEveryKeyIsAtItsLimitDeputyWaitsThenGoesRoundAgain`,
+  `everyKeyLimitedOnEveryTryEndsAsARateLimit`.
+- Remember finished downloads, no re-download: `AgentLoop.run` asks
+  `Device.newPhotos(started)` each turn (MediaStore, so it is the phone's own
+  record) and `Slideshow.arrivals` tells the model what is there and what is a
+  repeat. A run is never resumed after the process dies (`RunStore.closeInterrupted`,
+  AC-9), so there is nothing in memory to lose; finished runs' steps persist in
+  the JSONL log for route memory. Tests: `photosThatReachThePhoneAreListedOnceWithRepeatsNamed`,
+  `SlideshowTest.arrivalsCountEachPhotoOnceAndNameTheRepeats`,
+  `RunStoreTest.ac9ARunCutOffByProcessDeathIsClosedAsInterruptedAndNeverResumed`.
+- A run that ends on an error still names the files it saved: `AgentLoop.made`
+  and `end` (any status but done). Tests: `aRunThatFailsAfterMakingAVideoStillSaysTheVideoWasSaved`
+  (provider error), and added in `1eef0a8b`:
+  `aRunTheOwnerStopsAfterMakingAVideoStillSaysTheVideoWasSaved`,
+  `aRunThatHitsTheStepCapAfterMakingAVideoStillSaysTheVideoWasSaved`,
+  `aRunThatCrashesAfterMakingAVideoStillSaysTheVideoWasSaved`;
+  `aFinishedRunAndAFailedVideoAddNothingToTheSummary` for the negative case.
+- Not covered: only videos Deputy made are named; photos another app
+  downloaded are not listed when a run fails.

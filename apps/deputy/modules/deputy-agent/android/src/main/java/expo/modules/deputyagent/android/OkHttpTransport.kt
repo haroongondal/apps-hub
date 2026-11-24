@@ -2,6 +2,7 @@ package expo.modules.deputyagent.android
 
 import android.util.Log
 import expo.modules.deputyagent.core.HttpReply
+import expo.modules.deputyagent.core.RetryAfter
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
@@ -33,7 +34,7 @@ object OkHttpTransport {
         // OkHttp only logs an IOException thrown here and never calls onFailure, so it must be passed on by hand.
         override fun onResponse(call: Call, response: Response) = response.use {
           try {
-            val reply = HttpReply(it.code, it.body?.string().orEmpty(), it.header("retry-after")?.toDoubleOrNull()?.let { s -> (s * 1_000).toLong() })
+            val reply = HttpReply(it.code, it.body?.string().orEmpty(), RetryAfter.parse(it.header("retry-after"), System.currentTimeMillis()))
             if (reply.code == 429) Log.w("Deputy", "HTTP 429, retry-after ${it.header("retry-after")}, " + HINTS.findAll(reply.body).joinToString { m -> m.value })
             c.resume(reply)
           } catch (e: IOException) {

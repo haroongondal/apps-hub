@@ -24,9 +24,11 @@ import expo.modules.deputyagent.core.GateKind
 object Notifier {
   private const val APPROVALS = "deputy-approvals"
   private const val RUN = "deputy-run"
+  private const val SCHEDULES = "deputy-schedules"
   const val RUN_ID = 1
   private const val GATE_ID = 2
   private const val DONE_ID = 3
+  private const val SKIP_ID = 4
   const val REPLY = "reply"
   // shortcut: a system icon until the brand icon is chosen (PRD Q4); then add a monochrome drawable.
   private const val ICON = android.R.drawable.stat_notify_sync
@@ -37,6 +39,7 @@ object Notifier {
     listOf(
       NotificationChannel(APPROVALS, "Approvals", NotificationManager.IMPORTANCE_HIGH).apply { description = "Deputy asks before steps that can't be undone." },
       NotificationChannel(RUN, "Running task", NotificationManager.IMPORTANCE_LOW).apply { description = "Shows what Deputy is doing, with Stop." },
+      NotificationChannel(SCHEDULES, "Repeating tasks", NotificationManager.IMPORTANCE_DEFAULT).apply { description = "Tells you when Deputy skips a repeating task." },
     ),
   )
 
@@ -57,7 +60,10 @@ object Notifier {
       .setSmallIcon(ICON)
       .setCategory(Notification.CATEGORY_REMINDER)
       .setVisibility(Notification.VISIBILITY_PRIVATE)
-      .setPublicVersion(Notification.Builder(c, APPROVALS).setSmallIcon(ICON).setContentTitle("Deputy is waiting for you").build())
+      .setPublicVersion(
+        Notification.Builder(c, APPROVALS).setSmallIcon(ICON)
+          .setContentTitle(if (g.kind == GateKind.CONFIRM) "Deputy is waiting for your OK" else "Deputy is waiting for you").build(),
+      )
       .setContentIntent(openApp(c))
       .setTimeoutAfter((g.expiresAt - System.currentTimeMillis()).coerceAtLeast(1))
     if (g.kind == GateKind.CONFIRM) {
@@ -106,6 +112,19 @@ object Notifier {
     )
   }
 
+  fun skipped(c: Context, scheduleId: String, name: String, reason: String) = nm(c).notify(
+    scheduleId, SKIP_ID,
+    Notification.Builder(c, SCHEDULES).setSmallIcon(ICON).setContentTitle("Deputy skipped $name").setContentText(reason)
+      .setStyle(Notification.BigTextStyle().bigText(reason)).setContentIntent(openApp(c)).setAutoCancel(true)
+      .addAction(
+        Notification.Action.Builder(null, "Run now", receiver(c, 10, Intent(GateReceiver.RUN_SCHEDULE).setIdentifier("run/$scheduleId").putExtra("schedule", scheduleId), mutable = false))
+          .setAuthenticationRequired(true).build(),
+      )
+      .build(),
+  )
+
+  fun clearSkipped(c: Context, scheduleId: String) = nm(c).cancel(scheduleId, SKIP_ID)
+
   private fun answer(c: Context, code: Int, gateId: String, approve: Boolean, text: String? = null, mutable: Boolean = false, row: Boolean = false) = receiver(
     c, code,
     Intent(GateReceiver.ANSWER).setIdentifier("$gateId/$code").putExtra("gate", gateId).putExtra("approve", approve).putExtra("text", text).putExtra("row", row),
@@ -128,6 +147,7 @@ class GateReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
     when (intent.action) {
       STOP -> AgentRuntime.stop()
+      RUN_SCHEDULE -> intent.getStringExtra("schedule")?.let { Schedules.runNow(context, it) }
       ANSWER -> {
         val gate = intent.getStringExtra("gate") ?: return
         val approve = intent.getBooleanExtra("approve", false)
@@ -142,6 +162,7 @@ class GateReceiver : BroadcastReceiver() {
   companion object {
     const val STOP = "expo.modules.deputyagent.STOP"
     const val ANSWER = "expo.modules.deputyagent.ANSWER"
+    const val RUN_SCHEDULE = "expo.modules.deputyagent.RUN_SCHEDULE"
   }
 }
 

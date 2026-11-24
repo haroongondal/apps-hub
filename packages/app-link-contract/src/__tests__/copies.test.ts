@@ -105,6 +105,10 @@ test('Inflow carries a copy of each canonical file', () => {
   for (const f of INFLOW_FILES) assert.ok(copies.some((c) => c.includes(`${path.sep}inflow${path.sep}`) && path.basename(c) === f), `no Inflow copy of ${f}`);
 });
 
+test('Deputy carries a copy of each canonical file (it serves shares and the PROPOSE_TASK action)', () => {
+  for (const f of FILES) assert.ok(copies.some((c) => c.includes(`${path.sep}deputy${path.sep}`) && path.basename(c) === f), `no Deputy copy of ${f}`);
+});
+
 test('every copy under apps/ (found by content) equals the canonical file apart from its package line', () => {
   for (const copy of copies) {
     const text = fs.readFileSync(copy, 'utf8');
