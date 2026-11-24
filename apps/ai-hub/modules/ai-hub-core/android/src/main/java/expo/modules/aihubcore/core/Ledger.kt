@@ -4,6 +4,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.longOrNull
@@ -34,20 +35,49 @@ object PendingApps {
   }.toString()
 }
 
-// Never the prompt, the reply or a key: only who asked, for what, through which service and when.
-data class LoggedCall(val pkg: String, val job: String, val service: String, val timeMs: Long)
+// Never the prompt, the reply or a key: only who asked, for what, through which service and when. A failed request also holds the error kind,
+// the provider's HTTP status and whether the other service was tried, never the provider's error text (it can echo the request).
+data class LoggedCall(
+  val pkg: String,
+  val job: String,
+  val service: String,
+  val timeMs: Long,
+  val error: String? = null,
+  val httpCode: Int? = null,
+  val fellBack: Boolean = false,
+)
 
 object CallLog {
   const val CAP = 200
 
   fun parse(json: String?): List<LoggedCall> = rows(json, "calls").mapNotNull { o ->
-    LoggedCall(o.text("pkg") ?: return@mapNotNull null, o.text("job") ?: return@mapNotNull null, o.text("service") ?: return@mapNotNull null, o.num("timeMs") ?: 0)
+    LoggedCall(
+      o.text("pkg") ?: return@mapNotNull null,
+      o.text("job") ?: return@mapNotNull null,
+      o.text("service") ?: return@mapNotNull null,
+      o.num("timeMs") ?: 0,
+      o.text("error"),
+      o.num("code")?.toInt(),
+      (o["fellBack"] as? JsonPrimitive)?.booleanOrNull == true,
+    )
   }
 
   fun add(list: List<LoggedCall>, call: LoggedCall): List<LoggedCall> = (listOf(call) + list).take(CAP)
 
   fun toJson(list: List<LoggedCall>): String = buildJsonObject {
-    put("calls", JsonArray(list.map { c -> buildJsonObject { put("pkg", c.pkg); put("job", c.job); put("service", c.service); put("timeMs", c.timeMs) } }))
+    put(
+      "calls",
+      JsonArray(
+        list.map { c ->
+          buildJsonObject {
+            put("pkg", c.pkg); put("job", c.job); put("service", c.service); put("timeMs", c.timeMs)
+            c.error?.let { put("error", it) }
+            c.httpCode?.let { put("code", it) }
+            if (c.fellBack) put("fellBack", true)
+          }
+        },
+      ),
+    )
   }.toString()
 }
 
