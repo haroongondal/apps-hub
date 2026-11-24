@@ -120,7 +120,9 @@ changelog with `[branch build <short sha>]`. CI is not affected: it builds a pus
   so neither `adb install -d` nor the Store can go back. The old commit is rebuilt with `versionCode` = published + 1;
   its `versionName` stays the old one. The changelog defaults to `Rollback to <versionName> (<short sha>)`.
 - **Which commit.** Every release now records the full git sha it was built from in the manifest
-  (`android.commit`; optional, releases made before this have none). Without `--to`, the target is the first parent
+  (`android.commit`; optional, releases made before this have none). The Store shows its first seven characters on the
+  app's row as "Build from commit 8b8db0d", and hides the line when there is none. The manifest has no rollback flag, so the
+  Store does not say a build is a rollback. Without `--to`, the target is the first parent
   of the last commit that changed the app's folder (`apps/<app>`) at or before that recorded commit, that is, the app as
   it was just before its latest change. (The recorded commit alone is not enough: it can be a merge of another app's
   work, or one HEAD recorded for every app of an `--all` release.) `--to` takes a sha, short sha or tag. The target
@@ -266,6 +268,32 @@ Store 7+ downloads in a WorkManager foreground job (`InstallWorker`, type `dataS
 so locking the screen or switching apps does not stop it, and a reopened Store shows the running download. If the
 download finishes while the Store is in the background, it does not start the install (Play Protect's prompt would
 go unseen and time out); it posts "ready to install" and waits for the user to tap Update.
+
+### Setup and health
+The **Setup and health** row opens a screen with one card per installed app (every id in `ANDROID_PACKAGES`
+except `store` and `notch`, found by package, so HomeNet and TunnelWall count). Pure logic and its tests:
+`apps/store/src/health.ts`; native reader: `Health.kt` in `store-installer`.
+
+- **Accessibility** (Deputy, Clipboard, Halo) and **Notification access** (Halo, Inflow): the Store reads
+  `Settings.Secure` itself (`enabled_accessibility_services`, `enabled_notification_listeners`) and matches the
+  component names in the `SERVICES` table; a test checks that table against each app's manifest. An unset
+  accessibility key is "off"; a missing or refused listener key is "unknown", never "off".
+- **The app's own report**: the `health` share from `@apps-hub/app-link-contract`, queried for each app on a
+  background thread with a 3 s limit. The Store declares `com.haroon.permission.AUTOPILOT` (signature) and
+  holds it; `QUERY_ALL_PACKAGES` already makes every provider visible, so it needs no `<queries>` entry.
+  Before each query `AppLinkTarget.trustedProvider` (canonical copy in `store-installer/.../applink/`) checks who
+  serves the authority: it must be the sibling package that `SiblingPackages` lists for the release id (JS passes
+  the id, not a package) and carry the Store's signing key, otherwise no query. An id with no table entry
+  (notch) is "Not reported". `HealthTest` covers the refusal; the Store has no sender.
+  `parseHealthRow` checks each row (one row, the right `app_id`, flags 0, 1 or null, `ai_source` hub, own or
+  none, a heartbeat after 2024 and not in the future); anything else, a debug build refused by the signature
+  check, or an app without the share yet, shows "Not reported".
+- **Reconcile**: the phone's setting first, the app's report second; when both are known and differ the card
+  says "not sure". The report also gives the AI line (from AI hub, own key, none).
+- **Autostart** cannot be read, so apps with a background service get a "Keep it running" card with the
+  HyperOS steps and **Open app settings** (`ACTION_APPLICATION_DETAILS_SETTINGS`). Fix buttons open the
+  accessibility list (the per-service page is not public SDK) or the app's notification access page
+  (`ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS`, Android 11+, falling back to the list).
 
 ### Android developer verification checklist
 Since **30 Sep 2026**, certified devices in Brazil, Indonesia, Singapore and Thailand only install or update apps

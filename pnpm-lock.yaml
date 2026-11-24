@@ -860,6 +860,9 @@ importers:
 
   apps/store:
     dependencies:
+      '@apps-hub/app-link-contract':
+        specifier: workspace:*
+        version: link:../../packages/app-link-contract
       '@apps-hub/store-manifest':
         specifier: workspace:*
         version: link:../../packages/store-manifest

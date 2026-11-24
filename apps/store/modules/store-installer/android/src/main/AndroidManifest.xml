@@ -1,8 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- AppLinkTarget needs package visibility of the siblings; QUERY_ALL_PACKAGES below covers it, so no <queries> entries. -->
     <!-- getInstalledVersion sees every app the Store lists, with no per-app <queries> list for a branch release to drop. -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <!-- Reads each sibling app's health row; signature level, so only apps signed with the Store key hold it. -->
+    <permission android:name="com.haroon.permission.AUTOPILOT" android:protectionLevel="signature" />
+    <uses-permission android:name="com.haroon.permission.AUTOPILOT" />
     <application>
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"
