@@ -73,7 +73,7 @@ export default function NewCvScreen() {
           onChangeText={setProfile}
           multiline
           textAlignVertical="top"
-          style={{ minHeight: 160 }}
+          style={{ minHeight: 160, maxHeight: 320 }}
           placeholder="Jobs with dates and what you did, education, skills, languages, certifications. Write it however it comes to you."
           error={error}
           hint={filledFrom ? `${filledFrom} ${CV_NEW_HINT}` : CV_NEW_HINT}
