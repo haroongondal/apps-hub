@@ -74,8 +74,10 @@ class VitalsSqlWiringTest {
 
   @Test fun askReachesHealthOnlyThroughTheGate() {
     val runner = code(file("AiRunner.kt")).filter { healthCode.containsMatchIn(it) && !it.startsWith("import ") }
-    assertEquals(1, runner.size)
-    assertTrue(runner.single(), runner.single().trim().startsWith("val health = HealthForAsk.context(HealthForAsk.on(store.meta(HealthForAsk.META)), "))
+    // E2: the flag is read once, so the same value picks the own key (never AI hub) and gates the health context (HubRoutingTest).
+    assertEquals(runner.toString(), 2, runner.size)
+    assertEquals("val healthOn = HealthForAsk.on(store.meta(HealthForAsk.META))", runner[0].trim())
+    assertTrue(runner[1], runner[1].trim().startsWith("val health = HealthForAsk.context(healthOn, "))
     val ask = code(file("Ask.kt")).flatMap { healthCode.findAll(it).map { m -> m.value }.toList() }.toSet()
     assertEquals(setOf("HealthForAsk"), ask)
   }

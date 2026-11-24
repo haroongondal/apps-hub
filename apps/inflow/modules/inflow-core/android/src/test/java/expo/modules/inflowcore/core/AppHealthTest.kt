@@ -24,8 +24,22 @@ class AppHealthTest {
   @Test fun listenerOffAndNoKeyGiveZeroAndNone() =
     assertArrayEquals(arrayOf<Any?>("inflow", null, 0, "none", null), AppHealth.row(false, false, null))
 
-  @Test fun aiSourceIsNeverHub() {
+  @Test fun aiSourceIsTheRecordedSourceElseOwnAndNoneWithoutAKey() {
     for (keys in listOf(true, false)) assertEquals(if (keys) "own" else "none", AppHealth.row(true, keys, null)[3])
+    assertEquals("hub", AppHealth.row(true, true, null, "hub")[3])
+    assertEquals("own", AppHealth.row(true, true, null, "own")[3])
+    assertEquals("own", AppHealth.row(true, true, null, "garbage")[3])
+    assertEquals("none", AppHealth.row(true, false, null, "hub")[3])
+  }
+
+  @Test fun theRecorderWritesOnlyWhenTheSourceChanges() {
+    val store = WriteCounting(MemoryItemStore())
+    AppHealth.record(store, "hub")
+    AppHealth.record(store, "hub")
+    assertEquals(1, store.writes)
+    AppHealth.record(store, "own")
+    assertEquals(2, store.writes)
+    assertEquals("own", store.meta(AppHealth.META_AI_SOURCE))
   }
 
   @Test fun onlyTheHeartbeatWritesAndReadingOrBuildingTheRowDoesNot() {

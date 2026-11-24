@@ -381,3 +381,43 @@ Next step: merge `eco/inflow` to main (owner's go; release by local command only
 15. Ask Deputy on a reply suggestion (Run): Deputy starts; with a debug-signed Deputy it says Deputy isn't installed.
 16. After install check `dumpsys notification` for a live InflowListener and logcat for 'Reject service' (HyperOS Autostart), as for any Inflow build.
 17. HyperOS and `VISIBILITY_SECRET`: with 'Morning and evening summary' on, a secure lock and the system setting 'show sensitive notification content' on, post a summary with a personal line (spent, steps or who is home): nothing of it may appear on the lock screen (not even the app name or a count). If HyperOS shows it, record it and switch the summary to `setLocalOnly(true)` plus no post while locked. With a Wear OS watch paired, note whether the lines reach the watch.
+
+## E2: AI through AI hub (eco/inflow, 2026-11-24)
+
+### What was built
+- Inflow's non-health AI calls go to AI hub (`com.haroon.aihub`) first, through the Kotlin `AiHubClient` of `packages/ai-hub-client`, and fall back to the owner's own key. Paths on the hub: the 30-minute batch and the Autopilot fast run (summaries, importance, to-dos, money, Autopilot suggestion drafting all come from that one batch prompt), spending categories (`TxnCategorize`), weekly and monthly reports (`ReportRun`), and Ask AI (plan and answer) when "health in Ask" is off.
+- Never on the hub, own key only: the Doctor summary (`DoctorRunner`, unchanged: Groq URL, gpt-oss-120b, Groq keys only), Ask AI when "health in Ask" is on (the whole Ask, the plan call too, because the question itself is likely about health), and the key test in Settings (it tests one own key).
+- Pure core `core/HubFirst.kt`: `TextAi` (what `AiRun`, `TxnCategorize` and `ReportRun` now take; `OpenAiCompatProvider` implements it), `HubFirst(hub, own, pause, foreground, record, ids)`, `HubPause` (10 minutes, in memory), `HubChat` (request JSON per the client's contract fixture, reply parsing, error mapping).
+- Seam: `AiConfig.provider(readMs, foreground)` returns `HubFirst` over `ownProvider()` when built with a Context (all `AiRunner` call paths), else the own provider. `AiConfig.ownProvider(onlyKeyId, readMs)` is the old `provider()`.
+- `ai_source`: `AppHealth.record` writes meta `aiSource` ("hub" or "own") after each successful `HubFirst` call (only when it changes); the health row is `none` without a saved key, else the recorded value, else `own`.
+- Gradle: `inflow-core` has `implementation project(':ai-hub-client')`; `apps/inflow/package.json` lists `ai-hub-client: workspace:*` so autolinking includes the project (no duplicate AIDL: only the client compiles it). JS does not import it.
+- Manifest (merged, release and debug): `<uses-permission com.haroon.permission.AI_HUB>`, `<permission com.haroon.permission.AI_HUB protectionLevel=signature>`, `<queries><package com.haroon.aihub/>`, all from the client's module manifest; nothing added to Inflow's own manifest.
+
+### Decisions (my call unless marked; owner confirms)
+- R44 is unchanged and runs before any provider is chosen: the hub gets the same already-filtered prompt the own key would get. AI stays on only while an own key is saved (`AiConfig.on()`, `aiSince` set by the first key), so without an own key nothing goes to the hub either. Keyless use through the hub alone would need an Inflow-side opt-in that sets `aiSince` (a "Use AI hub" switch); not built.
+- The opt-in for the hub path is the hub's own switch for Inflow (default-deny). With it on, Inflow's text may reach Gemini when the hub falls back; Gemini 3.5 Flash-Lite is already Inflow's default own-key model, so no new provider receives Inflow text. Health data never takes this path.
+- Fallback set: hub-missing, not-allowed, version, no-key (the client's canFallBack) plus too-large (the own key has no 512 KB limit). The own key is tried exactly once per call; once the hub failed, the same `HubFirst` (one run, one Ask, one report) goes straight to the own key for its later calls. not-allowed pauses the hub for 10 minutes for every call in the process; a restart asks again.
+- No fallback, the error surfaces as an `AiError`: hub timeout becomes `TIMEOUT` (may be billed; the batch keeps its queue, a report counts a try); busy, provider-error, invalid, cancelled and an unreadable hub reply become `SERVER` (queue kept). An unreadable reply is never sent again to the own key, since the hub already paid for it.
+- Model, address, reasoning effort and custom prices apply to the own-key path only. On the hub path the hub picks the model; Inflow asks for at most 8,000 tokens (hub cap 8,192), priority background for runs and reports, foreground for Ask.
+- Spend: a hub reply is priced from the `model` it names when Inflow knows that model (`openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `gemini-3.5-flash-lite` at the `AiModels.KNOWN` prices) and counts toward Inflow's daily limit; a model Inflow does not know is not counted (0) and only the hub's own limits apply. The daily limit still stops hub calls once reached.
+
+### Tests
+- `HubFirstTest` (10): hub missing -> own; hub served -> own never called; each fallback kind mid-call -> own exactly once, no second hub call in the same instance; other kinds surface without own; own error after fallback is not retried; unreadable reply is an error; not-allowed remembered 10 minutes across instances; request passes the client's `HubLimits.check` and has exactly the contract keys; pricing.
+- `HubRoutingTest` (5, source pins): `AiHubClient(`/`HubFirst(` built only in `AiConfig.kt`; `DoctorRunner.kt`, `DoctorPdf.kt`, `DoctorSummary.kt` and the health files name no hub; Ask picks `ownProvider()` from the same `healthOn` flag that gates `HealthForAsk.context`; the key test uses `ownProvider(keyId)`.
+- `AppHealthTest` (+1, one renamed), `VitalsSqlWiringTest.askReachesHealthOnlyThroughTheGate` updated to the two lines (`healthOn`, then `HealthForAsk.context(healthOn, ...)`).
+
+### Gates (2026-11-24)
+- Gradle `:inflow-core:testDebugUnitTest :ai-hub-client:testDebugUnitTest :app:assembleDebug :app:processReleaseMainManifest`: BUILD SUCCESSFUL; inflow-core 850 tests, 0 failures (834 before); ai-hub-client 12, 0 failures.
+- `pnpm --filter inflow test` 143 pass, `typecheck` exit 0; `pnpm --filter @apps-hub/app-link-contract test` 138 pass; `pnpm --filter ai-hub-client test` 10 pass.
+- Metro: `npx expo export --platform android` in apps/inflow exit 0 (one 2.06 MB Hermes bundle).
+
+### Open
+- security-engineer review of the hub flow is still due (COMMON rule for a new flow to another app).
+- The Store health screen reads `ai_source`; until a hub call succeeds it shows `own` with a key saved.
+
+### Phone checks NOT run (E2)
+Install Inflow and AI hub from Store releases (debug builds are signed with the public debug key: the hub refuses them with not-allowed). Save an own key in Inflow (Gemini or Groq) so AI is on.
+1. Hub off: uninstall AI hub (or never install it). Settings > Send now: items get summaries; spend today rises at the own model's prices; health row (`content://com.haroon.inflow.autopilot/health` from a same-key sibling) shows `ai_source` own. Ask AI answers.
+2. Hub on, Inflow not allowed: install AI hub with a key, leave Inflow off in its Apps list. Send now: Inflow appears in the hub's Apps list as asking; Inflow's items are still summarised through the own key; a second Send now within 10 minutes makes no new hub request (the hub's request count for Inflow does not rise); after 10 minutes, or after force-stopping Inflow, it asks again.
+3. Hub on, Inflow allowed: turn Inflow on in AI hub. Send now, Make a report now, and Ask AI with health in Ask off: the hub's usage for Inflow rises, the own key's provider dashboard shows no new requests, `ai_source` becomes hub, Inflow's spend today rises at gpt-oss-120b's prices (or not at all if the hub served a model Inflow does not know). Then remove the hub's Groq and Gemini keys so it answers no-key: the next Send now goes once to the own key (its dashboard shows it) and `ai_source` becomes own.
+4. Doctor summary still on the own Groq key: with the hub on and Inflow allowed, Vitals > Doctor summary > Make: the Groq dashboard of the owner's own key shows the request; the hub's usage for Inflow does not rise. Turn "health in Ask" on and ask "How did I sleep last week?": the own key's dashboard shows two requests, the hub none.

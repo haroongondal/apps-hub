@@ -26,8 +26,8 @@ class AiError(val kind: Kind, message: String) : Exception(message) {
   enum class Kind { AUTH, BAD_REQUEST, SERVER, OFFLINE, TIMEOUT }
 }
 
-/** `inputChars` is the length of the request, so a reply without `usage` can still be counted. */
-data class AiReply(val text: String, val usage: Usage, val inputChars: Int = 0)
+/** `inputChars` is the length of the request, so a reply without `usage` can still be counted. `hubModel` is the model AI hub says served it; null for the own key. */
+data class AiReply(val text: String, val usage: Usage, val inputChars: Int = 0, val hubModel: String? = null)
 
 /** `post` is the transport (it throws IOException when the network fails), so request shape and retries run in JVM tests. `keys` are the owner's for this address. */
 class OpenAiCompatProvider(
@@ -37,10 +37,10 @@ class OpenAiCompatProvider(
   private val effort: String?,
   private val post: (url: String, headers: Map<String, String>, body: String) -> HttpReply,
   private val sleep: (Long) -> Unit = Thread::sleep,
-) {
+) : TextAi {
   private var current = 0 // the key in use; it changes only when that key is refused or reaches its limit
 
-  fun complete(system: String, user: String, maxTokens: Int = MAX_TOKENS): AiReply {
+  override fun complete(system: String, user: String, maxTokens: Int): AiReply {
     if (keys.isEmpty() || keys.any(String::isBlank)) throw AiError(AiError.Kind.AUTH, "No API key is set. Add your API key in Settings.")
     val url = baseUrl.trimEnd('/') + "/chat/completions"
     val body = request(system, user, maxTokens)
@@ -125,7 +125,6 @@ class OpenAiCompatProvider(
     private val RETRY_DELAYS = listOf(1_000L, 2_000L, 4_000L)
     private val UNKNOWN_KEY = Regex("API key not valid|API_KEY_INVALID")
     private const val MAX_WAIT_MS = 60_000L
-    private const val MAX_TOKENS = 8_000   // a batch of 40 items needs well under this; a runaway reply cannot cost more
   }
 }
 
@@ -136,7 +135,11 @@ data class Prices(val inputPerM: Double, val cachedPerM: Double, val outputPerM:
     return ((used.inputTokens - used.cachedTokens).coerceAtLeast(0) * inputPerM + used.cachedTokens * cachedPerM + used.outputTokens * outputPerM) / 1_000_000
   }
 
-  fun cost(r: AiReply): Double = cost(r.usage, r.inputChars, r.text.length)
+  // E2 (my call): a hub reply is priced from the model the hub names when Inflow knows it, else it is not counted (only the hub's own limits apply).
+  fun cost(r: AiReply): Double = when (val m = r.hubModel) {
+    null -> cost(r.usage, r.inputChars, r.text.length)
+    else -> AiModels.KNOWN.firstOrNull { it.model == m }?.prices?.cost(r.usage, r.inputChars, r.text.length) ?: 0.0
+  }
 }
 
 /** A model Inflow knows: its prices and the thinking level that keeps a batch fast. */

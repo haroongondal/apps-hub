@@ -1,11 +1,17 @@
 package expo.modules.inflowcore.android
 
+import android.content.Context
+import expo.modules.aihubclient.AiHubClient
 import expo.modules.inflowcore.core.AiMeta
 import expo.modules.inflowcore.core.AiReply
 import expo.modules.inflowcore.core.AiModels
+import expo.modules.inflowcore.core.AppHealth
 import expo.modules.inflowcore.core.HttpReply
+import expo.modules.inflowcore.core.HubFirst
+import expo.modules.inflowcore.core.HubPause
 import expo.modules.inflowcore.core.OpenAiCompatProvider
 import expo.modules.inflowcore.core.Prices
+import expo.modules.inflowcore.core.TextAi
 import java.net.ConnectException
 import java.net.HttpURLConnection
 import java.net.SocketTimeoutException
@@ -13,14 +19,16 @@ import java.net.URL
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.util.UUID
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonObject
 
-/** The owner's AI settings, kept in meta and the ai_* tables of the SQLCipher database (R23). Nothing here logs a key, a prompt or a reply. */
-class AiConfig(private val store: SqlItemStore) {
+/** The owner's AI settings, kept in meta and the ai_* tables of the SQLCipher database (R23). Nothing here logs a key, a prompt or a reply. `ctx` null: no AI hub, own key only. */
+class AiConfig(private val store: SqlItemStore, private val ctx: Context? = null) {
   fun baseUrl(): String = store.meta(AiMeta.BASE_URL)?.takeIf { it.isNotBlank() } ?: AiModels.KNOWN.first().baseUrl
 
   fun model(): String = store.meta(AiMeta.MODEL)?.takeIf { it.isNotBlank() } ?: AiModels.KNOWN.first().model
@@ -83,8 +91,19 @@ class AiConfig(private val store: SqlItemStore) {
     if (blocked) store.run("INSERT OR IGNORE INTO ai_blocks(block_key) VALUES (?)", key) else store.run("DELETE FROM ai_blocks WHERE block_key = ?", key)
   }
 
-  /** Null when there is no key for the saved address, or the address is not https (the key would travel unencrypted). */
-  fun provider(onlyKeyId: Long? = null, readMs: Int = AiHttp.READ_MS): OpenAiCompatProvider? {
+  /**
+   * E2: AI hub first, the own key as the fallback, for every non-health call. Null when [ownProvider] is: AI stays on only while an own key
+   * is saved, so R44's aiSince keeps its meaning. Call it off the main thread (the hub call blocks while it waits).
+   */
+  fun provider(readMs: Int = AiHttp.READ_MS, foreground: Boolean = false): TextAi? {
+    val own = ownProvider(readMs = readMs) ?: return null
+    val c = ctx ?: return own
+    val client = AiHubClient(c)
+    return HubFirst({ json -> runBlocking { client.submit(json) } }, own, hubPause, foreground, { AppHealth.record(store, it) }, { UUID.randomUUID().toString() })
+  }
+
+  /** The owner's own key only: the key test and every path that carries health data. Null when there is no key for the saved address, or the address is not https. */
+  fun ownProvider(onlyKeyId: Long? = null, readMs: Int = AiHttp.READ_MS): OpenAiCompatProvider? {
     val url = baseUrl()
     if (!url.startsWith("https://")) return null
     val keys = keys(url).filter { onlyKeyId == null || it.first == onlyKeyId }.map { it.second }
@@ -108,6 +127,7 @@ class AiConfig(private val store: SqlItemStore) {
 
   companion object {
     const val DEFAULT_CAP_USD = 0.50
+    private val hubPause = HubPause(System::currentTimeMillis)
   }
 }
 

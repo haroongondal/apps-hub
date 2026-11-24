@@ -30,5 +30,7 @@ dependencies {
   implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
   // Read-only steps, sleep and heart rate from Health Connect (newest stable). Apache-2.0 (AOSP); pulls guava, protobuf-lite and coroutines, no Play Services or analytics.
   implementation("androidx.health.connect:connect-client:1.1.0")
+  // E2: AI hub's client (our own packages/ai-hub-client, autolinked from apps/inflow/package.json); no third-party code.
+  implementation project(':ai-hub-client')
   testImplementation("junit:junit:4.13.2")
 }

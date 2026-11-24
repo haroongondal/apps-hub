@@ -39,7 +39,7 @@ interface AiStore {
 data class AiRunResult(val sent: Int, val saved: Int, val stoppedByCap: Boolean, val error: String?)
 
 class AiRun(
-  private val store: AiStore, private val ledger: Ledger, private val provider: () -> OpenAiCompatProvider?, private val prices: () -> Prices,
+  private val store: AiStore, private val ledger: Ledger, private val provider: () -> TextAi?, private val prices: () -> Prices,
   private val capUsd: () -> Double?, private val accounts: () -> List<String>, private val channelOf: (Long) -> Channel,
   private val now: () -> Long, private val zone: ZoneId,
   private val atomic: ((() -> Unit) -> Unit) = { it() },
