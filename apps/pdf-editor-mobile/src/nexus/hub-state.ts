@@ -46,6 +46,17 @@ export const HUB_COPY: Record<HubProblem, HubCopy> = {
   },
 };
 
+/** The queue row and the Stream notice when AI hub keeps not answering (offline, or a service that fails). */
+export const WAITING_LINE = 'Waiting for AI hub to answer';
+
+/** Shown on Stream while items wait for an answer, so a hub that never answers (bad keys, no connection) is not silent. */
+export const WAITING_COPY: HubCopy = {
+  title: 'AI hub is not answering',
+  body: 'Items wait, and Nexus tries again each time you open it. If this stays, open AI hub and check its keys, then your connection.',
+  button: 'Open AI hub',
+  opens: 'ai-hub',
+};
+
 export const READY_MS = 60_000;
 
 export interface HubGateOptions {

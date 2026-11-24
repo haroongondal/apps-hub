@@ -13,8 +13,8 @@ import { IconButton } from '../../src/library/icon-button';
 import { openItem } from '../../src/library/open-item';
 import { errorMessage } from '../../src/library/use-library';
 import { hubState } from '../../src/nexus/ai';
-import { HubNotice } from '../../src/nexus/hub-notice';
-import type { HubState } from '../../src/nexus/hub-state';
+import { HubNotice, WaitingNotice } from '../../src/nexus/hub-notice';
+import { WAITING_LINE, type HubState } from '../../src/nexus/hub-state';
 import { addNote, addPhoto, addRecording } from '../../src/nexus/capture';
 import { citationLabel, jobLabel } from '../../src/nexus/labels';
 import { currentMeeting, meetingStatus, meetingSupported } from '../../src/nexus/meeting';
@@ -246,6 +246,7 @@ export default function StreamScreen() {
           <View style={{ gap: space.lg, paddingBottom: space.lg }}>
             <Header title="Stream" trailing={<IconButton icon="settings-outline" label="AI settings" onPress={() => router.push('/settings')} />} />
             <HubNotice state={ai} />
+            {ai === 'ready' && cards.some((card) => card.job?.status === 'queued' && card.job.error === WAITING_LINE) ? <WaitingNotice /> : null}
             {meeting === 'recording' ? (
               <Notice tone="danger" title="Recording a meeting" action={<Button label="Open" size="sm" onPress={() => router.push('/meeting')} />}>
                 It keeps recording until you stop it.

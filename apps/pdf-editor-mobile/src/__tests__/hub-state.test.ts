@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import { ERROR_KINDS } from 'ai-hub-client/src/contract.ts';
 
-import { HUB_COPY, hubGate, hubStateOf, READY_MS, type HubState } from '../nexus/hub-state.ts';
+import { HUB_COPY, hubGate, hubStateOf, READY_MS, WAITING_COPY, WAITING_LINE, type HubState } from '../nexus/hub-state.ts';
 
 test('only the four kinds the owner can fix are hub states', () => {
   const found = Object.fromEntries(ERROR_KINDS.map((k) => [k, hubStateOf(k)]));
@@ -28,6 +28,12 @@ test('each problem says what to do, in plain words, and opens the right app', ()
   assert.equal(HUB_COPY['no-key'].title, 'Add a key in AI hub');
   assert.equal(HUB_COPY['no-key'].opens, 'ai-hub');
   for (const c of Object.values(HUB_COPY)) assert.doesNotMatch(`${c.title} ${c.body} ${c.button}`, /error|kind|API|key not|HTTP|provider/i);
+});
+
+test('a hub that keeps not answering is named in plain words and points at AI hub', () => {
+  assert.equal(WAITING_LINE, 'Waiting for AI hub to answer');
+  assert.equal(WAITING_COPY.opens, 'ai-hub');
+  assert.doesNotMatch(`${WAITING_COPY.title} ${WAITING_COPY.body}`, /error|kind|provider|HTTP/i);
 });
 
 function gateWith(states: HubState[]) {

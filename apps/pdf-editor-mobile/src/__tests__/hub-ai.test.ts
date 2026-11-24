@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { AiError, EMBED_DIMS, IMAGE_PROMPT } from '@apps-hub/knowledge-core';
+import { AiError, EMBED_DIMS, IMAGE_PROMPT, PAUSING } from '@apps-hub/knowledge-core';
 import { AiHubError, ERROR_KINDS, type ErrorKind } from 'ai-hub-client/src/contract.ts';
 
 import { HUB_MAX_IMAGE, HUB_MAX_TOKENS, hubAi, jsonPart, toAiError, type Hub } from '../nexus/hub-ai.ts';
@@ -76,8 +76,8 @@ test('no hub wording or error kind reaches the owner', () => {
 test('errors the owner cannot fix map to what the queue understands', async () => {
   const cases: [ErrorKind, AiError['kind']][] = [
     ['busy', 'rate'],
-    ['timeout', 'server'],
-    ['provider-error', 'server'],
+    ['timeout', 'offline'],
+    ['provider-error', 'offline'],
     ['too-large', 'bad_request'],
     ['invalid', 'bad_request'],
   ];
@@ -86,6 +86,16 @@ test('errors the owner cannot fix map to what the queue understands', async () =
     await assert.rejects(s.ai.answer('q', ['a']), (e: unknown) => e instanceof AiError && e.kind === aiKind);
     assert.deepEqual(s.states, [], 'a problem the owner cannot fix leaves the hub state alone');
   }
+});
+
+test('an offline phone (the hub says provider-error) and a slow hub pause the queue; a real bad request still counts an attempt', () => {
+  for (const kind of ['provider-error', 'timeout'] as const) {
+    const err = toAiError(new AiHubError(kind, 'AI hub couldn\'t reach Groq. Check the phone\'s connection and try again.'));
+    assert.ok(PAUSING.includes(err.kind), `${kind} pauses`);
+    assert.equal(err.message, 'Waiting for AI hub to answer');
+  }
+  for (const kind of ['too-large', 'invalid', 'cancelled'] as const) assert.ok(!PAUSING.includes(toAiError(new AiHubError(kind, 'x')).kind), `${kind} counts`);
+  assert.ok(!PAUSING.includes(new AiError('bad_reply', 'x').kind));
 });
 
 test('a call that works says AI hub is ready', async () => {
@@ -102,13 +112,13 @@ test('embed asks for 512 dimensions and returns unit vectors', async () => {
   assert.ok(Math.abs(Math.hypot(...v) - 1) < 1e-5);
 });
 
-test('embed with another vector size or model is refused instead of breaking search', async () => {
+test('embed with another vector size or model pauses and tells the owner to set Embeddings in AI hub', async () => {
   for (const other of [
     { dims: 768, model: 'gemini-embedding-001' },
     { dims: EMBED_DIMS, model: 'text-embedding-004' },
   ]) {
     const s = setup({ embed: (req) => ({ vectors: (req as { texts: string[] }).texts.map(() => vector(other.dims)), ...other }) });
-    await assert.rejects(s.ai.embed(['a', 'b']), (e: unknown) => e instanceof AiError && e.kind === 'bad_reply');
+    await assert.rejects(s.ai.embed(['a', 'b']), (e: unknown) => e instanceof AiError && e.kind === 'auth' && /set Embeddings to gemini-embedding-001/.test(e.message));
   }
 });
 

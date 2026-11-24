@@ -14,6 +14,7 @@ import { itemFile } from '../src/library/paths';
 import { errorMessage, useDebounced } from '../src/library/use-library';
 import { addTodoExtras, proposeTaskExtras } from '../src/nexus/action-links';
 import { hubState } from '../src/nexus/ai';
+import { MINUTES_FOOTER, MINUTES_HINT, MINUTES_REPLACE } from '../src/nexus/consent-copy';
 import { HubNotice } from '../src/nexus/hub-notice';
 import type { HubState } from '../src/nexus/hub-state';
 import { saveNote } from '../src/nexus/capture';
@@ -129,7 +130,7 @@ function MinutesSection({ item, saved, making, ai, playFrom }: { item: Item; sav
   const again = () =>
     confirmAction({
       title: 'Replace these minutes?',
-      message: 'Nexus sends the transcript to Groq through AI hub again and replaces the minutes you have now.',
+      message: MINUTES_REPLACE,
       confirmLabel: 'Replace',
       onConfirm: make,
     });
@@ -162,7 +163,7 @@ function MinutesSection({ item, saved, making, ai, playFrom }: { item: Item; sav
         footer={
           saved
             ? undefined
-            : 'Nexus sends this transcript to Groq, through AI hub, to write a summary, the decisions and the action items, each with the time it was said. To make the minutes searchable, it sends them to Gemini, also through AI hub. Nexus has no keys of its own.'
+            : MINUTES_FOOTER
         }
       >
         {saved ? <Row title={<Text>{saved.minutes.summary}</Text>} /> : null}
@@ -189,7 +190,7 @@ function MinutesSection({ item, saved, making, ai, playFrom }: { item: Item; sav
       {making ? null : saved ? (
         <Button label="Make minutes again" variant="secondary" onPress={again} />
       ) : (
-        <Button label="Make minutes" onPress={make} accessibilityHint="Sends the transcript to Groq through AI hub" />
+        <Button label="Make minutes" onPress={make} accessibilityHint={MINUTES_HINT} />
       )}
     </>
   );

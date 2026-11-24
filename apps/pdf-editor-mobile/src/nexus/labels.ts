@@ -63,6 +63,7 @@ export const seekTo = (p: MinutesPoint): number => p.cites[0].startSec;
 // The queue's own messages promise a later retry; minutes run only on a tap, so they say what to do instead.
 export function minutesError(err: unknown): string {
   if (err instanceof AiError && err.kind === 'rate') return 'AI hub is busy. Wait a minute, then try again.';
+  if (err instanceof AiError && err.kind === 'offline') return 'AI hub did not answer. Check your connection, then try again.';
   return err instanceof Error ? err.message : String(err);
 }
 

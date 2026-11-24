@@ -6,7 +6,7 @@ import { Alert, AppState } from 'react-native';
 import { openApp } from '../links/readers';
 
 import { hubState, recheckHub } from './ai';
-import { HUB_COPY, type HubState } from './hub-state';
+import { HUB_COPY, WAITING_COPY, type HubCopy, type HubState } from './hub-state';
 
 /** AI hub's state for a screen; looks again when the owner comes back from fixing it. */
 export function useHubState(): HubState | null {
@@ -27,13 +27,21 @@ export function useHubState(): HubState | null {
 /** What the owner has to do in AI hub, with a button to go there. Shows nothing when AI hub is ready or not yet known. */
 export function HubNotice({ state }: { state: HubState | null }) {
   if (!state || state === 'ready') return null;
-  const copy = HUB_COPY[state];
+  return <CopyNotice copy={HUB_COPY[state]} tone="accent" />;
+}
+
+/** Items are paused because AI hub did not answer (no connection, or a service that fails). */
+export function WaitingNotice() {
+  return <CopyNotice copy={WAITING_COPY} tone="warn" />;
+}
+
+function CopyNotice({ copy, tone }: { copy: HubCopy; tone: 'accent' | 'warn' }) {
   const open = async () => {
     if ((await openApp(NexusLinks, copy.opens)).status === 'done') return;
     Alert.alert(`Couldn't open ${copy.opens === 'store' ? 'the Store' : 'AI hub'}`, 'Open it from your home screen.');
   };
   return (
-    <Notice tone="accent" title={copy.title} action={NexusLinks ? <Button label={copy.button} size="sm" onPress={() => void open()} /> : undefined}>
+    <Notice tone={tone} title={copy.title} action={NexusLinks ? <Button label={copy.button} size="sm" onPress={() => void open()} /> : undefined}>
       {copy.body}
     </Notice>
   );

@@ -58,6 +58,8 @@ test('a minutes line says who, when it is due and where it was said, and seeks t
 test('a minutes failure says what happened and how to fix it', () => {
   assert.match(minutesError(new AiError('rate', 'AI hub is busy. Nexus tries again in a moment.')), /wait a minute, then try again/i);
   assert.equal(minutesError(new AiError('auth', 'Add a key in AI hub')), 'Add a key in AI hub');
+  assert.match(minutesError(new AiError('offline', 'Waiting for AI hub to answer')), /did not answer.*try again/i);
+  assert.equal(jobLabel(job({ error: 'Waiting for AI hub to answer' }), 'note', 'ready', none).label, 'Waiting for AI hub to answer');
   assert.equal(minutesError(new Error('This recording is too short to make minutes from.')), 'This recording is too short to make minutes from.');
 });
 

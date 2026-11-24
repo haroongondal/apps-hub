@@ -60,6 +60,20 @@ test('a missing key pauses the queue without using up an attempt', async () => {
   assert.deepEqual([job?.stage, job?.status, job?.attempts, job?.error], ['embed', 'queued', 0, 'No API key is set.']);
 });
 
+test('an offline-style pause waits without using up an attempt, while a real bad request counts', async () => {
+  const { kn, ai, add } = await setup();
+  const item = await add('Note', 'text');
+  await kn.runNext();
+  ai.fail = new AiError('offline', 'Waiting for AI hub to answer');
+  for (let i = 0; i < 5; i++) assert.equal(await kn.runNext(), 'paused');
+  let job = await kn.job(item.id);
+  assert.deepEqual([job?.status, job?.attempts, job?.error], ['queued', 0, 'Waiting for AI hub to answer']);
+  ai.fail = new AiError('bad_request', 'rejected');
+  assert.equal(await kn.runNext(), 'ran');
+  job = await kn.job(item.id);
+  assert.deepEqual([job?.status, job?.attempts], ['queued', 1]);
+});
+
 test('a stage that keeps failing stops after three attempts and can be retried', async () => {
   const { kn, ai, add, drain } = await setup();
   const item = await add('Note', 'text');

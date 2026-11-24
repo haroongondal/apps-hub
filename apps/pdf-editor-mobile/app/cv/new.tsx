@@ -10,6 +10,7 @@ import { type TemplateId } from '../../src/cv/model';
 import { newCv, saveCv } from '../../src/cv/store';
 import { TEMPLATE_LIST, TEMPLATES } from '../../src/cv/templates';
 import { ai } from '../../src/nexus/ai';
+import { CV_NEW_HINT } from '../../src/nexus/consent-copy';
 import { HubNotice, useHubState } from '../../src/nexus/hub-notice';
 
 export default function NewCvScreen() {
@@ -50,7 +51,7 @@ export default function NewCvScreen() {
           style={{ minHeight: 160 }}
           placeholder="Jobs with dates and what you did, education, skills, languages, certifications. Write it however it comes to you."
           error={error}
-          hint="Nexus uses only what you write here and sends it to Groq or Gemini, whichever answers, through AI hub."
+          hint={CV_NEW_HINT}
         />
         <Field label="Target role (optional)" value={role} onChangeText={setRole} placeholder="Data analyst" />
         <Segmented

@@ -19,8 +19,8 @@ push or release only when the owner says so.
 - The owner said "dive in" (2026-11-18) instead of answering design questions, so the
   design's **(call)** items are mine and open to change.
 - Android first via the private Store; iOS optional and last. FOSS app code, zero
-  telemetry; AI is opt-in with the owner's own key and the app is fully offline without
-  one. New app dependencies need the owner's approval.
+  telemetry; AI is opt-in and runs through AI hub only (no own keys, since 2026-11-24) and the
+  app is fully offline without it. New app dependencies need the owner's approval.
 
 ## Decisions made (with why)
 
@@ -57,12 +57,14 @@ Owner decision: Nexus uses AI hub and nothing else. Read this section before the
 - Gone: `openai.ts` and `providers.ts` in knowledge-core (prompts now in `prompts.ts`, embedding size in `embedding.ts`), the own-key fallback and `hub-first.ts` (now `src/nexus/hub-ai.ts`, no fallback), the key list in expo-secure-store, the key panels in AI settings, "Waiting for an AI key".
 - States (`src/nexus/hub-state.ts`): not installed -> "AI needs AI hub" with Install AI hub (opens the Store, no link to the AI hub page: the Store has no deep link, so the owner finds it there); not allowed -> "Allow Nexus in AI hub" (opens AI hub); no key -> "Add a key in AI hub"; hub too old -> "Update AI hub". A problem stays until the app comes back to the foreground, then it looks again. No hub text or error kind reaches a screen (`toAiError`).
 - Old keys: `gemini-api-keys`, `groq-api-keys`, `gemini-api-key`, `groq-api-key` are deleted from expo-secure-store only after the first SUCCESSFUL hub chat or embed on the phone (a real result; never on `available()` alone, never after an error). A marker file `hub_worked` in the app's files records it, so the deletion finishes on a later start (`old-keys.ts`, `old-keys.test.ts`).
-- What leaves the phone, and where: unchanged data, now only through AI hub. Gemini gets note, PDF and scan text and photos (ideas, images) and Ask my life source text (search); Groq gets note, PDF and scan text (graph, answers, minutes, CV), voice recordings (Whisper) and the receipt text. Every use stays opt-in as before.
+- What leaves the phone, and where: unchanged data, now only through AI hub. Gemini gets note, PDF and scan text and photos (ideas, images) and Ask my life source text (search); Chat (graph, answers, minutes, CV, receipt text) goes to Groq, or to Gemini when Groq has no working key or the owner chose Gemini in AI hub (the hub decides; the consent text names both); voice recordings go to Groq (Whisper). Every use stays opt-in as before.
 - Recordings over 25 MB are still cut into pieces under 25 MiB, the same as the hub's cap. A photo over 7 MB is refused with a plain line (it used to go to the own key).
-- An offline phone is reported by the hub as `provider-error`, same as other service failures, so Nexus cannot tell it apart and retries use up attempts. Needs hub change: a separate offline kind.
-- Phone checks not run: install the new Nexus from the Store; with AI hub missing, Stream shows "AI needs AI hub" and Install AI hub opens the Store; install AI hub, return, the notice goes; before allowing Nexus the notice says "Allow Nexus in AI hub" and the button opens AI hub; allow, add no key: "Add a key in AI hub"; with keys, add a note and see it indexed; make minutes on a recording; check the old keys are gone only after that first success.
+- An offline phone is reported by the hub as `provider-error`. Nexus maps `provider-error` and `timeout` to the pausing kind `offline` ("Waiting for AI hub to answer"): the queue waits and retries on the next open without using up an attempt, and Stream shows an "AI hub is not answering" notice with Open AI hub. Residual risk: a permanent provider-error (hub keys invalid) pauses instead of failing, so the notice and the queue label are how the owner finds out. Needs hub change, nice to have: a separate offline kind and a separate invalid-key kind.
+- An embedding reply that is not `gemini-embedding-001` at 512 dims pauses with "In AI hub, set Embeddings to gemini-embedding-001".
+- Phone checks not run: install the new Nexus from the Store; with AI hub missing, Stream shows "AI needs AI hub" and Install AI hub opens the Store; install AI hub, return, the notice goes; before allowing Nexus the notice says "Allow Nexus in AI hub" and the button opens AI hub; allow, add no key: "Add a key in AI hub"; with keys, add a note and see it indexed; make minutes on a recording; check the old keys are gone only after that first success. Airplane mode: a queued item says "Waiting for AI hub to answer", Stream shows "AI hub is not answering", and turning the connection back on lets it finish on the next open with no attempt used. Receipt: with Nexus not allowed, one tap on Read receipt shows "Allow Nexus in AI hub".
 
 ## Session log
+
 
 - 2026-11-18 S1: read the repo against the PRD, wrote the design and this handoff,
   created the worktree from `origin/main` 43856547, built N1:
@@ -299,7 +301,7 @@ Owner decision: Nexus uses AI hub and nothing else. Read this section before the
     28. Two shares in a row: share a PDF to Nexus and, while "Add to Nexus?" shows, share three photos from Gallery. The
         screen shows "Getting it ready…" then the three photos; Add adds the photos only, and the PDF is not added.
 
-- 2026-11-24 S6 (eco E2, branch `eco/nexus`): AI through AI hub, hub first and own keys second.
+- SUPERSEDED by "Hub only" above (own keys and the fallback are gone; `hub-first.ts` is now `hub-ai.ts`). 2026-11-24 S6 (eco E2, branch `eco/nexus`): AI through AI hub, hub first and own keys second.
   - `src/nexus/hub-first.ts` (pure, tested with a fake hub in `hub-first.test.ts`) wraps the own-key port. Every
     call goes to AI hub first; the own keys serve it when the hub can't (`canFallBack`: hub-missing, not-allowed,
     version, no-key) or when its reply can't be stored. Other hub errors become `AiError`s (busy -> rate,
@@ -352,7 +354,7 @@ Owner decision: Nexus uses AI hub and nothing else. Read this section before the
 
 Nexus 1.4.0 (versionCode 18) is on the Store, built from `nexus` at a88538e8. PR #44 was merged to main on 2026-11-18.
 
-AI today (#54, #57, #64; `packages/knowledge-core/src/providers.ts`): Gemini embeds text and reads
+SUPERSEDED by "Hub only" above. AI as of Nexus 1.4.0 (#54, #57, #64; `providers.ts`, since deleted): Gemini embeds text and reads
 images, Groq transcribes (Whisper), and chat (`extract`, `answer`, `complete`) tries Groq's keys, then
 Gemini's. Several keys per service, kept in expo-secure-store. No OpenAI.
 On `eco/nexus` (S6, E2): every AI call goes to AI hub first (`src/nexus/hub-first.ts`) and to these own keys only

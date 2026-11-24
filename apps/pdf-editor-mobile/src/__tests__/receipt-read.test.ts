@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
+import { AiError } from '@apps-hub/knowledge-core';
+
 import type { ImageFile } from '../nexus/hub-ai.ts';
 import { RECEIPT_PROMPT } from '../nexus/receipt-parse.ts';
-import { readReceipt, readScanReceipt } from '../nexus/receipt-read.ts';
+import { READ_FAILED, readFailure, readReceipt, readScanReceipt } from '../nexus/receipt-read.ts';
 
 const NOW = new Date(2026, 10, 24, 10).getTime();
 const file: ImageFile = { uri: 'file:///x.jpg', size: 10 };
@@ -58,4 +60,11 @@ test('a kept-out scan is never read or sent, even when the screen opens from a l
   assert.deepEqual(f.calls.read, [file]);
   await assert.rejects(readScanReceipt({ ...steps(false), keptOut: async () => Promise.reject(new Error('db locked')) }), /db locked/);
   assert.equal(f.calls.read.length, 1, 'a failed Keep out check sends nothing');
+});
+
+test('a hub that needs the owner shows its notice at once, a photo that is too big says so, and anything else is the usual line', () => {
+  assert.deepEqual(readFailure(new AiError('auth', 'Allow Nexus in AI hub')), { kind: 'no-ai' });
+  assert.deepEqual(readFailure(new AiError('bad_request', 'That photo is too large to read. Use a smaller one.')), { kind: 'failed', line: 'That photo is too large to read. Use a smaller one.' });
+  assert.deepEqual(readFailure(new AiError('offline', 'Waiting for AI hub to answer')), { kind: 'failed', line: READ_FAILED });
+  assert.deepEqual(readFailure(new Error('boom')), { kind: 'failed', line: READ_FAILED });
 });

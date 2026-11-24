@@ -8,6 +8,7 @@ import { IconButton } from '../../src/library/icon-button';
 import { itemFile } from '../../src/library/paths';
 import { readDebits, startLink } from '../../src/links/readers';
 import { ai, aiReady, hubState } from '../../src/nexus/ai';
+import { RECEIPT_START } from '../../src/nexus/consent-copy';
 import { HubNotice } from '../../src/nexus/hub-notice';
 import type { HubState } from '../../src/nexus/hub-state';
 import { outcomeText } from '../../src/nexus/action-links';
@@ -15,15 +16,13 @@ import { getScanService } from '../../src/scan/service';
 import { candidateLine, dayText, matchLine, readAllDebits, readLine } from '../../src/nexus/receipt-debits';
 import { matchReceipt, type Match } from '../../src/nexus/receipt-match';
 import { amountText, buildReceipt } from '../../src/nexus/receipt-parse';
-import { KEPT_OUT_LINE, readScanReceipt } from '../../src/nexus/receipt-read';
+import { KEPT_OUT_LINE, readFailure, readScanReceipt } from '../../src/nexus/receipt-read';
 import { warrantyReminder } from '../../src/nexus/receipt-reminder';
 import { openKnowledge } from '../../src/nexus/worker';
 
 type Fields = { amount: string; date: string; merchant: string; warrantyEnd: string };
 type Phase = { kind: 'start' } | { kind: 'reading' } | { kind: 'no-ai' } | { kind: 'failed'; line: string } | { kind: 'ready' };
 type Outcome = { kind: 'read'; line: string } | { kind: 'match'; match: Match } | { kind: 'done'; line: string };
-
-const READ_FAILED = "Nexus couldn't read that receipt. Check the photo is clear and your connection works, then try again.";
 
 // The photo is read on the AI service the owner already uses for scans. The matched payment lives only in this screen's memory: nothing from Inflow is saved, logged or sent to an AI.
 export default function ReceiptScreen() {
@@ -69,8 +68,10 @@ export default function ReceiptScreen() {
       const { amountMinor, date, merchant, warrantyEnd } = result.receipt;
       setFields({ amount: amountText(amountMinor), date, merchant, warrantyEnd: warrantyEnd ?? '' });
       setPhase({ kind: 'ready' });
-    } catch {
-      setPhase({ kind: 'failed', line: READ_FAILED });
+    } catch (err) {
+      const failure = readFailure(err);
+      if (failure.kind === 'no-ai') setHub(await hubState());
+      setPhase(failure);
     }
   };
 
@@ -117,7 +118,7 @@ export default function ReceiptScreen() {
 
       {phase.kind === 'start' ? (
         <Notice tone="neutral" action={<Button label="Read receipt" size="sm" disabled={keptOut !== false} onPress={() => void read()} />}>
-          Nexus sends this photo to Gemini through AI hub to read it.
+          {RECEIPT_START}
         </Notice>
       ) : null}
       {keptOut ? <Text tone="muted">{KEPT_OUT_LINE}</Text> : null}

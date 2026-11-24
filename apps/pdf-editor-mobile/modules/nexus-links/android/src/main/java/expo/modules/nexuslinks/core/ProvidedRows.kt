@@ -23,7 +23,7 @@ data class TodayRow(val id: Long, val title: String, val dueAt: Long)
  * title, a control character in the title, a dueAt that is not a whole number or is negative. A missing, garbled or oversized file,
  * another `v`, or `on` not true serves nothing.
  *
- * files/ai_source: "hub", "own" or "none" (anything else, or no file, reads as none). files/last_seen: decimal epoch ms of the app's heartbeat.
+ * files/ai_source: "hub" or "none" (anything else, including the "own" older builds wrote, or no file, reads as none). files/last_seen: decimal epoch ms of the app's heartbeat.
  */
 object ProvidedRows {
   const val AUTHORITY = "com.haroon.pdfeditor.applink"
@@ -38,7 +38,7 @@ object ProvidedRows {
   const val SMALL_FILE_MAX_BYTES = 32
   const val MAX_TITLE_CHARS = 200
   private const val MAX_SAFE_LONG = 9007199254740991L
-  private val AI_SOURCES = setOf("hub", "own", "none")
+  private val AI_SOURCES = setOf("hub", "none")
   private val DIGITS = Regex("[0-9]{1,16}")
 
   /** The file's text, or null when it is missing, unreadable or longer than `maxBytes`. Read only. */

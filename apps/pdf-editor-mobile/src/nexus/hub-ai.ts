@@ -22,7 +22,7 @@ import {
   type VisionRequest,
 } from 'ai-hub-client/src/contract.ts';
 
-import { HUB_COPY, hubStateOf, type HubState } from './hub-state.ts';
+import { HUB_COPY, hubStateOf, WAITING_LINE, type HubState } from './hub-state.ts';
 
 export interface Hub {
   chat(req: ChatRequest): Promise<ChatReply>;
@@ -57,8 +57,9 @@ export const HUB_MAX_TOKENS = 8192; // the hub's cap; its default of 2048 would 
 // What the owner sees. The hub's own wording and error kinds never reach a screen.
 const PLAIN: Partial<Record<ErrorKind, AiError>> = {
   busy: new AiError('rate', 'AI hub is busy. Nexus tries again in a moment.'),
-  timeout: new AiError('server', 'The AI service took too long. Nexus tries again.'),
-  'provider-error': new AiError('server', "The AI service couldn't answer. Check your connection. Nexus tries again."),
+  // The hub reports an offline phone as provider-error, so the two cannot be told apart. 'offline' is a pausing kind: the queue waits and tries again later without using up an attempt.
+  timeout: new AiError('offline', WAITING_LINE),
+  'provider-error': new AiError('offline', WAITING_LINE),
   cancelled: new AiError('server', 'The request was stopped. Nexus tries again.'),
   'too-large': new AiError('bad_request', 'That is too big for the AI service to take at once.'),
   invalid: new AiError('bad_request', "Nexus sent a request the AI service couldn't use."),
@@ -118,9 +119,9 @@ export function hubAi({ hub, onState, onWorked }: HubAiOptions): NexusAi {
     embed: (texts) =>
       run(async () => {
         const reply = await hub.embed({ texts, dimensions: EMBED_DIMS });
-        // Another vector size or model would silently break search.
+        // Another vector size or model would silently break search; the owner chooses the model in AI hub, so this waits for them instead of failing the item.
         if (reply.dims !== EMBED_DIMS || reply.model !== EMBED_MODEL || reply.vectors.length !== texts.length) {
-          throw new AiError('bad_reply', 'AI hub sent embeddings Nexus cannot use. Update AI hub.');
+          throw new AiError('auth', 'AI hub is using another Embeddings model. In AI hub, set Embeddings to gemini-embedding-001.');
         }
         if (reply.vectors.length > 0) onWorked?.();
         return reply.vectors.map(unit);
