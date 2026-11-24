@@ -1,0 +1,5 @@
+[
+  { "kind": "card", "label": "Card", "expires_on": "2026-11-30", "days_left": 7 },
+  { "kind": "card", "label": "Visa travel", "expires_on": "2027-02-28", "days_left": 97 },
+  { "kind": "card", "label": "Card", "expires_on": "2026-10-31", "days_left": -23 }
+]

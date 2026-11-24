@@ -51,6 +51,8 @@ test('the vault module keeps services private plus the keep-alive foreground ser
     'android.permission.RECEIVE_SMS',
     'android.permission.CAMERA',
     'android.permission.NFC',
+    // The app-link signature permission (packages/app-link-contract): only same-key sibling apps hold it; it guards the expiry share.
+    'com.haroon.permission.AUTOPILOT',
   ]);
   const autofill = serviceNamed(vaultModule, 'StrongroomAutofillService');
   const syncJob = serviceNamed(vaultModule, 'SyncJobService');
@@ -86,6 +88,17 @@ test('the NFC tag service is bindable by the system only and asks for an unlocke
   const hce = vaultModule.match(/<uses-feature\b[^>]*android:name="android\.hardware\.nfc\.hce"[^>]*>/)?.[0];
   assert.ok(hce, 'the HCE feature is declared');
   assert.equal(attr(hce, 'android:required'), 'false');
+});
+
+// The link provider is exported on purpose; only the signature permission (read and write) keeps other apps out, and it hands out no URI grants.
+test('the link provider is exported behind the signature permission and grants no URIs', () => {
+  const tag = vaultModule.match(/<provider\b[^>]*>/)?.[0] ?? '';
+  assert.equal(attr(tag, 'android:name'), 'expo.modules.strongroomvault.android.ExpiryLinkProvider');
+  assert.equal(attr(tag, 'android:exported'), 'true');
+  assert.equal(attr(tag, 'android:readPermission'), 'com.haroon.permission.AUTOPILOT');
+  assert.equal(attr(tag, 'android:writePermission'), 'com.haroon.permission.AUTOPILOT');
+  assert.doesNotMatch(vaultModule, /grantUriPermissions|<grant-uri-permission/);
+  assert.equal((vaultModule.match(/<provider\b/g) ?? []).length, 1, 'one provider only');
 });
 
 test('backup stays off', () => {

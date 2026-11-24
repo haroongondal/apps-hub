@@ -936,3 +936,12 @@ raised while it is open) and can be presented over NFC for 60 seconds.
   reader. Whether HyperOS lets Strongroom win the NDEF AID over Google Wallet, and
   whether a given reader accepts the capability container, are checked only by the
   phone test in the plan.
+
+## 16. Password check and expiry share (2026-11-23)
+
+The Password check runs in Kotlin over the unlocked vault and gives the screen only ids, flag kinds
+and counts (weak by plain rules, reused, on the bundled SecLists 10k list). The expiry share is an
+opt-in, read-only app link (`packages/app-link-contract`) serving card expiry dates (and card names
+only if the owner chooses) from a small index sealed by the device key, so sibling apps can read it
+while the vault is locked. Rules, decisions and the threat model: `docs/handoffs/strongroom.md`,
+section "Password check and expiry share".

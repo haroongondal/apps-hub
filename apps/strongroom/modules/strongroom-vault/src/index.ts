@@ -11,6 +11,9 @@ export interface Status {
   lostSaves: number;
   keepAliveEnabled: boolean;
   smsFillEnabled: boolean;
+  // Card expiry dates for sibling apps: off by default; expiryNames shows card names instead of "Card".
+  expiryShare: boolean;
+  expiryNames: boolean;
 }
 
 export interface Row {
@@ -116,6 +119,26 @@ export interface ExportCounts {
   passesSkipped: number;
 }
 
+// short: too short for its kinds of characters; digits: only digits; run: mostly a keyboard or alphabet run; repeats: mostly repeats;
+// name: holds the site's name, the username or the entry's name; common: on the bundled list of well-known passwords; reused: shared with another login.
+export type HealthFlag = 'short' | 'digits' | 'run' | 'repeats' | 'name' | 'common' | 'reused';
+
+// group numbers the logins that share one password (1 = the biggest group), 0 when the password is its own.
+export interface HealthItem {
+  id: string;
+  flags: HealthFlag[];
+  group: number;
+}
+
+// Worked out in Kotlin inside the vault: ids, flag kinds and counts only, never a password or anything derived from one.
+export interface HealthReport {
+  checked: number;
+  weak: number;
+  reused: number;
+  common: number;
+  items: HealthItem[];
+}
+
 export interface Diagnostics {
   lastUnlockMs: number | null;
   browsers: { pkg: string; installed: boolean; trusted: boolean }[];
@@ -203,6 +226,10 @@ export interface StrongroomVaultApi {
   setKeepAlive(enable: boolean): void;
   // The RECEIVE_SMS permission is requested from the Settings toggle only, never at setup.
   setSmsFill(enable: boolean): void;
+  // Logins only; needs an unlocked vault.
+  passwordCheck(): Promise<HealthReport>;
+  // On writes the expiry index now (dates only, or with names; while locked, at the next unlock); off deletes it.
+  setExpiryShare(on: boolean, names: boolean): void;
   changePassword(oldPw: string, newPw: string): Promise<boolean>;
   newRecoveryKey(password: string): Promise<string | null>;
   clearLostSaves(): void;

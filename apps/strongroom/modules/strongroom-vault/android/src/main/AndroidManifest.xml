@@ -15,7 +15,17 @@
   <!-- A pass is presented to an NFC reader as an NDEF tag by host card emulation. Optional: phones without it just cannot present. -->
   <uses-permission android:name="android.permission.NFC" />
   <uses-feature android:name="android.hardware.nfc.hce" android:required="false" />
+  <!-- App links (packages/app-link-contract): only apps signed with the same key hold this, and only they may read the expiry share. -->
+  <permission android:name="com.haroon.permission.AUTOPILOT" android:protectionLevel="signature" />
+  <uses-permission android:name="com.haroon.permission.AUTOPILOT" />
   <application>
+    <!-- Card expiry dates for sibling apps, when the owner turns it on in Settings. Read-only, no URI grants. -->
+    <provider
+      android:name="expo.modules.strongroomvault.android.ExpiryLinkProvider"
+      android:authorities="com.haroon.strongroom.applink"
+      android:exported="true"
+      android:readPermission="com.haroon.permission.AUTOPILOT"
+      android:writePermission="com.haroon.permission.AUTOPILOT" />
     <service
       android:name="expo.modules.strongroomvault.android.StrongroomAutofillService"
       android:label="Strongroom"
