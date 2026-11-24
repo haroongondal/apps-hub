@@ -297,6 +297,7 @@ export default function MakeAVideo() {
           <Half label={songsOpen ? 'Hide free songs' : 'Free songs'} disabled={!loaded || !project.clips.length} onPress={() => setSongsOpen(o => !o)} accessibilityHint="Searches free songs from Freesound and adds one at the line" />
         </Pair>
       </View>
+      {songsOpen ? <FreeSongs onPick={addFreeSong} /> : null}
       {project.clips.length || project.music.length ? <Button label="Start new project" variant="ghost" block onPress={confirmStartNew} accessibilityHint="Clears this video after you confirm; your video files stay" /> : null}
       {project.clips.length && !planned.ok ? <Notice tone="warn">{projectProblem(project)}</Notice> : null}
       {project.clips.length ? <Text tone="muted">{`${project.clips.length === 1 ? '1 clip' : `${project.clips.length} clips`}, ${timeText(totalS(project))} in all`}</Text> : null}
