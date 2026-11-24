@@ -183,7 +183,7 @@ function Home() {
       <Group title="Other apps">
         <Row
           title="Let Nexus read my pinned clips"
-          subtitle="Nexus can read the clips you pinned, and may send them to AI when you turn on Ask my life. Passwords, codes and pictures never go."
+          subtitle="Nexus can read the clips you pinned, and may send them to AI when you turn on Ask my life. Clips that apps mark as passwords, one-time codes and pictures never go. Don't pin a password."
           trailing={
             <Switch
               value={nexusPinned}

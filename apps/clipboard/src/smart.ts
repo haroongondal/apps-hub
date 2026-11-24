@@ -31,7 +31,11 @@ const E164 = /^\+[1-9]\d{7,14}$/;
 const PK_MOBILE = /^03\d{9}$/;
 
 export function smartActions(clip: Clip): SmartAction[] {
-  return recognise(clip).map(actionFor);
+  try {
+    return recognise(clip).map(actionFor);
+  } catch {
+    return []; // a clip the matchers cannot encode (a lone half of an emoji) must not break the list that draws it
+  }
 }
 
 export function recognise(clip: Clip): Found[] {
@@ -205,8 +209,9 @@ function findAddress(text: string) {
   const at = lines.findIndex((l) => STREET.test(l) || HOUSE_STREET.test(l) || UK_POSTCODE.test(l));
   if (at < 0) return null;
   const block = lines.length <= 4 ? lines.join(', ') : lines[at];
-  const query = block.replace(/(,\s*)+/g, ', ').replace(/^[,\s]+|[,\s]+$/g, '').slice(0, QUERY_LIMIT);
-  return { found: { kind: 'address' as const, value: query }, raw: lines[at] };
+  const query = block.replace(/(,\s*)+/g, ', ').replace(/^[,\s]+|[,\s]+$/g, '');
+  const value = Array.from(query).slice(0, QUERY_LIMIT).join('');
+  return { found: { kind: 'address' as const, value }, raw: lines[at] };
 }
 
 function encodeQuery(text: string): string {

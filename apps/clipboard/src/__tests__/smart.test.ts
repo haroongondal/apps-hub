@@ -98,6 +98,13 @@ test('a number with no carrier, or a bad check digit, gives nothing', () => {
   }
 });
 
+test('an emoji cut by the 200 character limit, or half an emoji, never breaks the list', () => {
+  const cut = one('12 Baker Street ' + 'x'.repeat(183) + '\u{1F600} tail');
+  assert.equal(cut.kind, 'address');
+  assert.match(cut.uri!, /^geo:0,0\?q=12%20Baker%20Street%20x+%F0%9F%98%80$/);
+  assert.deepEqual(smartActions(clip('12 Baker Street \uD83D')), []);
+});
+
 test('addresses: number plus street word, house and street, or a UK postcode', () => {
   const a = one('221B Baker Street\nLondon NW1 6XE');
   assert.deepEqual([a.kind, a.label], ['address', 'Open map']);

@@ -17,5 +17,5 @@ export const PINNED_SHARE = defineShare<PinnedRow>()({
   columns: { id: 'long', text: 'string', pinned_at: 'long', from_app: 'string' },
   maxRows: 200,
   description:
-    "Pinned text clips, never passwords, codes, clips marked sensitive, images or files; read by Nexus only, oldest first, paged with pinned/<sinceId>. Off until the owner turns on 'Let Nexus read my pinned clips'.",
+    "Pinned text clips only; clips an app marks as a password or sensitive, one-time codes, images and files are left out, but a password copied as plain text is shared if pinned; read by Nexus only, oldest first, paged with pinned/<sinceId>. Off until the owner turns on 'Let Nexus read my pinned clips'.",
 });

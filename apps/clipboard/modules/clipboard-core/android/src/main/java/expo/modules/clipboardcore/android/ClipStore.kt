@@ -145,7 +145,9 @@ class ClipStore private constructor(context: Context) : SQLiteOpenHelper(context
   fun setPinned(id: Long, pinned: Boolean) {
     val values = ContentValues().apply {
       put("pinned", if (pinned) 1 else 0)
-      if (pinned) put("pinned_at", System.currentTimeMillis()) else putNull("pinned_at")
+      val now = System.currentTimeMillis()
+      if (pinned) put("pinned_at", now) else putNull("pinned_at")
+      Expiry.savedAtOnPinChange(pinned, now)?.let { put("at", it) }
     }
     writableDatabase.update("clips", values, "id = ?", arrayOf(id.toString()))
   }

@@ -60,3 +60,11 @@ test('the provider checks the guard and the calling package before it reads, and
   for (const m of ['insert', 'update', 'delete']) assert.match(provider, new RegExp(`override fun ${m}\\([^)]*\\)[^=]*= throw UnsupportedOperationException`));
   assert.doesNotMatch(provider, /override fun call\(/);
 });
+
+test('the setting and the share description do not promise that every password and code stays out', () => {
+  const app = fs.readFileSync(path.join(import.meta.dirname, '..', '..', 'App.tsx'), 'utf8');
+  assert.doesNotMatch(app, /Passwords, codes and pictures never go/);
+  assert.match(app, /Don't pin a password/);
+  assert.doesNotMatch(PINNED_SHARE.description, /never passwords/);
+  assert.match(PINNED_SHARE.description, /copied as plain text is shared if pinned/);
+});

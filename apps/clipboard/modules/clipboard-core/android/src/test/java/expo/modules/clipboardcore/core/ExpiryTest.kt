@@ -16,9 +16,18 @@ class ExpiryTest {
     assertTrue(Expiry.expired("secret", now - 8 * day, false, now, 7))
   }
 
-  @Test fun `pinned clips never expire`() {
+  @Test fun `pinned clips never expire, except a one-time code`() {
     assertFalse(Expiry.expired("text", 0, true, now, 7))
-    assertFalse(Expiry.expired("code", 0, true, now, 7))
+    assertFalse(Expiry.expired("secret", 0, true, now, 7))
+    assertFalse(Expiry.expired("code", now - Expiry.CODE_MS + 1, true, now, 7))
+    assertTrue(Expiry.expired("code", now - Expiry.CODE_MS, true, now, 7))
+  }
+
+  @Test fun `unpinning restarts the saved time, pinning keeps it`() {
+    assertEquals(now, Expiry.savedAtOnPinChange(false, now))
+    assertEquals(null, Expiry.savedAtOnPinChange(true, now))
+    val unpinnedAt = Expiry.savedAtOnPinChange(false, now)!!
+    assertFalse(Expiry.expired("text", unpinnedAt, false, now, 7))
   }
 
   @Test fun `codes go after 10 minutes whatever the setting`() {
