@@ -42,3 +42,30 @@ export function createHeartbeat(o: { now: () => number; write: (text: string) =>
     },
   };
 }
+
+/** One queue for every today.json change: Off's remove and the switch write run in turn, so a refresh already under way cannot write after the remove. */
+export function todayQueue(o: { file: { put: (text: string) => boolean; clear: () => void }; snapshot: () => Promise<string>; setOn: (on: boolean) => Promise<void> }) {
+  let turn: Promise<unknown> = Promise.resolve();
+  const refresh = async () => {
+    try {
+      o.file.put(await o.snapshot());
+    } catch (err) {
+      console.warn('Nexus could not update what is due today for other apps', err);
+    }
+  };
+  const enqueue = <T>(step: () => Promise<T>): Promise<T> => {
+    const run = turn.then(step, step);
+    turn = run.catch(() => undefined);
+    return run;
+  };
+  return {
+    refresh: () => enqueue(refresh),
+    /** Off removes today.json before anything else; if that fails it throws, so the switch never reads Off while the file still serves. */
+    set: (on: boolean) =>
+      enqueue(async () => {
+        if (!on) o.file.clear();
+        await o.setOn(on);
+        await refresh();
+      }),
+  };
+}

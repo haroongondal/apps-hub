@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import type { ImageFile } from '../nexus/hub-first.ts';
 import { RECEIPT_PROMPT } from '../nexus/receipt-parse.ts';
-import { readReceipt } from '../nexus/receipt-read.ts';
+import { readReceipt, readScanReceipt } from '../nexus/receipt-read.ts';
 
 const NOW = new Date(2026, 10, 24, 10).getTime();
 const file: ImageFile = { uri: 'file:///x.jpg', size: 10, base64: async () => '' };
@@ -39,4 +39,23 @@ test('the photo is read once, the text goes out in the fixed prompt, and the fie
 test('a reply that is not a receipt gives a plain refusal', async () => {
   const r = await readReceipt(fake('Sorry, I cannot help with that.').port, file, NOW);
   assert.equal(r.ok, false);
+});
+
+test('a kept-out scan is never read or sent, even when the screen opens from a link', async () => {
+  const f = fake('{"amount":"12.50","date":"2026-11-20","merchant":"Corner Cafe","warrantyEnd":null}');
+  const asked: string[] = [];
+  const steps = (keptOut: boolean) => ({
+    keptOut: async () => (asked.push('keep out'), keptOut),
+    aiReady: async () => (asked.push('ai'), true),
+    firstPage: async () => (asked.push('page'), file),
+    port: f.port,
+    now: NOW,
+  });
+  assert.deepEqual(await readScanReceipt(steps(true)), { kind: 'kept-out' });
+  assert.deepEqual(asked, ['keep out']);
+  assert.deepEqual(f.calls, { read: [], complete: [] });
+  assert.equal((await readScanReceipt(steps(false))).kind, 'ready');
+  assert.deepEqual(f.calls.read, [file]);
+  await assert.rejects(readScanReceipt({ ...steps(false), keptOut: async () => Promise.reject(new Error('db locked')) }), /db locked/);
+  assert.equal(f.calls.read.length, 1, 'a failed Keep out check sends nothing');
 });

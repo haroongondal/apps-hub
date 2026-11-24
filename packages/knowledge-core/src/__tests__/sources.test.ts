@@ -38,7 +38,7 @@ function paged(rows: unknown[], idPage = 3) {
     sinces: [] as number[],
     onItems: null as (() => void) | null,
     status: async () => p.state,
-    async items(sinceId: number, limit: number) {
+    async items(sinceId: number, limit: number): Promise<unknown[] | null> {
       if (p.down) throw new Error('timed out');
       p.sinces.push(sinceId);
       p.onItems?.();
@@ -207,6 +207,49 @@ test('a normal run keeps the read mark and embeds unchanged messages only once',
   assert.deepEqual(w.inflow.sinces, [0, 3, 3, 4, 4]);
   await w.drain();
   assert.equal(w.ai.calls.embed, embeds + 1);
+});
+
+const meta = async (db: SqlPort, key: string) => (await db.first('SELECT value FROM kn_meta WHERE key = ?', [key]))?.value ?? null;
+
+async function newestDeleted() {
+  const w = await world();
+  w.inflow.rows = Array.from({ length: 300 }, (_, i) => msg(i + 1));
+  await w.sync.run('inflow', { maxNew: 300 });
+  w.inflow.rows = w.inflow.rows.slice(0, 299);
+  assert.equal((await w.sync.run('inflow')).removed, 1);
+  return w;
+}
+
+test('a new message after the newest one was deleted is read in the next run', async () => {
+  const w = await newestDeleted();
+  assert.equal(await meta(w.db, 'source_mark:inflow'), '299');
+  w.inflow.rows = [...w.inflow.rows, msg(301)];
+  assert.equal((await w.sync.run('inflow')).added, 1);
+  assert.ok((await w.sourceIds('inflow')).includes(301));
+  for (let n = 0; n < 10 && (await meta(w.db, 'source_rescan:inflow')) !== null; n++) await w.sync.run('inflow');
+  assert.equal(await meta(w.db, 'source_rescan:inflow'), null, 'the re-read ends once it passes the newest id');
+  assert.equal(await meta(w.db, 'source_mark:inflow'), '301');
+  assert.equal((await w.sourceIds('inflow')).length, 300);
+});
+
+test('switching off deletes the read mark and the re-read cursor', async () => {
+  const w = await newestDeleted();
+  assert.notEqual(await meta(w.db, 'source_rescan:inflow'), null);
+  await w.sync.turnOff('inflow');
+  assert.equal(await count(w.db, "kn_meta WHERE key LIKE 'source_%'"), 0);
+});
+
+test('a failed page while re-reading deletes nothing and moves no mark', async () => {
+  const w = await newestDeleted();
+  const marks = [await meta(w.db, 'source_mark:inflow'), await meta(w.db, 'source_rescan:inflow')];
+  w.inflow.rows = w.inflow.rows.filter((r) => (r as { id: number }).id !== 5);
+  const items = w.inflow.items;
+  w.inflow.items = async (since, limit) => (since < 299 ? null : items(since, limit));
+  assert.equal((await w.sync.run('inflow')).status, 'failed');
+  assert.ok((await w.sourceIds('inflow')).includes(5));
+  assert.deepEqual([await meta(w.db, 'source_mark:inflow'), await meta(w.db, 'source_rescan:inflow')], marks);
+  w.inflow.items = items;
+  assert.equal((await w.sync.run('inflow')).removed, 1);
 });
 
 test('a switch-off whose delete failed is finished by the next run', async () => {

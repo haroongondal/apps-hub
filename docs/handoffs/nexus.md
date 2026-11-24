@@ -580,3 +580,13 @@ Not run (phone), after B6:
 - Receipts: Read as receipt is disabled on a scan kept out of Nexus; the receipt screen asks before it reads; the no-match line adds
   the Inflow switch hint.
 - Stream lists only the owner's own items (`Library.list({ ownOnly: true })`); source items stay in Library and Ask (R12).
+
+### P3 fix round 2 (scoped re-review)
+- Inflow read point: when the newest message stops counting (deleted, blocked sender, code swept) or Inflow resets, the forward mark
+  `source_mark:<app>` now drops only to the newest live id, so a new message is read in the next run (was: back to 0, about N/50 runs).
+  Older rows are read again behind it through `source_rescan:<app>`, with what is left of the 50-a-run budget, and that cursor is
+  deleted once it passes the forward mark. All reads finish before items are removed, so a failed page deletes nothing. An empty answer
+  still deletes both marks (R16); switching off deletes both. Each read is bounded by the 50-row budget (no separate page cap).
+- The receipt screen checks Keep out itself (`readScanReceipt` in `receipt-read.ts`), so a `pdfeditor://scan/receipt?id=` link to a
+  kept-out scan sends nothing; its Read receipt button is disabled with the same line as the scan screen.
+- `today.json`: switch-off's remove, the switch write and the refresh run in one queue (`todayQueue` in `share-files.ts`).

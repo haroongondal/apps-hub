@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { closedFile, createHeartbeat } from '../nexus/share-files.ts';
+import { closedFile, createHeartbeat, todayQueue } from '../nexus/share-files.ts';
 
 function fakeFile(content: string | null = null) {
   const f = {
@@ -85,4 +85,49 @@ test('a failed heartbeat write is not counted, so the next call tries again', ()
   fail = false;
   assert.equal(hb.beat(), true);
   assert.deepEqual(written, ['5000']);
+});
+
+function fakeToday() {
+  const f = fakeFile();
+  const file = closedFile(f);
+  const log: string[] = [];
+  const state: { on: boolean; hold: Promise<void> | null } = { on: true, hold: null };
+  const queue = todayQueue({
+    file: {
+      put: (text) => (log.push(`put ${text}`), file.put(text)),
+      clear: () => (log.push('remove'), file.clear()),
+    },
+    snapshot: async (): Promise<string> => {
+      const on = state.on;
+      await state.hold;
+      return on ? 'on' : 'off';
+    },
+    setOn: async (on) => void (log.push(`switch ${on}`), (state.on = on)),
+  });
+  return { f, log, state, queue };
+}
+
+test('switching off waits for a refresh already under way, so the remove always comes after its write', async () => {
+  const t = fakeToday();
+  let release = () => {};
+  t.state.hold = new Promise((r) => (release = () => r()));
+  const refreshing = t.queue.refresh();
+  const off = t.queue.set(false);
+  await Promise.resolve();
+  release();
+  t.state.hold = null;
+  await Promise.all([refreshing, off]);
+  assert.deepEqual(t.log, ['put on', 'remove', 'switch false', 'put off']);
+  assert.equal(t.f.content, 'off');
+});
+
+test('a failed remove rejects the switch-off, leaves the switch on, and the queue keeps going', async () => {
+  const t = fakeToday();
+  await t.queue.refresh();
+  t.f.failRemove = true;
+  await assert.rejects(t.queue.set(false), /read-only/);
+  assert.equal(t.state.on, true);
+  t.f.failRemove = false;
+  await t.queue.set(false);
+  assert.equal(t.f.content, 'off');
 });

@@ -54,6 +54,8 @@ const BARE_CODE = /^\s*(?:[a-z]{1,3}-)?\d{4,8}\s*\.?\s*$/i;
 
 const isId = (v: unknown): v is number => Number.isSafeInteger(v) && (v as number) > 0;
 const markKey = (app: SourceApp) => `source_mark:${app}`;
+const rescanKey = (app: SourceApp) => `source_rescan:${app}`;
+const SET_META = 'INSERT INTO kn_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value';
 
 export const dayLabel = (ms: number) => {
   const d = new Date(ms);
@@ -129,7 +131,7 @@ export class SourceSync {
     const db = this.kn.lib.db;
     const removed = await this.kn.lib.deleteAllFromSource(app);
     await pruneConcepts(db);
-    await db.run('DELETE FROM kn_meta WHERE key = ?', [markKey(app)]);
+    await db.run('DELETE FROM kn_meta WHERE key IN (?, ?)', [markKey(app), rescanKey(app)]);
     return removed;
   }
 
@@ -178,31 +180,52 @@ export class SourceSync {
     await this.kn.enqueueEmbedOnly(put.item.id, body);
   }
 
-  private async fromPages(app: SourceApp, p: PagedSource, maxNew: number, live: () => void, report: SyncReport): Promise<void> {
-    const db = this.kn.lib.db;
-    const read = await this.readPages(app, p, Number((await db.first('SELECT value FROM kn_meta WHERE key = ?', [markKey(app)]))?.value ?? 0) || 0, maxNew, live, report);
-    const ids = await this.allLiveIds(p);
-    await this.removeGone(app, ids, live, report);
-    let newest = 0;
-    for (const id of ids) newest = Math.max(newest, id);
-    if (newest >= read.mark) return;
-    // Ruling R16: an empty list (Inflow switched off) or ids below the mark (Inflow data reset) restart the read from 0, or those messages never come back.
-    live();
-    await db.run('DELETE FROM kn_meta WHERE key = ?', [markKey(app)]);
-    if (ids.size) await this.readPages(app, p, 0, read.left, live, report);
+  private async meta(key: string): Promise<number | null> {
+    const value = (await this.kn.lib.db.first('SELECT value FROM kn_meta WHERE key = ?', [key]))?.value;
+    return value === undefined || value === null ? null : Number(value) || 0;
   }
 
-  private async readPages(app: SourceApp, p: PagedSource, since: number, maxNew: number, live: () => void, report: SyncReport): Promise<{ mark: number; left: number }> {
+  // Every read finishes before removeGone, so a failed page deletes nothing.
+  private async fromPages(app: SourceApp, p: PagedSource, maxNew: number, live: () => void, report: SyncReport): Promise<void> {
+    const db = this.kn.lib.db;
+    const read = await this.readPages(app, p, markKey(app), (await this.meta(markKey(app))) ?? 0, Infinity, maxNew, live, report);
+    const ids = await this.allLiveIds(p);
+    let newest = 0;
+    for (const id of ids) newest = Math.max(newest, id);
+    let forward = read.mark;
+    let rescan = await this.meta(rescanKey(app));
+    if (newest < forward) {
+      // Ruling R16: an empty list (Inflow switched off) or ids below the mark (deleted newest, or Inflow data reset).
+      // The forward mark drops only to the newest live id, so new messages come next run; old rows are re-read behind it.
+      forward = newest;
+      rescan = newest ? 0 : null;
+      live();
+      if (newest) {
+        await db.run(SET_META, [markKey(app), String(newest)]);
+        await db.run(SET_META, [rescanKey(app), '0']);
+      } else await db.run('DELETE FROM kn_meta WHERE key IN (?, ?)', [markKey(app), rescanKey(app)]);
+    }
+    if (rescan !== null) {
+      const back = await this.readPages(app, p, rescanKey(app), rescan, forward, read.left, live, report);
+      if (back.mark >= forward || back.left > 0) {
+        live();
+        await db.run('DELETE FROM kn_meta WHERE key = ?', [rescanKey(app)]);
+      }
+    }
+    await this.removeGone(app, ids, live, report);
+  }
+
+  private async readPages(app: SourceApp, p: PagedSource, key: string, since: number, until: number, maxNew: number, live: () => void, report: SyncReport): Promise<{ mark: number; left: number }> {
     const db = this.kn.lib.db;
     let budget = maxNew;
-    for (; budget > 0; ) {
+    for (; budget > 0 && since < until; ) {
       const page = answer(await p.items(since, budget), 'items').slice(0, budget);
       const top = Math.max(since, ...page.map(idOf).filter((id): id is number => id !== null));
       if (top <= since) break;
-      const rows = page.map(cleanRow).filter((r): r is SourceRow => r !== null && r.id > since && !looksLikeOneTimeCode(r.text));
+      const rows = page.map(cleanRow).filter((r): r is SourceRow => r !== null && r.id > since && r.id <= until && !looksLikeOneTimeCode(r.text));
       for (const row of rows.sort((a, b) => a.id - b.id)) await this.store(app, row, live, report);
       live();
-      await db.run('INSERT INTO kn_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', [markKey(app), String(top)]);
+      await db.run(SET_META, [key, String(top)]);
       since = top;
       budget -= page.length;
     }

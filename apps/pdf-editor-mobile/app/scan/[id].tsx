@@ -10,6 +10,7 @@ import { IconButton } from '../../src/library/icon-button';
 import { openLibrary } from '../../src/library/open-library';
 import { itemFile } from '../../src/library/paths';
 import { errorMessage } from '../../src/library/use-library';
+import { KEPT_OUT_LINE } from '../../src/nexus/receipt-read';
 import { openKnowledge } from '../../src/nexus/worker';
 import { openInEditor, saveImages, savedMessage, shareImages, sharePdf } from '../../src/scan/export';
 import { getScanService } from '../../src/scan/service';
@@ -111,7 +112,7 @@ export default function ScanScreen() {
         />
         <Button label="Share images" block variant="secondary" busy={busy === 'images'} disabled={!!busy || pages.length === 0} onPress={() => run('images', () => shareImages(id), "The images couldn't be shared.")} />
         <Button label="Read as receipt" block variant="secondary" disabled={!!busy || pages.length === 0 || keptOut} onPress={() => router.push({ pathname: '/scan/receipt', params: { id } })} />
-        {keptOut ? <Text tone="muted">Kept out of Nexus. Add it back to read it as a receipt.</Text> : null}
+        {keptOut ? <Text tone="muted">{KEPT_OUT_LINE}</Text> : null}
         <Button label="Add pages" block variant="secondary" disabled={!!busy || !item} onPress={startAppend} />
       </View>
     </Screen>

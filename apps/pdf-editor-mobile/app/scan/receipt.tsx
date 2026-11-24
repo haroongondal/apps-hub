@@ -1,7 +1,7 @@
 import { Button, Field, Group, Header, Notice, Row, Screen, space, Text } from '@apps-hub/ui';
 import { router, useLocalSearchParams } from 'expo-router';
 import { NexusLinks, type DebitRow } from 'nexus-links';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 
 import { IconButton } from '../../src/library/icon-button';
@@ -13,8 +13,9 @@ import { getScanService } from '../../src/scan/service';
 import { candidateLine, dayText, matchLine, readAllDebits, readLine } from '../../src/nexus/receipt-debits';
 import { matchReceipt, type Match } from '../../src/nexus/receipt-match';
 import { amountText, buildReceipt } from '../../src/nexus/receipt-parse';
-import { readReceipt } from '../../src/nexus/receipt-read';
+import { KEPT_OUT_LINE, readScanReceipt } from '../../src/nexus/receipt-read';
 import { warrantyReminder } from '../../src/nexus/receipt-reminder';
+import { openKnowledge } from '../../src/nexus/worker';
 
 type Fields = { amount: string; date: string; merchant: string; warrantyEnd: string };
 type Phase = { kind: 'start' } | { kind: 'reading' } | { kind: 'no-ai' } | { kind: 'failed'; line: string } | { kind: 'ready' };
@@ -30,16 +31,37 @@ export default function ReceiptScreen() {
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [busy, setBusy] = useState<'match' | 'remind' | null>(null);
   const [reminded, setReminded] = useState<string | null>(null);
+  const [keptOut, setKeptOut] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    // A failed check leaves the button on: read() checks Keep out again before anything is sent.
+    openKnowledge()
+      .then((kn) => kn.isExcluded(id))
+      .then((out) => alive && setKeptOut(out), () => alive && setKeptOut(false));
+    return () => {
+      alive = false;
+    };
+  }, [id]);
 
   const read = async () => {
     setPhase({ kind: 'reading' });
     setOutcome(null);
     try {
-      if (!(await aiReady())) return setPhase({ kind: 'no-ai' });
-      const page = (await (await getScanService()).pages(id))[0];
-      if (!page) return setPhase({ kind: 'failed', line: 'This scan has no pages to read.' });
-      const result = await readReceipt(ai, itemFile(id, `pages/${page.pageId}.jpg`));
-      if (!result.ok) return setPhase({ kind: 'failed', line: result.reason });
+      const result = await readScanReceipt({
+        keptOut: async () => (await openKnowledge()).isExcluded(id),
+        aiReady,
+        firstPage: async () => {
+          const page = (await (await getScanService()).pages(id))[0];
+          return page ? itemFile(id, `pages/${page.pageId}.jpg`) : null;
+        },
+        port: ai,
+      });
+      if (result.kind === 'kept-out') {
+        setKeptOut(true);
+        return setPhase({ kind: 'start' });
+      }
+      if (result.kind !== 'ready') return setPhase(result);
       const { amountMinor, date, merchant, warrantyEnd } = result.receipt;
       setFields({ amount: amountText(amountMinor), date, merchant, warrantyEnd: warrantyEnd ?? '' });
       setPhase({ kind: 'ready' });
@@ -90,10 +112,11 @@ export default function ReceiptScreen() {
       <Header title="Receipt" subtitle="Reads the first page" trailing={<IconButton icon="arrow-back" label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} />} />
 
       {phase.kind === 'start' ? (
-        <Notice tone="neutral" action={<Button label="Read receipt" size="sm" onPress={() => void read()} />}>
+        <Notice tone="neutral" action={<Button label="Read receipt" size="sm" disabled={keptOut !== false} onPress={() => void read()} />}>
           Nexus sends this photo to your AI service to read it.
         </Notice>
       ) : null}
+      {keptOut ? <Text tone="muted">{KEPT_OUT_LINE}</Text> : null}
       {phase.kind === 'reading' ? <Text tone="muted" accessibilityLiveRegion="polite">Reading the receipt...</Text> : null}
       {phase.kind === 'no-ai' ? (
         <Notice tone="warn" title="Nexus needs an AI service" action={<Button label="Open settings" size="sm" variant="secondary" onPress={() => router.push('/settings')} />}>
