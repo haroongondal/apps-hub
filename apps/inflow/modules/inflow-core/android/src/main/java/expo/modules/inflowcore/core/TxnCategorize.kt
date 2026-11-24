@@ -117,6 +117,6 @@ Rules:
   }
 
   private companion object {
-    const val BATCH = 100
+    const val BATCH = 50   // about 10,000 characters of transaction lines per request: a bigger one may be refused by the provider (HTTP 413)
   }
 }

@@ -192,7 +192,7 @@ class AiRunTest {
 
   private fun bigQueue() {
     keyAdded()
-    (1..61).forEach { save("item $it " + "x".repeat(990)) }   // 61 items: two requests (40 and 21)
+    (1..20).forEach { save("item $it " + "x".repeat(990)) }   // 20 items of about 1,000 characters: two requests (12 and 8) at 12,000 characters each
   }
 
   @Test fun capStopsBeforeNextRequest() {
@@ -203,8 +203,8 @@ class AiRunTest {
     assertEquals(1, prompts.size)
     assertTrue(r.stoppedByCap)
     assertEquals(AiRun.CAP_REACHED, r.error)
-    assertEquals(40, r.saved)
-    assertEquals(21, store.queue.size)   // the rest waits
+    assertEquals(12, r.saved)
+    assertEquals(8, store.queue.size)   // the rest waits
     assertEquals(0.55, store.spentToday("2026-11-14"), 1e-9)
     assertEquals("Inflow reached today's AI spending limit. It will send the rest tomorrow, or raise the limit in Settings.", r.error)
   }
@@ -215,7 +215,7 @@ class AiRunTest {
     val r = runner(cap = null).run()
     assertEquals(2, prompts.size)
     assertFalse(r.stoppedByCap)
-    assertEquals(61, r.saved)
+    assertEquals(20, r.saved)
   }
 
   @Test fun capCountsLocalDay() {

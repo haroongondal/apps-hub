@@ -55,7 +55,8 @@ data class AiResult(
 /** Everything the model returns is untrusted: it can only describe the items it was sent, by id, and anything invalid is dropped, never guessed. */
 object AiBatch {
   const val MAX_ITEM_CHARS = 2_000
-  const val MAX_REQUEST_CHARS = 60_000
+  /** About 4,000 tokens of item text per request: Groq refuses a bigger one (HTTP 413) and the hub does not retry that elsewhere. A longer queue just takes more requests. */
+  const val MAX_REQUEST_CHARS = 12_000
   const val MAX_ITEMS = 40
   private const val MAX_SUMMARY = 200
   private const val MAX_TODOS = 5

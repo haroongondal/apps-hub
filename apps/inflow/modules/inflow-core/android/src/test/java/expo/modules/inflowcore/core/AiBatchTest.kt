@@ -28,14 +28,14 @@ class AiBatchTest {
   @Test fun splitKeepsRequestsUnderLimit() {
     val items = (1L..130L).map { input(it, "x".repeat(1_000)) }
     val parts = AiBatch.split(items)
-    assertEquals(listOf(40, 40, 40, 10), parts.map { it.size })   // 130 x 1,000 chars would fit 60 per request by size alone
+    assertEquals(List(10) { 12 } + 10, parts.map { it.size })   // 12,000 characters: twelve 1,000-character items per request
     assertTrue(parts.all { p -> p.sumOf { it.text.length } <= AiBatch.MAX_REQUEST_CHARS })
     assertEquals(items.map { it.itemId }, parts.flatten().map { it.itemId })
   }
 
   @Test fun splitCountsEachItemCutToTheLimit() {
     val parts = AiBatch.split((1L..31L).map { input(it, "x".repeat(5_000)) })
-    assertEquals(listOf(30, 1), parts.map { it.size })
+    assertEquals(listOf(6, 6, 6, 6, 6, 1), parts.map { it.size })   // each 5,000-character item counts as 2,000: six fit 12,000
   }
 
   @Test fun splitOfNothingIsNothing() {
