@@ -28,7 +28,9 @@ class AiHubService : Service() {
 
   override fun onBind(intent: Intent?): IBinder = binder
 
-  private fun caller(): Caller = Callers.identify(this, Binder.getCallingUid(), worker.switches())
+  private fun caller(): Caller = Callers.identify(this, Binder.getCallingUid(), worker.switches()).also { c ->
+    (c.decision as? Decision.Deny)?.ask?.let(worker::notePending)
+  }
 
   private fun allowed(): Caller {
     val c = caller()
