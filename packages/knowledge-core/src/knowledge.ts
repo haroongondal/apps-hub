@@ -1,8 +1,10 @@
-import { migrate, type Item, type ItemKind, type Library, type Row, type SqlPort } from '@apps-hub/library-core';
+import { migrate, type Item, type ItemKind, type Library, type Row, type SourceApp, type SqlPort } from '@apps-hub/library-core';
 
 import { chunkSegments } from './chunk.ts';
 import { cleanExtraction, normLabel } from './extraction.ts';
+import { composeMinutes, minutesFingerprint, minutesSegments, type Minutes, type MinutesChat, type MinutesOptions, type SavedMinutes } from './minutes.ts';
 import { KNOWLEDGE_STEPS } from './schema.ts';
+import { sourceLabel } from './sources.ts';
 import { AiError, PAUSING, type AiPort, type ContentPort, type Extraction, type Locator, type Segment } from './types.ts';
 import { cosine, fromBlob, toBlob, topK } from './vectors.ts';
 
@@ -24,6 +26,8 @@ export interface Source {
   kind: ItemKind;
   locator: Locator;
   text: string;
+  /** "From Inflow message, 3 Nov" for an item read from another app, else null. */
+  origin: string | null;
 }
 export interface Answer {
   text: string;
@@ -47,6 +51,8 @@ const ASK_ATOMS = 6;
 const EMBED_BATCH = 64;
 // shortcut: only the first ~24k characters of an item feed the graph (Ask still searches every chunk); extract per window when long PDFs need full graphs.
 const EXTRACT_CHARS = 24_000;
+const KEPT_OUT = 'This item is kept out of Nexus, so Nexus does not send its transcript anywhere.';
+const GONE = 'This item is no longer in your library.';
 const NEXT: Record<Exclude<JobStage, 'done'>, JobStage> = { text: 'embed', embed: 'graph', graph: 'done' };
 
 /** Thrown when the item was excluded or re-queued during a stage, so the stage stops before its next outbound call. */
@@ -120,7 +126,8 @@ export class Knowledge {
     if ((await this.db.first("SELECT value FROM kn_meta WHERE key = 'embed_tag'"))?.value === tag) return;
     await this.db.transaction(async (tx) => {
       await tx.run(
-        `UPDATE kn_jobs SET stage = 'embed', status = 'queued', gen = gen + 1, attempts = 0, error = NULL, updated_at = ?
+        `UPDATE kn_jobs SET stage = 'embed', status = 'queued', gen = gen + 1, attempts = 0, error = NULL, updated_at = ?,
+           embed_only = CASE WHEN item_id IN (SELECT item_id FROM item_sources) THEN 1 ELSE 0 END
          WHERE stage <> 'text' AND item_id IN (SELECT item_id FROM kn_chunks)`,
         [this.deps.now()],
       );
@@ -134,25 +141,58 @@ export class Knowledge {
   async enqueue(itemId: string): Promise<void> {
     await this.db.transaction(async (tx) => {
       if (await isExcluded(tx, itemId)) return;
+      // An item read from another app has no file to read again: its text is the segment the sync saved.
+      if (await tx.first('SELECT 1 FROM item_sources WHERE item_id = ?', [itemId])) return this.queueEmbedOnly(tx, itemId);
       await tx.run(
         `INSERT INTO kn_jobs (item_id, stage, status, updated_at) VALUES (?, 'text', 'queued', ?)
          ON CONFLICT(item_id) DO UPDATE SET stage = 'text', status = 'queued', gen = gen + 1, attempts = 0, error = NULL,
-           updated_at = excluded.updated_at`,
+           embed_only = 0, updated_at = excluded.updated_at`,
         [itemId, this.deps.now()],
       );
     });
   }
 
+  /** Saves `text` as the item's one segment and queues it to be embedded only (no graph, no AI extraction). False when the item is gone or kept out. */
+  async enqueueEmbedOnly(itemId: string, text: string): Promise<boolean> {
+    return this.db.transaction(async (tx) => {
+      if (!(await tx.first('SELECT 1 FROM items WHERE id = ?', [itemId]))) return false;
+      await tx.run('DELETE FROM kn_segments WHERE item_id = ?', [itemId]);
+      await tx.run('INSERT INTO kn_segments (item_id, seq, text, locator) VALUES (?, 0, ?, NULL)', [itemId, text]);
+      if (await isExcluded(tx, itemId)) return false;
+      await this.queueEmbedOnly(tx, itemId);
+      return true;
+    });
+  }
+
+  private async queueEmbedOnly(tx: SqlPort, itemId: string): Promise<void> {
+    await tx.run(
+      `INSERT INTO kn_jobs (item_id, stage, status, embed_only, updated_at) VALUES (?, 'embed', 'queued', 1, ?)
+       ON CONFLICT(item_id) DO UPDATE SET stage = 'embed', status = 'queued', gen = gen + 1, attempts = 0, error = NULL,
+         embed_only = 1, updated_at = excluded.updated_at`,
+      [itemId, this.deps.now()],
+    );
+  }
+
   // Segments stay: they are the item's own transcript or OCR text. A stage already running finds no job and writes nothing.
   async exclude(itemId: string): Promise<void> {
-    await this.db.transaction(async (tx) => {
+    const hadMinutes = await this.db.transaction(async (tx) => {
+      const had = (await tx.first('SELECT 1 FROM kn_minutes WHERE item_id = ?', [itemId])) !== null;
       await tx.run('INSERT OR IGNORE INTO kn_excluded (item_id, excluded_at) VALUES (?, ?)', [itemId, this.deps.now()]);
       await tx.run('DELETE FROM kn_jobs WHERE item_id = ?', [itemId]);
       await tx.run('DELETE FROM kn_chunks WHERE item_id = ?', [itemId]);
       await tx.run('DELETE FROM kn_nodes WHERE item_id = ?', [itemId]); // the source node and its atoms; their edges go by cascade
       await tx.run('DELETE FROM kn_edges WHERE item_id = ?', [itemId]); // the links it made to concepts other items share
+      await tx.run('DELETE FROM kn_minutes WHERE item_id = ?', [itemId]);
       await pruneConcepts(tx);
+      return had;
     });
+    if (hadMinutes) await this.indexBody(itemId); // the transcript stays searchable, the minutes go
+    await this.dropWork(itemId);
+  }
+
+  // A text stage still running stops at its next check and calls this again, after the piece it had in flight is saved.
+  private async dropWork(itemId: string): Promise<void> {
+    await this.deps.content.withdrawn?.(itemId).catch(() => {}); // leftovers only waste space, and are cleared with the item
   }
 
   async include(itemId: string): Promise<void> {
@@ -211,7 +251,7 @@ export class Knowledge {
   async runNext(): Promise<RunResult> {
     const now = this.deps.now();
     const claimed = await this.db.transaction(async (tx) => {
-      const row = await tx.first("SELECT item_id, stage, gen FROM kn_jobs WHERE status = 'queued' ORDER BY updated_at, item_id LIMIT 1");
+      const row = await tx.first("SELECT item_id, stage, gen, embed_only FROM kn_jobs WHERE status = 'queued' ORDER BY updated_at, item_id LIMIT 1");
       if (row) await tx.run("UPDATE kn_jobs SET status = 'running', updated_at = ? WHERE item_id = ?", [now, row.item_id]);
       return row;
     });
@@ -240,7 +280,7 @@ export class Knowledge {
       );
       return 'ran';
     }
-    const next = NEXT[stage];
+    const next = stage === 'embed' && claimed.embed_only === 1 ? 'done' : NEXT[stage];
     await this.db.run(
       'UPDATE kn_jobs SET stage = ?, status = ?, attempts = 0, error = NULL, updated_at = ? WHERE item_id = ? AND gen = ?',
       [next, next === 'done' ? 'done' : 'queued', this.deps.now(), itemId, gen],
@@ -253,8 +293,16 @@ export class Knowledge {
   }
 
   private async textStage(item: Item, gen: number): Promise<void> {
-    await this.keep(item.id, gen); // audio and images go out to the provider inside segments()
-    const segments = (await this.deps.content.segments(item)).filter((s) => s.text.trim() !== '');
+    const check = () => this.keep(item.id, gen);
+    await check(); // audio and images go out to the provider inside segments()
+    let segments: Segment[];
+    try {
+      segments = (await this.deps.content.segments(item, check)).filter((s) => s.text.trim() !== '');
+    } catch (e) {
+      // kept out: drop the pieces this run saved; re-queued (recover): the newer run resumes from them
+      if (e instanceof Withdrawn && (await isExcluded(this.db, item.id))) await this.dropWork(item.id);
+      throw e;
+    }
     const wrote = await this.db.transaction(async (tx) => {
       if (!(await isLive(tx, item.id, gen))) return false;
       await tx.run('DELETE FROM kn_segments WHERE item_id = ?', [item.id]);
@@ -263,7 +311,19 @@ export class Knowledge {
       }
       return true;
     });
-    if (wrote && (item.kind === 'audio' || item.kind === 'image')) await this.lib.setBody(item.id, segments.map((s) => s.text).join('\n')); // so Library search finds transcripts and OCR
+    if (!wrote && (await isExcluded(this.db, item.id))) await this.dropWork(item.id); // kept out during the last piece
+    if (wrote && (item.kind === 'audio' || item.kind === 'image')) await this.indexBody(item.id);
+    if (wrote) await this.deps.content.saved?.(item).catch(() => {}); // leftovers only waste space, and are cleared with the item
+  }
+
+  /**
+   * Library search text of a recording or picture: its transcript or read text, then its minutes, rewritten whenever either changes.
+   * shortcut: read then written in two transactions, so a transcript and minutes saved at the same instant can leave the older text until the next change; read inside Library if that shows up.
+   */
+  private async indexBody(itemId: string): Promise<void> {
+    const minutes = await storedMinutes(this.db, itemId);
+    const texts = [...(await this.segmentsOf(itemId)), ...(minutes ? minutesSegments(minutes) : [])].map((s) => s.text);
+    await this.lib.setBody(itemId, texts.join('\n'));
   }
 
   async segmentsOf(itemId: string): Promise<Segment[]> {
@@ -271,14 +331,63 @@ export class Knowledge {
     return rows.map((r) => ({ text: r.text as string, locator: loc(r.locator) }));
   }
 
+  async minutes(itemId: string): Promise<SavedMinutes | null> {
+    const row = await this.db.first('SELECT body, source, made_at FROM kn_minutes WHERE item_id = ?', [itemId]);
+    if (!row) return null;
+    return {
+      minutes: JSON.parse(row.body as string) as Minutes,
+      madeAt: row.made_at as number,
+      stale: row.source !== minutesFingerprint(await this.segmentsOf(itemId)),
+    };
+  }
+
+  // Only on the owner's tap, never from the queue: excluding or including an item never makes minutes by itself.
+  async makeMinutes(itemId: string, chat: MinutesChat, o: MinutesOptions = {}): Promise<Minutes> {
+    const keptOut = async () => {
+      if (await this.isExcluded(itemId)) throw new Error(KEPT_OUT);
+    };
+    await keptOut();
+    const item = await this.lib.getItem(itemId);
+    if (!item) throw new Error(GONE);
+    if (item.kind !== 'audio') throw new Error('Minutes are made from voice notes and meetings.');
+    const segments = await this.segmentsOf(itemId);
+    const minutes = await composeMinutes(segments, chat, { ...o, check: keptOut });
+    await this.db.transaction(async (tx) => {
+      if (await isExcluded(tx, itemId)) throw new Error(KEPT_OUT);
+      if (!(await tx.first('SELECT 1 FROM items WHERE id = ?', [itemId]))) throw new Error(GONE);
+      await tx.run(
+        `INSERT INTO kn_minutes (item_id, body, source, made_at) VALUES (?, ?, ?, ?)
+         ON CONFLICT(item_id) DO UPDATE SET body = excluded.body, source = excluded.source, made_at = excluded.made_at`,
+        [itemId, JSON.stringify(minutes), minutesFingerprint(segments), this.deps.now()],
+      );
+      // Ask finds minutes through their chunks: a finished item embeds them and stops; one still in the queue picks them up on its way.
+      await tx.run(
+        `UPDATE kn_jobs SET stage = 'embed', status = 'queued', gen = gen + 1, attempts = 0, error = NULL, updated_at = ?,
+           embed_only = CASE WHEN stage = 'done' THEN 1 ELSE embed_only END
+         WHERE item_id = ? AND stage <> 'text'`,
+        [this.deps.now(), itemId],
+      );
+    });
+    await this.indexBody(itemId);
+    return minutes;
+  }
+
   private async embedStage(itemId: string, gen: number): Promise<void> {
-    const chunks = chunkSegments(await this.segmentsOf(itemId));
-    const vectors: Float32Array[] = [];
-    for (let i = 0; i < chunks.length; i += EMBED_BATCH) {
+    const minutes = await storedMinutes(this.db, itemId);
+    const chunks = [...chunkSegments(await this.segmentsOf(itemId)), ...(minutes ? minutesSegments(minutes) : [])];
+    // A chunk whose text is already embedded keeps its vector (retagEmbeddings drops every vector of an old model), so new minutes cost only their own embeddings.
+    const known = new Map(
+      (await this.db.all('SELECT text, embedding FROM kn_chunks WHERE item_id = ?', [itemId])).map((r) => [r.text as string, fromBlob(r.embedding as Uint8Array)]),
+    );
+    const missing = [...new Set(chunks.map((c) => c.text).filter((t) => !known.has(t)))];
+    for (let i = 0; i < missing.length; i += EMBED_BATCH) {
       await this.keep(itemId, gen);
-      vectors.push(...(await this.deps.ai.embed(chunks.slice(i, i + EMBED_BATCH).map((c) => c.text))));
+      const batch = missing.slice(i, i + EMBED_BATCH);
+      const got = await this.deps.ai.embed(batch);
+      if (got.length !== batch.length) throw new AiError('bad_reply', 'The model sent the wrong number of embeddings.');
+      batch.forEach((t, j) => known.set(t, got[j]));
     }
-    if (vectors.length !== chunks.length) throw new AiError('bad_reply', 'The model sent the wrong number of embeddings.');
+    const vectors = chunks.map((c) => known.get(c.text) as Float32Array);
     await this.db.transaction(async (tx) => {
       if (!(await isLive(tx, itemId, gen))) return;
       await tx.run('DELETE FROM kn_chunks WHERE item_id = ?', [itemId]);
@@ -434,27 +543,35 @@ export class Knowledge {
     const q = question.trim();
     const [qv] = await this.deps.ai.embed([q]);
     // shortcut: brute-force cosine over every chunk; fine to ~20k chunks, switch to sqlite-vec beyond that.
-    const rows = await this.db.all('SELECT c.item_id, c.text, c.locator, c.embedding, i.title, i.kind FROM kn_chunks c JOIN items i ON i.id = c.item_id');
+    const rows = await this.db.all(
+      `SELECT c.item_id, c.text, c.locator, c.embedding, i.title, i.kind, s.app, s.source_at
+       FROM kn_chunks c JOIN items i ON i.id = c.item_id LEFT JOIN item_sources s ON s.item_id = c.item_id`,
+    );
     const hits = topK(rows, (r) => cosine(qv, fromBlob(r.embedding as Uint8Array)), ASK_CHUNKS).filter((h) => h.score > 0);
     const hitItems = [...new Set(hits.map((h) => h.item.item_id as string))];
     const atoms = hitItems.length
       ? await this.db.all(
-          `${WALK(hitItems.length)} SELECT n.item_id, n.label, n.locator, i.title, i.kind, MIN(walk.depth) AS d, COUNT(*) AS c
-           FROM walk JOIN kn_nodes n ON n.id = walk.id JOIN items i ON i.id = n.item_id
+          `${WALK(hitItems.length)} SELECT n.item_id, n.label, n.locator, i.title, i.kind, s.app, s.source_at, MIN(walk.depth) AS d, COUNT(*) AS c
+           FROM walk JOIN kn_nodes n ON n.id = walk.id JOIN items i ON i.id = n.item_id LEFT JOIN item_sources s ON s.item_id = n.item_id
            WHERE n.type = 'atom' AND n.item_id NOT IN (${marks(hitItems.length)})
            GROUP BY n.id ORDER BY d, c DESC, n.id LIMIT ?`,
           [...hitItems.map(srcId), 2, ...hitItems, ASK_ATOMS],
         )
       : [];
-    const sources: Source[] = [
-      ...hits.map(({ item: r }) => ({ itemId: r.item_id as string, title: r.title as string, kind: r.kind as ItemKind, locator: loc(r.locator), text: r.text as string })),
-      ...atoms.map((r) => ({ itemId: r.item_id as string, title: r.title as string, kind: r.kind as ItemKind, locator: loc(r.locator), text: r.label as string })),
-    ];
+    const source = (r: Row, text: unknown): Source => ({
+      itemId: r.item_id as string,
+      title: r.title as string,
+      kind: r.kind as ItemKind,
+      locator: loc(r.locator),
+      text: text as string,
+      origin: r.app === null || r.app === undefined ? null : sourceLabel({ app: r.app as SourceApp, sourceAt: r.source_at as number }),
+    });
+    const sources: Source[] = [...hits.map(({ item: r }) => source(r, r.text)), ...atoms.map((r) => source(r, r.label))];
     if (!sources.length) return { text: 'Nothing in your library matches that yet.', citations: [] };
 
     const text = await this.deps.ai.answer(
       q,
-      sources.map((s) => `${s.title}${s.locator ? ` (${locatorLabel(s.locator)})` : ''}: ${s.text}`),
+      sources.map((s) => `${s.origin ?? s.title}${s.locator ? ` (${locatorLabel(s.locator)})` : ''}: ${s.text}`),
     );
     const cited: number[] = [];
     for (const m of text.matchAll(/\[(\d+(?:\s*,\s*\d+)*)\]/g)) {
@@ -466,6 +583,10 @@ export class Knowledge {
 
 // A run whose job was re-queued (an edit, or recover after a kill) must not overwrite newer results.
 const isLive = async (tx: SqlPort, itemId: string, gen: number) => (await tx.first('SELECT gen FROM kn_jobs WHERE item_id = ?', [itemId]))?.gen === gen;
+const storedMinutes = async (db: SqlPort, itemId: string): Promise<Minutes | null> => {
+  const row = await db.first('SELECT body FROM kn_minutes WHERE item_id = ?', [itemId]);
+  return row ? (JSON.parse(row.body as string) as Minutes) : null;
+};
 const isExcluded = async (db: SqlPort, itemId: string) => (await db.first('SELECT 1 FROM kn_excluded WHERE item_id = ?', [itemId])) !== null;
 
 export const pruneConcepts = (db: SqlPort) =>

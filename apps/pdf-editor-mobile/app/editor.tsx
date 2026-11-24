@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import WebView, { type WebViewMessageEvent, type WebViewNavigation } from 'react-native-webview';
 
 import { injectCommand, parseMessage, type PageEvent } from '../src/editor/bridge';
+import { pageParam, pendingPage } from '../src/editor/goto-page';
 import { dirSize, writeBase64Atomic } from '../src/library/files';
 import { newId } from '../src/library/ids';
 import { openLibrary } from '../src/library/open-library';
@@ -69,7 +70,7 @@ async function saveEditedCopy(sourceId: string, base64: string, info: DocInfo | 
 }
 
 export default function EditorScreen() {
-  const params = useLocalSearchParams<{ uri?: string; name?: string; itemId?: string }>();
+  const params = useLocalSearchParams<{ uri?: string; name?: string; itemId?: string; page?: string }>();
   const { c } = useTheme();
   const [assetUri, setAssetUri] = useState<string | null>(null);
   const [assetError, setAssetError] = useState<string | null>(null);
@@ -82,6 +83,7 @@ export default function EditorScreen() {
   const merged = useRef(false);
   const lastInfo = useRef<DocInfo | null>(null);
   const sharingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const goto = useRef(pendingPage(pageParam(params.page)));
 
   useEffect(() => {
     if (params.uri && params.name) lastDoc = { uri: params.uri, name: params.name, append: false };
@@ -120,13 +122,16 @@ export default function EditorScreen() {
       case 'ready':
         void reopenDoc();
         break;
-      case 'documentLoaded':
+      case 'documentLoaded': {
+        const page = goto.current.take(msg);
+        if (page) injectCommand(webRef, { type: 'goto-page', page });
         if (msg.ok) {
           if (msg.name) setDocName(msg.name);
         } else {
           Alert.alert('Could not open PDF', msg.error ?? 'Unknown error', [{ text: 'OK' }, { text: 'Back', onPress: () => router.back() }]);
         }
         break;
+      }
       case 'docInfo':
         lastInfo.current = msg;
         if (activeItem.current && !merged.current) void indexItem(activeItem.current, msg);

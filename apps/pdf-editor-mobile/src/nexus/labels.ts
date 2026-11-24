@@ -1,4 +1,4 @@
-import type { Job } from '@apps-hub/knowledge-core';
+import { AiError, locatorLabel, type Job, type MinutesAction, type MinutesPoint, type Source } from '@apps-hub/knowledge-core';
 import type { ItemKind } from '@apps-hub/library-core';
 import type { Tone } from '@apps-hub/ui';
 
@@ -12,9 +12,11 @@ export function noteTitle(text: string): string {
   return chars.length > MAX_TITLE ? `${chars.slice(0, MAX_TITLE - 1).join('').trimEnd()}…` : chars.join('');
 }
 
-export function captureTitle(kind: 'audio' | 'image', at: Date): string {
+const CAPTURED = { audio: 'Voice note', image: 'Photo', meeting: 'Meeting' };
+
+export function captureTitle(kind: keyof typeof CAPTURED, at: Date): string {
   const time = `${at.getDate()} ${MONTHS[at.getMonth()]} ${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
-  return `${kind === 'audio' ? 'Voice note' : 'Photo'}, ${time}`;
+  return `${CAPTURED[kind]}, ${time}`;
 }
 
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
@@ -40,3 +42,31 @@ export function jobLabel(
   if (job.status === 'queued' && job.error) return { label: job.error, tone: 'warn' };
   return { label: `${WORKING[job.stage as Exclude<Job['stage'], 'done'>](kind)}…`, tone: 'accent' };
 }
+
+const two = (n: number) => String(n).padStart(2, '0');
+
+export function clockTime(sec: number): string {
+  const s = Math.max(0, Math.floor(sec));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return h ? `${h}:${two(m)}:${two(s % 60)}` : `${m}:${two(s % 60)}`;
+}
+
+export function minutesDetail(p: MinutesPoint & Partial<Pick<MinutesAction, 'owner' | 'due'>>): string {
+  return [p.owner, p.due, p.cites.map((c) => clockTime(c.startSec)).join(', ')].filter(Boolean).join(' · ');
+}
+
+export const seekTo = (p: MinutesPoint): number => p.cites[0].startSec;
+
+// The queue's own messages promise a later retry; minutes run only on a tap, so they say what to do instead.
+export function minutesError(err: unknown): string {
+  if (err instanceof AiError && err.kind === 'rate') return 'The AI service is busy for your key. Wait a minute, then try again.';
+  if (err instanceof AiError && err.kind === 'offline') return "Nexus couldn't reach the AI service. Check your connection, then try again.";
+  return err instanceof Error ? err.message : String(err);
+}
+
+/** An item read from another app is named by where it came from ("From Inflow message, 3 Nov"), not by its title. */
+export const citationLabel = (c: Source & { n: number }) => `${c.n} · ${c.origin ?? c.title}${c.locator ? `, ${locatorLabel(c.locator)}` : ''}`;
+
+// A source item's saved text opens with its own label line ("From Inflow message, 3 Nov, from Bank", blank line); the screen shows the label separately.
+export const sourceText = (saved: string): string => saved.replace(/^From [^\n]*\n\n/, '');

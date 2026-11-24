@@ -4,11 +4,23 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { startAskSources } from '../src/nexus/ask-sources';
+import { sweepInboxes } from '../src/nexus/share-inbox';
+import { startShares } from '../src/nexus/today-share';
 import { startWorker } from '../src/nexus/worker';
 import { syncPlaceReminders } from '../src/places/sync';
 
 export default function RootLayout() {
   useEffect(() => startWorker(), []);
+  useEffect(() => startAskSources(), []);
+  useEffect(() => startShares(), []);
+  useEffect(() => {
+    try {
+      sweepInboxes();
+    } catch (err) {
+      console.warn('Could not clear old shares', err);
+    }
+  }, []);
   useEffect(() => {
     syncPlaceReminders().catch((err) => console.warn('Could not sync place reminders', err));
   }, []);
@@ -21,6 +33,8 @@ export default function RootLayout() {
           <Stack.Screen name="folder" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="item" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="settings" options={{ animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="meeting" options={{ animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="share" options={{ animation: 'slide_from_bottom' }} />
           <Stack.Screen name="cv/new" options={{ animation: 'slide_from_bottom' }} />
           <Stack.Screen name="cv/[id]" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="editor" options={{ animation: 'slide_from_right' }} />
@@ -28,6 +42,7 @@ export default function RootLayout() {
           <Stack.Screen name="scan/review" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="scan/[id]" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="scan/page" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="scan/receipt" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="scan-text" options={{ animation: 'slide_from_right' }} />
         </Stack>
       </ThemeProvider>

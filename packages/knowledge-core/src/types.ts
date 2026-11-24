@@ -25,7 +25,12 @@ export interface AiPort {
 }
 
 export interface ContentPort {
-  segments(item: Item): Promise<Segment[]>;
+  /** `check` throws once the item is taken out of Nexus or re-queued; long work (a recording sent in pieces) calls it before each outbound call. */
+  segments(item: Item, check?: () => Promise<void>): Promise<Segment[]>;
+  /** Called after the item's segments are saved, so work kept only to finish them (saved transcript pieces) can go. A failure here is ignored. */
+  saved?(item: Item): Promise<void>;
+  /** Called when the item is kept out of Nexus, so that work (saved transcript pieces) goes too. A failure here is ignored. */
+  withdrawn?(itemId: string): Promise<void>;
 }
 
 export type AiErrorKind = 'auth' | 'offline' | 'rate' | 'server' | 'bad_request' | 'bad_reply';

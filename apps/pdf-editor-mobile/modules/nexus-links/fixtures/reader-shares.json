@@ -1,0 +1,128 @@
+{
+  "inflow.ask_items": {
+    "authority": "com.haroon.inflow.autopilot",
+    "path": "ask_items",
+    "columns": [
+      [
+        "id",
+        "long"
+      ],
+      [
+        "app",
+        "string"
+      ],
+      [
+        "sender",
+        "string?"
+      ],
+      [
+        "text",
+        "string"
+      ],
+      [
+        "at",
+        "long"
+      ]
+    ],
+    "maxRows": 200,
+    "pkg": "com.haroon.inflow",
+    "paged": true,
+    "strict": false
+  },
+  "inflow.ask_ids": {
+    "authority": "com.haroon.inflow.autopilot",
+    "path": "ask_ids",
+    "columns": [
+      [
+        "id",
+        "long"
+      ]
+    ],
+    "maxRows": 200,
+    "pkg": "com.haroon.inflow",
+    "paged": true,
+    "strict": true
+  },
+  "inflow.debits": {
+    "authority": "com.haroon.inflow.autopilot",
+    "path": "debits",
+    "columns": [
+      [
+        "id",
+        "long"
+      ],
+      [
+        "amount_minor",
+        "long"
+      ],
+      [
+        "at",
+        "long"
+      ],
+      [
+        "merchant",
+        "string"
+      ],
+      [
+        "account",
+        "string"
+      ]
+    ],
+    "maxRows": 200,
+    "pkg": "com.haroon.inflow",
+    "paged": true,
+    "strict": false
+  },
+  "deputy.runs": {
+    "authority": "com.haroon.deputy.applink",
+    "path": "runs",
+    "columns": [
+      [
+        "id",
+        "long"
+      ],
+      [
+        "task",
+        "string"
+      ],
+      [
+        "state",
+        "string"
+      ],
+      [
+        "finished_at",
+        "long"
+      ]
+    ],
+    "maxRows": 200,
+    "pkg": "com.haroon.deputy",
+    "paged": false,
+    "strict": true
+  },
+  "clipboard.pinned": {
+    "authority": "com.haroon.clipboard.applink",
+    "path": "pinned",
+    "columns": [
+      [
+        "id",
+        "long"
+      ],
+      [
+        "text",
+        "string"
+      ],
+      [
+        "pinned_at",
+        "long"
+      ],
+      [
+        "from_app",
+        "string"
+      ]
+    ],
+    "maxRows": 200,
+    "pkg": "com.haroon.clipboard",
+    "paged": true,
+    "strict": true
+  }
+}

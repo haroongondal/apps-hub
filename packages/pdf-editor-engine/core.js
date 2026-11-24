@@ -389,7 +389,7 @@ window.pdfEditorShell = function (main) {
     } catch (err) { A.alert('Save failed: ' + err.message); }
   };
 
-  // Native-side command entry for bridge pushes (mobile): open/image/toast.
+  // Native-side command entry for bridge pushes (mobile): open/image/toast/goto-page.
   window.__editorCommand = (type, payload = {}) => {
     if (type === 'open') {
       const bytes = Uint8Array.from(atob(payload.base64), c => c.charCodeAt(0));
@@ -403,6 +403,10 @@ window.pdfEditorShell = function (main) {
       img.decode().then(() => placeImage(target.pg, target.x, target.y, img)).catch(() => A.alert('Could not read that image.'));
     } else if (type === 'toast') {
       A.alert(payload.message);
+    } else if (type === 'goto-page') {
+      const pg = pages[Math.min(Math.max(1, Math.trunc(Number(payload.page)) || 1), pages.length) - 1];
+      // a frame later, so the width-fit pass queued by layout() has scaled the pages first
+      if (pg) requestAnimationFrame(() => pg.slot.scrollIntoView({ block: 'start' }));
     }
   };
 };

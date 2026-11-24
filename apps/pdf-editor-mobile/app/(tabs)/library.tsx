@@ -1,4 +1,5 @@
 import type { Folder, Item, ItemKind, Library } from '@apps-hub/library-core';
+import { sourceLabel } from '@apps-hub/knowledge-core';
 import { Button, confirmAction, Empty, Field, Header, Notice, Progress, RecordMenu, Screen, Segmented, space, type RecordAction } from '@apps-hub/ui';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as Sharing from 'expo-sharing';
@@ -17,6 +18,7 @@ import { itemDir } from '../../src/library/paths';
 import { FolderRow, ItemRow } from '../../src/library/rows';
 import { AddSheet, FolderPickerSheet, NameSheet, TagFilterSheet, TagManageSheet, TagsSheet } from '../../src/library/sheets';
 import { errorMessage, useDebounced, useLibraryData } from '../../src/library/use-library';
+import { refreshTodayShare } from '../../src/nexus/today-share';
 import { keepOut, takeBack } from '../../src/nexus/worker';
 import { discardSession, loadSession } from '../../src/scan/session';
 
@@ -54,6 +56,12 @@ export default function LibraryScreen() {
   useEffect(() => {
     if (tagId !== null && !data.loading && !data.error && !data.tags.some((t) => t.id === tagId)) setTagId(null);
   }, [tagId, data.loading, data.error, data.tags]);
+
+  useEffect(() => {
+    if (!data.gone) return;
+    if (router.canGoBack()) router.back();
+    else router.replace('/library');
+  }, [data.gone]);
 
   useFocusEffect(
     useCallback(() => {
@@ -107,7 +115,9 @@ export default function LibraryScreen() {
 
   const itemActions = (item: Item): RecordAction[] => {
     const keptOut = data.keptOut.has(item.id);
-    return [
+    // A copy of another app's text: a rename would be overwritten and a delete would come back on the next read. It goes when its source is switched off.
+    const copy = data.sources.has(item.id);
+    const actions: RecordAction[] = [
       { label: 'Rename', onPress: () => setSheet({ type: 'renameItem', item }) },
       { label: 'Move to folder', onPress: () => setSheet({ type: 'moveItem', item }) },
       { label: 'Tags', onPress: () => setSheet({ type: 'tags', item }) },
@@ -139,6 +149,7 @@ export default function LibraryScreen() {
           void guard('Could not delete it', async () => {
             await (await openLibrary()).deleteItem(item.id);
             await syncPlaceReminders();
+            await refreshTodayShare();
             try {
               itemDir(item.id).delete();
             } catch {
@@ -147,6 +158,7 @@ export default function LibraryScreen() {
           }),
       },
     ];
+    return copy ? actions.filter((a) => a.label !== 'Rename' && a.label !== 'Delete') : actions;
   };
 
   const folderActions = (target: Folder): RecordAction[] => [
@@ -276,6 +288,7 @@ export default function LibraryScreen() {
               item={row.item}
               snippet={row.snippet}
               where={row.where}
+              origin={data.sources.has(row.item.id) ? sourceLabel(data.sources.get(row.item.id)!) : null}
               onOpen={() => void guard('Could not open it', async () => void (await openItem(row.item)))}
               actions={itemActions(row.item)}
             />
@@ -310,7 +323,12 @@ export default function LibraryScreen() {
           title="Rename"
           label="Title"
           initial={sheet.item.title}
-          onSubmit={(name) => write((lib) => lib.updateItem(sheet.item.id, { title: name }))}
+          onSubmit={(name) =>
+            write(async (lib) => {
+              await lib.updateItem(sheet.item.id, { title: name });
+              await refreshTodayShare();
+            })
+          }
           onClose={close}
         />
       )}

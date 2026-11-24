@@ -57,7 +57,7 @@ test('answer numbers the sources from 1 and passes reasoning effort only when se
   const { sent, fetch } = stub(200, { choices: [{ message: { content: 'It is [1].' } }] });
   assert.equal(await openAiCompatPort({ apiKey: 'k', baseUrl: BASE, chatModel: 'm', reasoningEffort: 'low', fetch }).answer('Why?', ['A: x']), 'It is [1].');
   const body = sent[0].body as { messages: { content: string }[]; reasoning_effort?: string };
-  assert.equal(body.messages[1].content, '[1] A: x\n\nQuestion: Why?');
+  assert.equal(body.messages[1].content, '<<<SOURCES>>>\n[1] A: x\n<<<END SOURCES>>>\n\nQuestion: Why?');
   assert.equal(body.reasoning_effort, 'low');
 
   await openAiCompatPort({ apiKey: 'k', baseUrl: BASE, chatModel: 'm', fetch }).answer('Why?', []);

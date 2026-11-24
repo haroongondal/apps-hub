@@ -6,7 +6,7 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
-    "test": "node --test src/__tests__/chunk.test.ts src/__tests__/extraction.test.ts src/__tests__/pipeline.test.ts src/__tests__/resolve.test.ts src/__tests__/ask.test.ts src/__tests__/exclude.test.ts src/__tests__/openai.test.ts src/__tests__/providers.test.ts",
+    "test": "node --test src/__tests__/chunk.test.ts src/__tests__/extraction.test.ts src/__tests__/pipeline.test.ts src/__tests__/resolve.test.ts src/__tests__/ask.test.ts src/__tests__/exclude.test.ts src/__tests__/openai.test.ts src/__tests__/providers.test.ts src/__tests__/audio-chunks.test.ts src/__tests__/long-recordings.test.ts src/__tests__/minutes.test.ts src/__tests__/minutes-search.test.ts src/__tests__/sources.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

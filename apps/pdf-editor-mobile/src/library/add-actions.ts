@@ -65,6 +65,5 @@ export const addActions: AddAction[] = [
   { key: 'scan-text', label: 'Scan text', icon: 'camera-outline', run: () => router.push('/scan-text') },
   { key: 'import-photos', label: 'Import photos', icon: 'images-outline', run: importPhotos },
   { key: 'open-pdf', label: 'Open a PDF', icon: 'document-outline', run: openPdf },
-  { key: 'scan-text', label: 'Scan text', icon: 'camera-outline', run: () => router.push('/scan-text') },
   { key: 'new-folder', label: 'New folder', icon: 'folder-open-outline', run: (ctx) => ctx.newFolder() },
 ];

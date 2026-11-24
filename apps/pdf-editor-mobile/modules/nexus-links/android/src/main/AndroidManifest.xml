@@ -1,0 +1,18 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <permission android:name="com.haroon.permission.AUTOPILOT" android:protectionLevel="signature" />
+  <uses-permission android:name="com.haroon.permission.AUTOPILOT" />
+  <application>
+    <!-- Read-only shares (health, today) for signed sibling apps; the code checks the caller again. -->
+    <provider
+      android:name="expo.modules.nexuslinks.android.NexusLinkProvider"
+      android:authorities="com.haroon.pdfeditor.applink"
+      android:exported="true"
+      android:readPermission="com.haroon.permission.AUTOPILOT"
+      android:writePermission="com.haroon.permission.AUTOPILOT" />
+  </application>
+  <queries>
+    <package android:name="com.haroon.inflow" />
+    <package android:name="com.haroon.deputy" />
+    <package android:name="com.haroon.clipboard" />
+  </queries>
+</manifest>

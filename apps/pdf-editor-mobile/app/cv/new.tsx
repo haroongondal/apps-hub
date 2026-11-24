@@ -9,7 +9,7 @@ import { generateBody } from '../../src/cv/generate';
 import { type TemplateId } from '../../src/cv/model';
 import { newCv, saveCv } from '../../src/cv/store';
 import { TEMPLATE_LIST, TEMPLATES } from '../../src/cv/templates';
-import { ai, hasKeys } from '../../src/nexus/ai';
+import { ai, aiReady } from '../../src/nexus/ai';
 
 export default function NewCvScreen() {
   const [profile, setProfile] = useState('');
@@ -20,7 +20,7 @@ export default function NewCvScreen() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    void hasKeys().then(setKeys);
+    void aiReady().then(setKeys);
   }, []);
 
   const create = async () => {
@@ -43,7 +43,7 @@ export default function NewCvScreen() {
       <Header title="New CV" trailing={<IconButton icon="close" label="Close" onPress={() => router.back()} />} />
       {keys === false ? (
         <Notice tone="accent" title="AI is off" action={<Button label="Add your keys" size="sm" onPress={() => router.push('/settings')} />}>
-          Nexus writes CVs with your Gemini and Groq keys. Add them in AI settings first.
+          Nexus writes CVs with your Gemini and Groq keys or through AI hub. Add your keys in AI settings, or turn on Nexus in AI hub.
         </Notice>
       ) : null}
       <View style={{ gap: space.md }}>
