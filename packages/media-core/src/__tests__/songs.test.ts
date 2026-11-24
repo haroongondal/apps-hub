@@ -21,7 +21,10 @@ test('songs: an empty search lists the most downloaded songs', () => {
   const params = new URLSearchParams(songSearchUrl('  ', 'tok', 1).split('?')[1]);
   assert.equal(params.get('query'), 'music');
   assert.equal(params.get('sort'), 'downloads_desc');
-  assert.equal(new URLSearchParams(songSearchUrl('calm', 'tok', 1).split('?')[1]).get('sort'), null);
+  assert.equal(params.get('filter'), 'license:"Creative Commons 0" duration:[15 TO 600] tag:music');
+  const typed = new URLSearchParams(songSearchUrl('calm', 'tok', 1).split('?')[1]);
+  assert.equal(typed.get('sort'), null);
+  assert.ok(!typed.get('filter')?.includes('tag:music'));
 });
 
 test('songs: a page keeps only CC0 sounds with an https MP3 preview, and says whether more pages follow', () => {

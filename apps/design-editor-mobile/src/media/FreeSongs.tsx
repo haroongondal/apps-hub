@@ -20,6 +20,7 @@ export function FreeSongs({ onPick }: { onPick: (song: PickedSong) => Promise<vo
   const [hasMore, setHasMore] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [adding, setAdding] = useState<number | null>(null);
 
   useEffect(() => { loadToken().then(setToken, () => setToken('')); }, []);
 
@@ -46,7 +47,10 @@ export function FreeSongs({ onPick }: { onPick: (song: PickedSong) => Promise<vo
   // With a key saved, open on the most popular songs instead of an empty list.
   useEffect(() => { if (token) search(1); }, [token]);
 
-  const add = (hit: SongHit) => run(async () => onPick(await downloadSong(hit)));
+  const add = (hit: SongHit) => run(async () => {
+    setAdding(hit.id);
+    try { await onPick(await downloadSong(hit)); } finally { setAdding(null); }
+  });
 
   if (token === null) return null;
   if (!token) {
@@ -69,7 +73,7 @@ export function FreeSongs({ onPick }: { onPick: (song: PickedSong) => Promise<vo
         <Row
           key={hit.id}
           title={hit.name}
-          subtitle={timeText(hit.durationS)}
+          subtitle={adding === hit.id ? 'Getting this song. This can take a moment.' : timeText(hit.durationS)}
           trailing={<Button label="Add" variant="secondary" size="sm" busy={busy} onPress={() => add(hit)} accessibilityHint="Adds this song at the line" />}
         />
       ))}
