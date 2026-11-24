@@ -58,6 +58,7 @@ interface DropRecorder {
 function recordDrop(deps: DropRecorder, work: QueueWork, disposition: QueueDisposition, message: string): void {
   const status = DROP_STATUS[disposition]
   if (!status || work.kind === 'lease') return
+  if (work.kind === 'routine' && work.dryRun) return
 
   try {
     deps.runs.record(
@@ -221,6 +222,7 @@ if (!app.requestSingleInstanceLock()) {
       sites,
       accept: (work) => db.transaction(work)(),
       updatesDir,
+      dryRunsDir: path.join(app.getPath('userData'), 'dry-runs'),
       automation,
       queue,
       control,

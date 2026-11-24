@@ -78,6 +78,9 @@ describe('labelling queued work', () => {
     const names = new Map([['known', 'Weekly invoice pull']])
     expect(workLabel({ kind: 'routine', target: { kind: 'user', id: 'known' } }, names)).toBe('Weekly invoice pull')
     expect(workLabel({ kind: 'routine', target: { kind: 'user', id: 'gone' } }, names)).toBe('gone')
+    expect(workLabel({ kind: 'routine', target: { kind: 'user', id: 'known' }, dryRun: true }, names)).toBe(
+      'Weekly invoice pull — dry run'
+    )
     expect(workLabel({ kind: 'chat', input: { sessionId: 's', goal: 'find a flight' } }, names)).toBe('find a flight')
     expect(workLabel({ kind: 'lease', label: 'debug session' }, names)).toBe('debug session')
   })

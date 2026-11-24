@@ -16,10 +16,13 @@ object ShareImages {
     val context = appContext.reactContext ?: throw IllegalStateException("the app isn't running")
     val roots = listOf(context.cacheDir, context.filesDir).map { it.canonicalPath + File.separator }
     val authority = "${context.packageName}.pdfscan.fileprovider"
-    val uris = paths.map { p ->
+    // The provider serves only this folder (pdfscan_paths.xml), so it can never hand out the library or the database.
+    val out = File(context.cacheDir, "pdfscan-share").apply { deleteRecursively(); mkdirs() }
+    val uris = paths.mapIndexed { i, p ->
       val file = existingFile(p).canonicalFile
       if (roots.none { file.path.startsWith(it) }) throw CodedException("not_found", "${file.name} isn't in this app's storage.", null)
-      FileProvider.getUriForFile(context, authority, file)
+      // numbered, so two pages with the same file name are both shared
+      FileProvider.getUriForFile(context, authority, file.copyTo(File(out, "${i + 1}-${file.name}"), overwrite = true))
     }
     val send = if (uris.size == 1) {
       Intent(Intent.ACTION_SEND).putExtra(Intent.EXTRA_STREAM, uris[0])

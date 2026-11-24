@@ -14,7 +14,17 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 
-data class RunSummary(val runId: String, val task: String, val startedAt: Long, val status: String, val summary: String?, val costUsd: Double, val steps: Int)
+data class RunSummary(
+  val runId: String,
+  val task: String,
+  val startedAt: Long,
+  val status: String,
+  val summary: String?,
+  val costUsd: Double,
+  val steps: Int,
+  val trigger: String? = null,
+  val endedAt: Long? = null,
+)
 
 /** SPEC §12: one JSONL file per run, plus a marker that turns a run cut off by process death into `interrupted` (NFR-4). */
 class RunStore(root: File, private val now: () -> Long, zone: ZoneId = ZoneId.systemDefault()) {
@@ -86,6 +96,7 @@ class RunStore(root: File, private val now: () -> Long, zone: ZoneId = ZoneId.sy
       RunSummary(
         head.str("runId")!!, head.str("task")!!, (head["at"] as JsonPrimitive).longOrNull!!,
         end?.str("status") ?: if (f == current) "running" else "interrupted", end?.str("summary"), lines.last().cost(), lines.count { it.str("type") == "step" },
+        head.str("trigger"), (end?.get("at") as? JsonPrimitive)?.longOrNull,
       )
     }.getOrNull()
   }

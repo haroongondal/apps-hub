@@ -27,6 +27,7 @@ export function HomeScreen({
   onOpenMoney,
   onOpenApps,
   onOpenTodos,
+  onOpenHealth,
 }: {
   status: Status;
   refreshStatus: () => void;
@@ -35,6 +36,7 @@ export function HomeScreen({
   onOpenMoney: () => void;
   onOpenApps: () => void;
   onOpenTodos: () => void;
+  onOpenHealth: () => void;
 }) {
   const [summary, setSummary] = useState<HomeSummary | null>(null);
   const [money, setMoney] = useState<MoneySummary | null>(null);
@@ -53,7 +55,7 @@ export function HomeScreen({
       setError(LOAD_ERROR);
     }
   }, []);
-  const { run, skip, message } = useSuggestionActions(loadWaiting);
+  const { run, skip, pay, message } = useSuggestionActions(loadWaiting);
 
   const load = useCallback(() => {
     try {
@@ -174,7 +176,7 @@ export function HomeScreen({
       {count > 0 && (
         <Group title="Waiting" footer={headline}>
           {waiting.slice(0, WAITING_SHOWN).map((r) => (
-            <SuggestionRowItem key={r.id} row={r} now={now} onRun={run} onSkip={skip} />
+            <SuggestionRowItem key={r.id} row={r} now={now} onRun={run} onSkip={skip} onPay={pay} />
           ))}
           <Row title="See all" onPress={() => setShowSuggestions(true)} />
         </Group>
@@ -277,6 +279,9 @@ export function HomeScreen({
           <Row title="See all" onPress={() => onOpen({ kind: 'all' }, 'Everything')} />
         </Group>
       )}
+      <Group title="Health">
+        <Row title="Health" subtitle="Steps, sleep and heart rate" onPress={onOpenHealth} />
+      </Group>
       {summary !== null && summary.hasItems && (
         <Group title="All apps">
           <Row title="See every app" onPress={onOpenApps} />

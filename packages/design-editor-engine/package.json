@@ -4,5 +4,5 @@
   "private": true,
   "description": "The Design Editor page (Fabric.js canvas, multi-page designs, bundled fonts) shared by the Mac app and the Android WebView",
   "files": ["desktop.html", "app.js", "copy.js", "ai-layout.js", "image-maths.js", "selection.js", "vendor"],
-  "scripts": { "test": "node --test test/ai-layout.test.js test/image-maths.test.mjs test/selection.test.mjs" }
+  "scripts": { "test": "node --test test/ai-layout.test.js test/image-maths.test.mjs test/palette.test.mjs test/selection.test.mjs" }
 }

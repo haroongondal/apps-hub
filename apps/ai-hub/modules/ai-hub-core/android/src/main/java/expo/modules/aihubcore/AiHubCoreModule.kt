@@ -4,8 +4,10 @@ import android.content.pm.PackageManager
 import expo.modules.aihubcore.android.HubStore
 import expo.modules.aihubcore.android.KeyVault
 import expo.modules.aihubcore.core.ApiVersion
+import expo.modules.aihubcore.core.CallLog
 import expo.modules.aihubcore.core.CallerPolicy
 import expo.modules.aihubcore.core.Job
+import expo.modules.aihubcore.core.PendingApps
 import expo.modules.aihubcore.core.Service
 import expo.modules.aihubcore.core.Settings
 import expo.modules.aihubcore.core.Usage
@@ -42,6 +44,9 @@ class AiHubCoreModule : Module() {
 
     AsyncFunction("apps") { apps() }
     AsyncFunction("setAppEnabled") { packageName: String, enabled: Boolean -> setAppEnabled(packageName, enabled) }
+
+    AsyncFunction("calls") { calls() }
+    AsyncFunction("clearCalls") { store.put("call_log", CallLog.toJson(emptyList())) }
   }
 
   private fun keys(): List<Map<String, Any>> = vault.list().mapIndexed { index, key ->
@@ -83,13 +88,15 @@ class AiHubCoreModule : Module() {
   private fun apps(): List<Map<String, Any>> {
     val usage = Usage.fromJson(store.get("usage")).apps
     val switches = switches()
-    val packages = (usage.keys + switches.keys).filter { it != context.packageName }.sorted()
+    val pending = PendingApps.parse(store.get("pending")).associate { it.pkg to it.lastMs }
+    val packages = (usage.keys + switches.keys + pending.keys).filter { it != context.packageName }.sorted()
     return packages.map { pkg ->
       val counts = usage[pkg].orEmpty().values
       mapOf(
         "packageName" to pkg,
         "label" to labelFor(pkg),
-        "enabled" to (pkg != CallerPolicy.STRONGROOM && switches[pkg] != false),
+        "enabled" to (pkg != CallerPolicy.STRONGROOM && switches[pkg] == true),
+        "pending" to (pkg in pending && pkg !in switches),
         "calls" to counts.sumOf { it.calls },
         "inputTokens" to counts.sumOf { it.inputTokens },
         "outputTokens" to counts.sumOf { it.outputTokens },
@@ -109,6 +116,23 @@ class AiHubCoreModule : Module() {
         put(packageName, enabled)
       }
       store.put("app_switches", next.toString())
+    }
+    store.update("pending") { PendingApps.toJson(PendingApps.remove(PendingApps.parse(it), packageName)) }
+  }
+
+  private fun calls(): List<Map<String, Any>> {
+    val labels = HashMap<String, String>()
+    return CallLog.parse(store.get("call_log")).map { c ->
+      buildMap {
+        put("packageName", c.pkg)
+        put("label", labels.getOrPut(c.pkg) { labelFor(c.pkg) })
+        put("job", c.job)
+        put("service", c.service)
+        put("time", c.timeMs)
+        c.error?.let { put("error", it) }
+        c.httpCode?.let { put("code", it) }
+        if (c.fellBack) put("fellBack", true)
+      }
     }
   }
 

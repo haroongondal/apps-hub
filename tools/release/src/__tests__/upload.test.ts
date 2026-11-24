@@ -1,29 +1,29 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { makeUploader } from '../upload.ts';
+import { makeUploader, type Send } from '../upload.ts';
 
 function fakeStore() {
   const calls: string[] = [];
   const parts = new Map<number, Uint8Array>();
   const done: Uint8Array[] = [];
-  const send = (async (input: string, init: RequestInit) => {
+  const send: Send = async (method, input, headers, body) => {
     const url = new URL(input);
-    calls.push(`${init.method} ${url.pathname}${url.search}`);
-    assert.equal((init.headers as Record<string, string>).authorization, 'Bearer tok');
-    if (url.searchParams.has('uploads')) return Response.json({ uploadId: 'u1' });
+    calls.push(`${method} ${url.pathname}${url.search}`);
+    assert.equal(headers.authorization, 'Bearer tok');
+    if (url.searchParams.has('uploads')) return { status: 200, text: JSON.stringify({ uploadId: 'u1' }) };
     if (url.searchParams.has('part')) {
       const n = Number(url.searchParams.get('part'));
-      parts.set(n, init.body as Uint8Array);
-      return Response.json({ partNumber: n, etag: `e${n}` });
+      parts.set(n, body);
+      return { status: 200, text: JSON.stringify({ partNumber: n, etag: `e${n}` }) };
     }
     if (url.searchParams.has('uploadId')) {
-      const { parts: list } = JSON.parse(init.body as string) as { parts: { partNumber: number }[] };
+      const { parts: list } = JSON.parse(body.toString()) as { parts: { partNumber: number }[] };
       for (const p of list) done.push(parts.get(p.partNumber)!);
-      return new Response(null, { status: 204 });
+      return { status: 204, text: '' };
     }
-    done.push(init.body as Uint8Array);
-    return new Response(null, { status: 204 });
-  }) as unknown as typeof fetch;
+    done.push(body);
+    return { status: 204, text: '' };
+  };
   return { calls, done, send };
 }
 
@@ -49,6 +49,6 @@ test('a bigger file goes up in equal parts and arrives whole', async () => {
 });
 
 test('a refused request says which one', async () => {
-  const send = (async () => new Response('nope', { status: 413 })) as unknown as typeof fetch;
+  const send: Send = async () => ({ status: 413, text: 'nope' });
   await assert.rejects(makeUploader('https://s.example', 'tok', send, 8)('k.apk', 'x', 'a/b'), /PUT k\.apk: 413 nope/);
 });

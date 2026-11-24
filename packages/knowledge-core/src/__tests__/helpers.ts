@@ -6,7 +6,7 @@ import { Knowledge } from '../knowledge.ts';
 import type { AiPort, ContentPort, Segment } from '../types.ts';
 
 // Copied from library-core's test driver (test helpers aren't exported across packages).
-function nodeRawSql(): RawSql {
+export function nodeRawSql(): RawSql {
   const db = new DatabaseSync(':memory:');
   db.exec('PRAGMA foreign_keys = ON');
   const plain = (row: unknown): Row => ({ ...(row as Row) });

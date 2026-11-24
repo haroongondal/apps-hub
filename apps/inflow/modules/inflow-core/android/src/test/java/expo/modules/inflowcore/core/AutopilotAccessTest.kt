@@ -1,5 +1,6 @@
 package expo.modules.inflowcore.core
 
+import expo.modules.inflowcore.applink.SiblingPackages
 import java.io.File
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -20,6 +21,14 @@ class AutopilotAccessTest {
   }
 
   @Test fun theConstantsEqualTheSharedFixture() = assertEquals(fixturePackages(), AutopilotAccess.NEVER_SHARE)
+
+  @Test fun onlyAUidHoldingDeputyAloneMayReadAnItem() {
+    assertEquals("com.haroon.deputy", SiblingPackages.DEPUTY)
+    assertTrue(AutopilotAccess.callerIsDeputy(arrayOf("com.haroon.deputy")))
+    for (other in listOf(null, emptyArray(), arrayOf(SiblingPackages.HALO), arrayOf(SiblingPackages.NEXUS), arrayOf(SiblingPackages.INFLOW), arrayOf(SiblingPackages.DEPUTY, SiblingPackages.HALO), arrayOf(SiblingPackages.HALO, SiblingPackages.DEPUTY), arrayOf("com.haroon.deputy.debug"))) {
+      assertFalse(other?.toList().toString(), AutopilotAccess.callerIsDeputy(other))
+    }
+  }
 
   @Test fun neverSharePackagesNeverCross() {
     for (pkg in fixturePackages()) {

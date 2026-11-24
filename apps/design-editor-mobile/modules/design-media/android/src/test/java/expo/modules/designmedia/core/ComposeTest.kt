@@ -44,6 +44,29 @@ class ComposeTest {
   }
 
   @Test
+  fun aReelIsPhotosShownForTheirSecondsWithTheSongUnder() {
+    val reel = decodeSamples().getValue("composeReel") as ComposePlan
+    assertEquals(
+      listOf(
+        ComposeClip("content://media/external/images/media/7", "Photo 1", 0.0, 3.0, false, 1.0, still = true),
+        ComposeClip("content://media/external/images/media/9", "Photo 2", 0.0, 3.0, false, 1.0, still = true),
+      ),
+      reel.clips,
+    )
+    assertEquals(reel, decodePlan(encodePlan(reel)))
+    assertFalse(encodePlan(plan).toString().contains("still"))
+    assertEquals(
+      listOf(ItemSpec("content://media/external/images/media/7", 0, 3_000_000, false, 1f, true), ItemSpec("content://media/external/images/media/9", 0, 3_000_000, false, 1f, true)),
+      composeItems(reel),
+    )
+    assertEquals(6_000L, durationMs(reel))
+    assertTrue(forceAudio(reel))
+    val still = ComposeBuilder.still(composeItems(reel)[0], MediaItem.Builder().build(), reel.fps, emptyList())
+    assertEquals(3_000_000L, still.presentationDurationUs)
+    assertEquals(30, still.frameRate)
+  }
+
+  @Test
   fun eachItemKnowsItsLengthSoThePreviewPlayerAcceptsIt() {
     val spec = ItemSpec("content://media/a", 2_000_000, 10_000_000, true)
     val media = MediaItem.Builder().setClippingConfiguration(ComposeBuilder.clipping(spec.startUs, spec.endUs)).build()

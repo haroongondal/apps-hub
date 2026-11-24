@@ -1,4 +1,4 @@
-export type LibraryErrorCode = 'not_found' | 'invalid_name' | 'duplicate_name' | 'cycle' | 'too_new' | 'invalid_place';
+export type LibraryErrorCode = 'not_found' | 'invalid_name' | 'duplicate_name' | 'cycle' | 'too_new' | 'invalid_place' | 'invalid_source' | 'invalid_date';
 
 export class LibraryError extends Error {
   code: LibraryErrorCode;

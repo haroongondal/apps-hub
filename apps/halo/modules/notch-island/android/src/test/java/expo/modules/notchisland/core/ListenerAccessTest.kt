@@ -17,4 +17,15 @@ class ListenerAccessTest {
     assertFalse(listenerEnabled(null, notch))
     assertFalse(listenerEnabled("", notch))
   }
+
+  @Test fun service_enabled_full_or_short_form_only() {
+    val pkg = "com.haroon.halo"
+    val cls = "expo.modules.notchisland.android.NotchAccessibilityService"
+    assertTrue(serviceEnabled("com.other/x.Y:$pkg/$cls", pkg, cls))
+    assertFalse(serviceEnabled("$pkg/${cls}X", pkg, cls))
+    assertFalse(serviceEnabled("com.haroon.halo2/$cls", pkg, cls))
+    assertFalse(serviceEnabled(null, pkg, cls))
+    assertTrue(serviceEnabled("$pkg/.svc.A", pkg, "$pkg.svc.A"))
+    assertTrue(serviceEnabled("$pkg/$pkg.svc.A", pkg, "$pkg.svc.A"))
+  }
 }

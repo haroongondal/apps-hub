@@ -88,6 +88,62 @@ Continue from "Current state + exact next step".
 
 ## Current state + exact next step
 
-All five phases are built and reviewed; branch HEAD `907804f5`; draft PR #47 (https://github.com/haroongondal/apps-hub/pull/47) is not yet updated for Phase 5. Nothing has run on a phone and the iOS build is not done.
-Next: the main session pushes, updates PR #47's body (what is verified, what is not: no phone test, iOS build not run, iOS Wake likely needs the multicast entitlement, open Minors above) and asks the owner for the go. The owner (or an approved session) runs `pod install --no-repo-update` in `apps/netlens/ios`, then `xcodebuild -workspace NetLens.xcworkspace -scheme NetLens -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -configuration Debug build CODE_SIGNING_ALLOWED=NO`.
-On the owner's go: merge with `[skip ci]`, run `pnpm release` locally, install via the Store on the phone through coord (claim `device:<ro.serialno>`), then check each feature at home, including Review Focus 5 with TunnelWall connected.
+All five phases are built and reviewed; branch HEAD `907804f5`; PR #47 (https://github.com/haroongondal/apps-hub/pull/47) was merged to main as e5264f05, "HomeNet 0.2.0: router, device remotes, who's home, wake PC, guest Wi-Fi" (`[skip ci]`; `apps/netlens` is at 0.2.0). Nothing has run on a phone and the iOS build is not done.
+Next: the owner (or an approved session) runs `pod install --no-repo-update` in `apps/netlens/ios`, then `xcodebuild -workspace NetLens.xcworkspace -scheme NetLens -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -configuration Debug build CODE_SIGNING_ALLOWED=NO`. Still true: no phone test, iOS build not run, iOS Wake likely needs the multicast entitlement, open Minors above.
+Then, if the release has not shipped yet (check the Store manifest): run `pnpm release netlens` locally on the owner's go, install via the Store on the phone through coord (claim `device:<ro.serialno>`), then check each feature at home, including Review Focus 5 with TunnelWall connected.
+
+## Background checks and shares (C4, ecosystem wave, 2026-11-23)
+
+Branch `eco/homenet` (worktree `~/Documents/apps-hub-wt/eco-homenet`), built on `eco/base` (E1 app-link contract). Not merged, not released, nothing run on a phone.
+
+What was added:
+
+- **Who's home in the background** (Android only). A WorkManager periodic job (`WhoIsHomeWorker`, 15 minutes, battery not low) probes only the last known addresses of tagged people (at most 4 per person, 16 people), on the default ports with a 350 ms timeout, through `TcpSweepEngine` (Semaphore 64). Open or refused (RST) counts as an answer. Present/away uses `nextPresence` (`packages/core/src/presence.ts`, Kotlin twin `Presence.next`): present on one answer, away after 3 misses in a row. No subnet sweep.
+- **New device joined** (Android only). `NewDeviceWorker` sweeps the /24 around the phone (same engine, 350 ms, Semaphore 64, TCP only: no mDNS or SSDP, so no multicast lock is needed) every 3, 6 (default), 12 or 24 hours. Rule `findNewDevices` (`new-devices.ts`, Kotlin `NewDevices.find`): an answering address is new unless it is this phone, the router, a saved device seen there in the last 30 days, a tagged or trusted device (any age), or a device reported or marked "This is mine" in the last 30 days (counted from when it was first reported; after that whatever holds the address is reported again). One notification per new device (at most 5 per run) with a "This is mine" action; tapping opens `netlens://devices`. The notification names the device guess, never its address, and is private on the lock screen (public version "New device on your Wi-Fi").
+- Both run only while the phone is on a Wi-Fi network (not VPN, not mobile data) whose default gateway is the saved home gateway AND whose router still answers with the UPnP device ID (first UDN of its description) pinned when home was saved (`HomeWatch.homeLan` fetches the saved description URL on the gateway; `HomeRouter.matches`). Both are off by default; the home network is the scanned network when the first switch is turned on, and a router that gives no ID cannot be saved as home (fail closed, my call: the address alone, such as 192.168.1.1, is on many Wi-Fis), and native keeps a snapshot of the device list that the app refreshes after each scan there, only after the router answered with the pinned ID (`useHomeWatch`, `readHomeRouter`; this also re-pins the description URL if the router moved it to a new port).
+- **Shares** (E1): `content://com.haroon.netlens.applink/who_is_home` (person, present, last_seen_at) and `/new_devices` (first_seen_at, label, acknowledged), declared in `packages/core/src/home-shares.ts`, served by `HomeLinkProvider` behind `com.haroon.permission.AUTOPILOT` and `AppLinkCaller`. Empty unless "Share with my other Haroon apps" is on (off by default) and the matching check is on. No address, MAC, hostname, port or scan detail is served.
+- **Bonjour names for matching**: the scan keeps the cleaned instance names each address announces (up to 8, from the service types discovery already browses). `personTagCarries` adds two signals after the old same-name match, each used only when the one before matched nothing: an announced name equal to the old row's name, and a name whose owner word (`ownerOfName`, "Haroon's iPhone") equals the person's tag. The owner-word match only suggests (`personTagSuggestions`): it may be the person's laptop or a guest's phone, so the Home tab asks "Is it Haroon's?" and moves the tag only on "Yes". The Home tab shows the reason of a move ("Matched: Same name on the network, …").
+- iOS: `getHomeWatch`, `setHomeWatch`, `syncHomeWatch`, `markDeviceMine` answer `{ supported: false }`; the Home tab says the checks are Android only.
+
+Decisions:
+
+- Away after 3 misses (about 45 minutes) (my call): one or two missed checks are normal for a sleeping phone.
+- "New" means not seen at that address in 30 days (my call). The background pass has only TCP answers, so it keys on the address; every saved row (USN, hostname or IP identity) is known at its last address. Known limit: a known phone that comes back with a new private MAC and a new address is reported once; "This is mine" stops it.
+- Native owns settings and background state (SharedPreferences, `HomeWatchStore`), because WorkManager runs without JS (my call). The app's SQLite store is not read by native.
+- Turning every check off clears the home network and the background state (my call).
+- Sharing off by default, and a share serves rows only while its check is on (my call).
+- Shares live in `packages/core` with fixtures there, because `apps/netlens` has no `test` script; `home-shares.ts` is not exported from the core index so Metro never loads `@apps-hub/app-link-contract`.
+- The gateway match is the only home test (a different Wi-Fi with the same router address counts as home); SSID/BSSID would need location permission.
+
+Verified (2026-11-23): `@apps-hub/core` 349/349, core and netlens typecheck clean, `@apps-hub/app-link-contract` 91/91 (copies test covers the netlens copies), Gradle `:netlens-core:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL with 58 JVM tests (HomeRulesTest 8, HomeLinkProviderShareTest 3, HomeWatchStoreTest 5, AppLinkGuardTest 16, TcpProbeClassifierTest 5 and the rest), no gms/firebase on `releaseRuntimeClasspath`. iOS build not run (no Pods in the worktree); `swiftc -parse` of the module file passes.
+
+Phone checks (not run): see the C4 report; they need two Store-signed apps for the share and a second phone or laptop to join the Wi-Fi.
+
+## Halo ping, health row and Restart with Deputy (P4, ecosystem wave 3, 2026-11-24)
+
+Same branch `eco/homenet`, on top of C4. Not merged, not released, nothing run on a phone.
+
+What was added:
+
+- **CHANGED ping to Halo** (Android). After a background new-device check finds at least one new device, and after a who's-home change (someone arrived or left, from the 15-minute check or from a scan the app hands native), HomeNet sends `com.haroon.autopilot.CHANGED` to `com.haroon.halo` only, with `sendBroadcast(intent, "com.haroon.permission.AUTOPILOT")` and no extras, so Halo re-reads the `new_devices` and `who_is_home` shares through their guard. Rule `ChangedPing.due` (`HomeRules.kt`, `ChangedPingTest`): nothing while "Share with my other Haroon apps" is off; a new device pings when the new-device check is on; a presence change pings when the who's-home check is on, at most once a minute (`lastPingAt` in the same SharedPreferences, claimed under the store lock).
+- **Health row**: `content://com.haroon.netlens.applink/health` from `appHealthShare('netlens')`: `app_id` netlens, `accessibility` null, `listener` null, `ai_source` none, `last_seen_at` the heartbeat. The heartbeat is written when the native module is created (the app opened) and at the start of each background check; a query only reads it. Served to same-signed callers whatever the share switch says (not personal). `HomeLinkProviderShareTest` binds it to `packages/app-link-contract/fixtures/app-health.share.json`.
+- **Restart the router with Deputy** (Android; the button is hidden on iOS). A button on the Router tab (shown once the router lookup ends, in every state) calls the new native `proposeDeputyTask(task, context)`, which calls `startActivityForResult` on the current Activity with `com.haroon.deputy.action.PROPOSE_TASK`, package `com.haroon.deputy`, so Deputy's `AppLinkActivityCaller` check sees HomeNet. Extras: `task` only, the fixed text `ROUTER_RESTART_TASK` (`packages/core/src/deputy-proposal.ts`); Kotlin re-validates with `AppLinkGuard.validateExtras` against `DeputyProposal.SPEC` (bound to `propose-task-extras.json` by `DeputyProposalTest`). Outcomes `handed_over`, `cancelled`, `not_installed`, `refused`, `invalid`, `busy`, iOS `{ supported: false }`; each but cancelled shows a plain sentence. Deputy only opens a draft; the owner starts it there, behind Deputy's own gate.
+
+Decisions:
+
+- `context` is empty (my call). The only router brand and model HomeNet has come from the router's UPnP description, which is text the router (or whoever set it up) wrote, so it is not HomeNet's own words.
+- `apps` and `ref` are never sent (my call): the owner picks the router app in Deputy's draft; guessing a package would be wrong for most homes.
+- New-device pings are not rate-limited (my call): the check runs every 3 hours at most. A new-device ping also resets the one-minute presence window.
+- One pending hand-off at a time (my call): a second tap while Deputy is open answers `busy`. The promise settles once through an `AtomicReference`, and `OnDestroy` settles it as `cancelled`.
+- `<queries>` for `com.haroon.deputy` and `com.haroon.halo` (replaces the earlier "no entry" call): `AppLinkTarget` needs package visibility to resolve and check the sibling, so without them every check answers "not installed".
+- The heartbeat lives next to the home-watch state in `homenet_home_watch` SharedPreferences (my call), not in the JSON state, so a query never parses the state for it.
+
+Known limits: Halo receives the ping only once its manifest holds `<uses-permission android:name="com.haroon.permission.AUTOPILOT" />` and declares the receiver (Halo's side, not built here). The heartbeat is written only if the React context exists when the module is created; the background checks write it too.
+
+Verified (2026-11-24): `@apps-hub/core` 358/358, core and netlens typecheck clean, `@apps-hub/app-link-contract` 133/133, Gradle `:netlens-core:testDebugUnitTest :app:assembleDebug` BUILD SUCCESSFUL with 71 JVM tests (ChangedPingTest 5, DeputyProposalTest 6, HomeLinkProviderShareTest 5, TcpProbeClassifierTest 5 and the rest), merged manifest has the provider behind the signature permission. iOS build not run (no Pods); `swiftc -parse` of the module passes; Kotlin and Swift register the same 14 functions.
+
+Phone checks (not run): see the P4 report.
+
+## AppLinkTarget (2026-11-24)
+
+`applink/AppLinkTarget.kt` (+ `AppLinkTargetTest.kt`) are the canonical copy-ins (only the `package` line differs). Two call sites: `proposeDeputyTask` in `NetlensCoreModule.kt` runs `AppLinkTarget.trustedActivity(activity, intent)` before `startActivityForResult` (false resolves `not_installed`, nothing is sent), and `HomeWatch.ping` in `HomeWatchWork.kt` runs `trustedReceiver` before the CHANGED broadcast to Halo. The rate-limit claim is taken only after the trust check passes, so a refused ping never uses up the one-minute window. Seams for JVM tests: `DeputyProposal.start(trusted, go)` and `ChangedPing.deliver(trusted, claim, send)` (tests in `DeputyProposalTest` and `ChangedPingTest`). The module manifest holds the `<queries>` entries for Deputy and Halo. Phone check not run: with Deputy or Halo uninstalled HomeNet says not installed and sends nothing; with Store-signed siblings it works as before.

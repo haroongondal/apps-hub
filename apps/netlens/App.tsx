@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Linking, View } from 'react-native';
 import { TabBar, ThemeProvider } from '@apps-hub/ui';
 
 import { ScanProvider } from './src/scan/ScanProvider';
@@ -24,6 +24,14 @@ const TABS: ReadonlyArray<{ key: TabKey; label: string }> = [
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabKey>('scanner');
+
+  // The new-device notification opens netlens://devices.
+  useEffect(() => {
+    const sub = Linking.addEventListener('url', ({ url }) => {
+      if (url.startsWith('netlens://devices')) setActiveTab('scanner');
+    });
+    return () => sub.remove();
+  }, []);
 
   return (
     <ThemeProvider brand="netlens">

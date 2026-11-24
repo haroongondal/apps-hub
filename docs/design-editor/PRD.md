@@ -73,7 +73,7 @@ hardware encoders; §6.6 works the numbers for a one-minute clip into 20 MB (720
 | Background on Android | Kotlin `mediaProcessing` foreground service owning a sequential queue | RESEARCH §9.1 |
 | Distribution | Android through the private Store only, never `adb install`; Mac built locally | AGENTS.md, memory |
 | Name | No new app name; the feature is "Media tools" ("SnapCompress" collides) | RESEARCH §15 |
-| Design with AI | The one online feature: a prompt sent to Groq's API (`openai/gpt-oss-120b`) or Gemini's (`gemini-3.5-flash-lite`), both OpenAI-compatible chat with one tool, builds an editable page from the editor's own objects. Only the prompt and the page size are sent; the keys stay on the device and the page never sees them. The owner can save several keys, Groq and Gemini mixed (a key's prefix, `gsk_` or `AIza`, picks its service); a key the service refuses or that is at its limit hands over to the next one. Everything else stays offline. Images are not generated. Provider changed from Anthropic to Groq by the owner, 2026-11-19; Gemini and several keys added 2026-11-19 | Owner, 2026-11-18; `docs/superpowers/specs/2026-11-18-design-editor-ai-layout-design.md` |
+| Design with AI | The one online feature: a prompt sent to Groq's API (`openai/gpt-oss-120b`) or Gemini's (`gemini-3.5-flash-lite`), both OpenAI-compatible chat with one tool, builds an editable page from the editor's own objects. Only the prompt and the page size are sent; the page never sees a key. On the Mac the owner saves several keys, Groq and Gemini mixed (a key's prefix, `gsk_` or `AIza`, picks its service); a key the service refuses or that is at its limit hands over to the next one. On the phone the request goes through AI hub only (no key in the app, no key screen); the hub sends it to Groq or Gemini, whichever AI hub uses for chat; if AI hub is missing, too old, not allowed or has no key, the app says so and a button opens the Store or AI hub Keys an older build saved on the phone are deleted only after AI hub has returned a real reply to a Design with AI request there (never on the hub merely answering, never on a hub error) (owner decision, 2026-11-24). Everything else stays offline. Images are not generated. Provider changed from Anthropic to Groq by the owner, 2026-11-19; Gemini and several keys added 2026-11-19 | Owner, 2026-11-18; `docs/superpowers/specs/2026-11-18-design-editor-ai-layout-design.md` |
 
 ## 5. Requirements
 
@@ -333,7 +333,7 @@ These lift parts of the list above; the owner's message is the yes. They are the
 1. Put a clip on a design and export the design as MP4 (needs a timeline and an encoder path from
    the canvas).
 2. Animated WebP output (Mac first; libwebp on Android).
-3. "Share to Design Editor" from the gallery's share sheet on Android.
+3. "Share to Design Editor" from the gallery's share sheet on Android. (Built 2026-11-23, ecosystem E3: JPEG, PNG and video, copied into the app first, an "Add to Design Editor" screen before anything is queued; see `docs/handoffs/design-editor-media.md`.)
 4. Merge clips with the same codecs losslessly (LosslessCut does this).
 5. A "compress PDF to fit" in PDF Editor reusing `media-core`'s presets and fit check.
 

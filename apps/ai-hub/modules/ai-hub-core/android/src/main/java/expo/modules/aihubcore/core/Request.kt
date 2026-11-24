@@ -30,6 +30,8 @@ data class Request(
   val maxTokens: Int = DEFAULT_MAX_TOKENS,
   val fileName: String? = null,
   val mime: String? = null,
+  val dimensions: Int? = null,
+  val segments: Boolean = false,
 ) {
   val attachmentCap: Int?
     get() = when (job) {
@@ -62,6 +64,10 @@ data class Request(
     const val DEFAULT_MAX_TOKENS = 2048
     const val MAX_IMAGE_BYTES = 7 * 1024 * 1024
     const val MAX_AUDIO_BYTES = 25 * 1024 * 1024
+    // Sizes gemini-embedding-001 documents for output dimensionality; anything else is rounded up to the next one.
+    val DIMENSIONS = listOf(128, 256, 512, 768, 1536, 3072)
+
+    fun dimensionsFor(asked: Int): Int = DIMENSIONS.firstOrNull { it >= asked } ?: DIMENSIONS.last()
 
     private val ID = Regex("[A-Za-z0-9_-]{1,64}")
     private val MIME = Regex("[\\w.+-]+/[\\w.+-]+")
@@ -109,12 +115,18 @@ data class Request(
           val texts = (root["texts"] as? JsonArray)?.map { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }
           if (texts == null || texts.isEmpty() || texts.any { it.isNullOrEmpty() }) bad("An embed request needs texts: a list of non-empty strings.")
           if (texts.size > MAX_TEXTS) bad("An embed request takes at most $MAX_TEXTS texts. Split it into smaller batches.")
-          Request(id, job, priority, texts = texts.map { it!! })
+          val dimensions = if (root["dimensions"] == null) null else {
+            root.int("dimensions")?.takeIf { it > 0 }?.let(::dimensionsFor) ?: bad("dimensions must be a whole number above 0, such as 768.")
+          }
+          Request(id, job, priority, texts = texts.map { it!! }, dimensions = dimensions)
         }
         Job.TRANSCRIBE -> {
           val fileName = root.str("fileName")?.takeIf { it.isNotBlank() } ?: bad("A transcribe request needs fileName, such as note.m4a.")
           val mime = root.str("mime")?.takeIf { MIME.matches(it) } ?: bad("A transcribe request needs mime: the audio's type, such as audio/mp4.")
-          Request(id, job, priority, fileName = fileName, mime = mime)
+          val segments = if (root["segments"] == null) false else {
+            (root["segments"] as? JsonPrimitive)?.takeIf { !it.isString }?.booleanOrNull ?: bad("segments must be true or false.")
+          }
+          Request(id, job, priority, fileName = fileName, mime = mime, segments = segments)
         }
       }
     }
@@ -206,7 +218,12 @@ object Results {
     put("model", model)
   }.toString()
 
-  fun transcribe(text: String): String = buildJsonObject { put("text", text) }.toString()
+  fun transcribe(t: Transcript): String = buildJsonObject {
+    put("text", t.text)
+    t.segments?.let { list ->
+      put("segments", JsonArray(list.map { g -> buildJsonObject { put("start", g.start); put("end", g.end); put("text", g.text) } }))
+    }
+  }.toString()
 }
 
 object Settings {

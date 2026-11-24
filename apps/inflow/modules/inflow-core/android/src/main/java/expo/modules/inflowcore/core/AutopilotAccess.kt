@@ -1,5 +1,7 @@
 package expo.modules.inflowcore.core
 
+import expo.modules.inflowcore.applink.SiblingPackages
+
 /** The one message Deputy may read for a run. `sender` is the contact's saved name when there is one. */
 data class AutopilotItem(val id: Long, val app: String, val pkg: String, val sender: String?, val conversation: String?, val text: String, val at: Long)
 
@@ -18,4 +20,7 @@ object AutopilotAccess {
   val SQL_LIST: String = NEVER_SHARE.joinToString(",") { "'$it'" }
 
   fun mayShare(pkg: String, inQueueFilter: Boolean): Boolean = pkg !in NEVER_SHARE && inQueueFilter
+
+  /** `items/#` (message text) is for Deputy alone: the uid must hold exactly one package, com.haroon.deputy. */
+  fun callerIsDeputy(packages: Array<String>?): Boolean = packages != null && packages.size == 1 && packages[0] == SiblingPackages.DEPUTY
 }

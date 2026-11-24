@@ -1,6 +1,7 @@
 package expo.modules.designmedia.android
 
 import androidx.media3.common.C
+import androidx.media3.common.Effect
 import androidx.media3.common.MediaItem
 import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.audio.BaseAudioProcessor
@@ -23,7 +24,8 @@ object ComposeBuilder {
   fun composition(plan: ComposePlan, preview: Boolean = false): Composition {
     val picture = effects(plan, preview).videoEffects
     val items = composeItems(plan).map { spec ->
-      item(spec, media(spec.uri, spec.startUs, spec.endUs), Effects(clipGain(spec), picture))
+      if (spec.still) still(spec, stillMedia(spec), plan.fps, picture)
+      else item(spec, media(spec.uri, spec.startUs, spec.endUs), Effects(clipGain(spec), picture))
     }
     val video = EditedMediaItemSequence.Builder(items).experimentalSetForceAudioTrack(forceAudio(plan)).build()
     val music = musicItems(plan)
@@ -57,6 +59,12 @@ object ComposeBuilder {
   // (the planner floors it to a tenth), and the clipping stops there anyway.
   fun item(spec: ItemSpec, media: MediaItem, effects: Effects): EditedMediaItem =
     EditedMediaItem.Builder(media).setDurationUs(spec.endUs).setEffects(effects).build()
+
+  // Media3 reads a photo as a picture only with an image duration on the MediaItem and a frame rate on the edited item.
+  private fun stillMedia(spec: ItemSpec) = MediaItem.Builder().setUri(spec.uri).setImageDurationMs(spec.endUs / 1000).build()
+
+  fun still(spec: ItemSpec, media: MediaItem, fps: Int, picture: List<Effect>): EditedMediaItem =
+    EditedMediaItem.Builder(media).setDurationUs(spec.endUs).setFrameRate(fps).setEffects(Effects(emptyList(), picture)).build()
 
   // On the phone (Media3 1.11.1) CompositionPlayer froze the picture after the first clip with the frame-rate cap on each item;
   // the preview plays at the clips' own rates, the export still caps it.

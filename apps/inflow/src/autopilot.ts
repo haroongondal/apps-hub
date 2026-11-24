@@ -52,6 +52,13 @@ export function runDoneMessage(kind: Kind, bankAppSet: boolean): string {
   return 'Deputy is starting.';
 }
 
+// What the owner sees after Pay with Deputy: null for a cancel (they know), a line for the rest.
+export function payWithDeputyMessage(outcome: 'handed_over' | 'cancelled' | 'unavailable'): { tone: 'neutral'; text: string } | null {
+  if (outcome === 'handed_over') return { tone: 'neutral', text: 'Sent to Deputy. Finish there.' };
+  if (outcome === 'unavailable') return { tone: 'neutral', text: "Deputy isn't installed on this phone." };
+  return null;
+}
+
 const PACKAGE = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+$/;
 const MULTIPLE_ERROR = 'Enter a whole number from 1 to 1000 for the multiple, for example 3.';
 const amountError = (name: string) => `Enter ${name} as a number of rupees, 0 or more, for example 5000.`;

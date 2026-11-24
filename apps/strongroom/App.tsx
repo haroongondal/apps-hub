@@ -8,6 +8,7 @@ import { EmailRecoveryScreen } from './src/EmailRecoveryScreen.tsx';
 import { EditScreen } from './src/EditScreen.tsx';
 import { EntryScreen } from './src/EntryScreen.tsx';
 import { ImportScreen } from './src/ImportScreen.tsx';
+import { PasswordCheckScreen } from './src/PasswordCheckScreen.tsx';
 import { AuthenticatorImportScreen } from './src/AuthenticatorImportScreen.tsx';
 import { SettingsScreen, type SettingsFlow } from './src/SettingsScreen.tsx';
 import { ChangePasswordScreen, FingerprintScreen, NewRecoveryKeyScreen } from './src/SettingsFlows.tsx';
@@ -19,7 +20,8 @@ import { VaultScreen, type VaultView } from './src/VaultScreen.tsx';
 type Tab = 'vault' | 'settings';
 type Route =
   | { name: 'tabs' }
-  | { name: 'entry'; id: string }
+  | { name: 'entry'; id: string; fromCheck?: boolean }
+  | { name: 'check' }
   | { name: 'edit'; id: string | null }
   | { name: 'import' }
   | { name: 'authenticator' }
@@ -49,6 +51,7 @@ const FLOW_ROUTES: Record<SettingsFlow, Route> = {
   export: { name: 'export' },
   imports: { name: 'imports' },
   deleteAll: { name: 'deleteAll' },
+  check: { name: 'check' },
 };
 const NO_VIEW: VaultView = { kind: 'login', query: '' };
 const DISCARDED = 'Strongroom locked, so your unsaved changes were discarded.';
@@ -127,7 +130,7 @@ function Home() {
       if (!unlocked || route.name === 'tabs') return false;
       if (route.name === 'newKey' && route.key !== null) return true;
       if ((route.name === 'sync' || route.name === 'emailRecovery') && holdingKey) return true;
-      setRoute(route.name === 'edit' && route.id !== null ? { name: 'entry', id: route.id } : TABS_ROUTE);
+      setRoute(route.name === 'edit' && route.id !== null ? { name: 'entry', id: route.id } : route.name === 'entry' && route.fromCheck ? FLOW_ROUTES.check : TABS_ROUTE);
       return true;
     });
     return () => sub.remove();
@@ -171,8 +174,10 @@ function Home() {
   if (!status.unlocked) return <UnlockScreen status={status} notice={discarded ? DISCARDED : null} onUnlocked={refresh} />;
 
   if (route.name === 'entry') {
-    return <EntryScreen id={route.id} onBack={home} onEdit={() => setRoute({ name: 'edit', id: route.id })} onLocked={refresh} />;
+    const back = route.fromCheck ? () => setRoute(FLOW_ROUTES.check) : home;
+    return <EntryScreen id={route.id} onBack={back} onEdit={() => setRoute({ name: 'edit', id: route.id })} onLocked={refresh} />;
   }
+  if (route.name === 'check') return <PasswordCheckScreen onBack={home} onOpen={(id) => setRoute({ name: 'entry', id, fromCheck: true })} onLocked={refresh} />;
   if (route.name === 'edit') {
     const { id } = route;
     return <EditScreen id={id} onBack={() => setRoute(id === null ? TABS_ROUTE : { name: 'entry', id })} onSaved={(saved) => setRoute({ name: 'entry', id: saved })} onLocked={refresh} />;

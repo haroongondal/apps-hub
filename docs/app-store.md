@@ -102,6 +102,59 @@ For each app, the CLI:
 
 `--platform ios` exits with an explanation until iOS is set up.
 
+### Release guard
+
+Before anything is built, `pnpm release` runs `git fetch origin main` and refuses unless:
+- `HEAD` is contained in `origin/main` (`git merge-base --is-ancestor HEAD origin/main`), and
+- the working tree is clean (`git status --porcelain` is empty; untracked files count, git-ignored ones do not).
+
+A failed fetch or a missing `origin/main` also refuses. Untracked files are always counted, whatever `status.showUntrackedFiles` says. This stops a branch build from replacing a main build in
+the Store. For a test build, pass `--from-branch`: it skips both checks, prints a warning to stderr and starts the
+changelog with `[branch build <short sha>]`. CI is not affected: it builds a pushed commit of `main` in a clean checkout.
+
+### Rollback
+
+`pnpm release <app> --rollback [--to <sha|tag>] [--dry-run]` republishes an older build of one app.
+
+- **A rollback is a new release, not a downgrade.** Android refuses to install an APK with a lower `versionCode` over
+  a higher one ([versioning](https://developer.android.com/studio/publish/versioning)), and on a user build only the
+  system server may override that for a non-debuggable app (`isDowngradePermitted` in AOSP
+  [`PackageManagerServiceUtils.java`](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/services/core/java/com/android/server/pm/PackageManagerServiceUtils.java)),
+  so neither `adb install -d` nor the Store can go back. The old commit is rebuilt with `versionCode` = published + 1;
+  its `versionName` stays the old one. The changelog defaults to `Rollback to <versionName> (<short sha>)`.
+- **Which commit.** Every release now records the full git sha it was built from in the manifest
+  (`android.commit`; optional, releases made before this have none). The Store shows its first seven characters on the
+  app's row as "Build from commit 8b8db0d", and hides the line when there is none. The manifest has no rollback flag, so the
+  Store does not say a build is a rollback. Without `--to`, the target is the first parent
+  of the last commit that changed the app's folder (`apps/<app>`) at or before that recorded commit, that is, the app as
+  it was just before its latest change. (The recorded commit alone is not enough: it can be a merge of another app's
+  work, or one HEAD recorded for every app of an `--all` release.) `--to` takes a sha, short sha or tag. The target
+  must be on `origin/main`, older than the current release, different from it, contain the app, and differ from the
+  release commit inside the app's folder (otherwise there is nothing to roll back). Without a recorded commit and
+  without `--to` it refuses. The manifest holds only the latest release per app, so there is no "previous
+  versionName" lookup and `--to` does not take a versionName.
+- **How it builds.** The usual release guard runs on your checkout. The target is checked out in a temporary
+  `git worktree` (removed afterwards, also on Ctrl-C; a hard kill is cleaned up by `git worktree prune` on the next run), `pnpm install --frozen-lockfile --prefer-offline` runs there, then the normal
+  steps (prepare, prebuild, gradle patch, `assembleRelease`, signer check, upload) run with that worktree as the root.
+  Your own tree is never touched.
+- **`--dry-run`** prints `app`, `from` (commit and versionCode), `to commit`, `new versionCode` and `target` (Store
+  host) and exits before any worktree, build or upload. It only reads the manifest.
+- **Old code meets the newer database.** A rollback installs old code over the phone's newer on-device
+  database. Android accepts the install because the `versionCode` is higher, but `SQLiteOpenHelper`'s default
+  `onDowngrade` throws, so an app whose database schema version was raised after the target commit crashes on
+  start until a forward release ships. Examples on the ecosystem branches: Clipboard (`ClipStore`, `clips.db`,
+  version 1 to 2 added `pinned_at`) and Strongroom (`Schema.VERSION` in `SqliteRecordStore.kt`; neither overrides
+  `onDowngrade`). Check the diff between the target and the current release for a schema version bump before a
+  rollback.
+- `pnpm release <app> --rollback` without `--dry-run` builds and publishes. It replaces what every phone gets
+  from the Store, so run it only on the owner's go.
+
+```bash
+pnpm release netlens --rollback --dry-run                 # see the plan
+pnpm release netlens --rollback -m "Back out the scan bug" # roll back to main before the released change
+pnpm release netlens --rollback --to 1a2b3c4 --dry-run    # an explicit target
+```
+
 ### CI/CD (automatic releases)
 
 `.github/workflows/ci.yml` runs on GitHub Actions (free for this public repo):
@@ -113,7 +166,9 @@ For each app, the CLI:
   workspace package the app depends on, e.g. `packages/ui` releases all four, `packages/core` only NetLens.
   Changes to `*.md` files alone release nothing. A release only reads the commit range of that push, so if
   one fails, re-run it from the Actions tab or use **Run workflow** with the app ids.
-- **Manual:** Actions → CI → Run workflow, `apps` = `netlens open-tunnel pdf-editor store` (any subset).
+- **Manual:** Actions → CI → Run workflow, `apps` = `netlens open-tunnel pdf-editor store` (any subset). The field takes
+  app ids only (lowercase letters, digits and dashes, none starting with a dash); anything else fails the run, so a flag
+  such as `--rollback` or `--from-branch` cannot be passed through.
 
 Releases run one at a time (`concurrency`), since each one rewrites `manifest.json`. Repository secrets
 (Settings → Secrets and variables → Actions), copied from this Mac's files:
@@ -216,6 +271,32 @@ Store 7+ downloads in a WorkManager foreground job (`InstallWorker`, type `dataS
 so locking the screen or switching apps does not stop it, and a reopened Store shows the running download. If the
 download finishes while the Store is in the background, it does not start the install (Play Protect's prompt would
 go unseen and time out); it posts "ready to install" and waits for the user to tap Update.
+
+### Setup and health
+The **Setup and health** row opens a screen with one card per installed app (every id in `ANDROID_PACKAGES`
+except `store` and `notch`, found by package, so HomeNet and TunnelWall count). Pure logic and its tests:
+`apps/store/src/health.ts`; native reader: `Health.kt` in `store-installer`.
+
+- **Accessibility** (Deputy, Clipboard, Halo) and **Notification access** (Halo, Inflow): the Store reads
+  `Settings.Secure` itself (`enabled_accessibility_services`, `enabled_notification_listeners`) and matches the
+  component names in the `SERVICES` table; a test checks that table against each app's manifest. An unset
+  accessibility key is "off"; a missing or refused listener key is "unknown", never "off".
+- **The app's own report**: the `health` share from `@apps-hub/app-link-contract`, queried for each app on a
+  background thread with a 3 s limit. The Store declares `com.haroon.permission.AUTOPILOT` (signature) and
+  holds it; `QUERY_ALL_PACKAGES` already makes every provider visible, so it needs no `<queries>` entry.
+  Before each query `AppLinkTarget.trustedProvider` (canonical copy in `store-installer/.../applink/`) checks who
+  serves the authority: it must be the sibling package that `SiblingPackages` lists for the release id (JS passes
+  the id, not a package) and carry the Store's signing key, otherwise no query. An id with no table entry
+  (notch) is "Not reported". `HealthTest` covers the refusal; the Store has no sender.
+  `parseHealthRow` checks each row (one row, the right `app_id`, flags 0, 1 or null, `ai_source` hub, own or
+  none, a heartbeat after 2024 and not in the future); anything else, a debug build refused by the signature
+  check, or an app without the share yet, shows "Not reported".
+- **Reconcile**: the phone's setting first, the app's report second; when both are known and differ the card
+  says "not sure". The report also gives the AI line (from AI hub, own key, none).
+- **Autostart** cannot be read, so apps with a background service get a "Keep it running" card with the
+  HyperOS steps and **Open app settings** (`ACTION_APPLICATION_DETAILS_SETTINGS`). Fix buttons open the
+  accessibility list (the per-service page is not public SDK) or the app's notification access page
+  (`ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS`, Android 11+, falling back to the list).
 
 ### Android developer verification checklist
 Since **30 Sep 2026**, certified devices in Brazil, Indonesia, Singapore and Thailand only install or update apps

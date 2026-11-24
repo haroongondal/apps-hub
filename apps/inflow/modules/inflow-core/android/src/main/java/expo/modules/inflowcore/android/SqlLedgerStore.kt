@@ -4,6 +4,7 @@ import android.database.Cursor
 import expo.modules.inflowcore.core.Channel
 import expo.modules.inflowcore.core.Direction
 import expo.modules.inflowcore.core.LedgerStore
+import expo.modules.inflowcore.core.NexusShares
 import expo.modules.inflowcore.core.Parsed
 import expo.modules.inflowcore.core.Txn
 import net.zetetic.database.sqlcipher.SQLiteDatabase
@@ -127,6 +128,8 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
 
   /** Every transaction (own ones too) with `from <= at < to`, oldest first: what a report is made from. */
   fun between(from: Long, to: Long): List<Txn> = txns("t.at >= ? AND t.at < ? ORDER BY t.at, t.id", from, to)
+
+  fun nexusDebits(sinceId: Long, from: Long, limit: Int): List<Txn> = txns(NEXUS_DEBITS_WHERE, sinceId, from, limit.toLong())
 
   override fun undecided(): List<Txn> = txns("t.own_set = 0 AND t.pair_id IS NULL")
 
@@ -285,5 +288,7 @@ class SqlLedgerStore(private val db: SQLiteDatabase) : LedgerStore {
       "ORDER BY SUM(amount_minor) DESC, 1"
     // The channel column is a comma list; ',NOTIFICATION,' is a source that was a bare push (WhatsApp, a bank app), whatever became of its item.
     private const val PUSH_SOURCE = "instr(',' || p.channel || ',', ',NOTIFICATION,') > 0"
+    // Nexus's debits: money out, own transfers left out, since a time; only the newest MAX_DEBITS by id can ever be paged through.
+    val NEXUS_DEBITS_WHERE = "t.id > ? AND t.id IN (SELECT id FROM txns WHERE direction = 'OUT' AND own = 0 AND at >= ? ORDER BY id DESC LIMIT ${NexusShares.MAX_DEBITS}) ORDER BY t.id LIMIT ?"
   }
 }

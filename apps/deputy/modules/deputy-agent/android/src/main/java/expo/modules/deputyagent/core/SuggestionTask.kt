@@ -22,8 +22,9 @@ object SuggestionTask {
   private fun plain(s: String) = s.filter { it.isLetterOrDigit() || it in " .'-" }.take(NAME_MAX).trim()
 
   /** Only the app label is in the task. The chat name is set by the other person, so it travels with their message as data. */
-  fun build(app: String) =
-    "In ${plain(app)}, open the chat that the notification below came from, find the answer to its latest message from the other apps you may use, and type a reply."
+  const val TAIL = ", open the chat that the notification below came from, find the answer to its latest message from the other apps you may use, and type a reply."
+
+  fun build(app: String) = "In ${plain(app)}$TAIL"
 
   /** One untrusted entry: who it is from and what they wrote, the name on one line and cut short. */
   internal fun untrustedEntry(name: String, text: String) =

@@ -1,0 +1,82 @@
+{
+  "who_is_home": {
+    "authority": "com.haroon.netlens.applink",
+    "path": "who_is_home",
+    "columns": [
+      "person",
+      "present",
+      "last_seen_at"
+    ],
+    "maxRows": 16
+  },
+  "new_devices": {
+    "authority": "com.haroon.netlens.applink",
+    "path": "new_devices",
+    "columns": [
+      "first_seen_at",
+      "label",
+      "acknowledged"
+    ],
+    "maxRows": 200
+  },
+  "shield": {
+    "authority": "com.haroon.opentunnel.applink",
+    "path": "shield",
+    "columns": [
+      "on",
+      "untrusted_now",
+      "since"
+    ],
+    "maxRows": 1
+  },
+  "tunnel_health": {
+    "authority": "com.haroon.opentunnel.applink",
+    "path": "health",
+    "columns": [
+      "app_id",
+      "accessibility",
+      "listener",
+      "ai_source",
+      "last_seen_at"
+    ],
+    "maxRows": 1
+  },
+  "deputy_waiting": {
+    "authority": "com.haroon.deputy.applink",
+    "path": "waiting",
+    "columns": [
+      "id",
+      "label",
+      "due_at",
+      "state"
+    ],
+    "maxRows": 100
+  },
+  "suggestions": {
+    "authority": "com.haroon.inflow.autopilot",
+    "path": "suggestions",
+    "columns": [
+      "id",
+      "kind",
+      "title",
+      "item_id",
+      "due_at",
+      "state",
+      "created_at",
+      "expires_at"
+    ],
+    "maxRows": 200
+  },
+  "briefing": {
+    "authority": "com.haroon.inflow.autopilot",
+    "path": "briefing",
+    "columns": [
+      "line_id",
+      "kind",
+      "text",
+      "at",
+      "personal"
+    ],
+    "maxRows": 20
+  }
+}

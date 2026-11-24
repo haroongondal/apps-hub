@@ -29,11 +29,15 @@ import de.blinkt.openvpn.core.keepVPNAlive
 import java.io.StringReader
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 
 // ics-openvpn hosts its own VpnService; the manifest pulls it into the app process so VpnStatus listeners here see it.
 class OpenVpnEngine(context: Context) : TunnelEngine {
 
   override val hostsThroughAppService = false
+
+  /** Names this engine in its RELEASE, so the service can tell it from the engine that replaced it. */
+  val session = sessions.incrementAndGet()
 
   private val appContext = context.applicationContext
   @Volatile private var totals: Pair<Long, Long>? = null
@@ -41,6 +45,7 @@ class OpenVpnEngine(context: Context) : TunnelEngine {
   // Set by this session's own first state, so the replayed state of a previous session is ignored.
   @Volatile private var armed = false
   @Volatile private var ended: CountDownLatch? = null
+  @Volatile private var revoked = false
   private var control: IOpenVPNServiceInternal? = null
   private val main = Handler(Looper.getMainLooper())
   private val connectTimeout = Runnable {
@@ -104,6 +109,15 @@ class OpenVpnEngine(context: Context) : TunnelEngine {
     override fun setConnectedVPN(uuid: String?) = Unit
   }
 
+  // ics logs permission_revoked from its onRevoke: the user or another VPN app took the slot, so the kill switch stands down.
+  private val revokeListener = VpnStatus.LogListener { item ->
+    if (item.logLevel == VpnStatus.LogLevel.ERROR &&
+      item.getString(appContext) == appContext.getString(de.blinkt.openvpn.R.string.permission_revoked)
+    ) {
+      revoked = true
+    }
+  }
+
   private val byteCountListener = VpnStatus.ByteCountListener { inBytes, outBytes, _, _ ->
     totals = inBytes to outBytes
   }
@@ -129,6 +143,8 @@ class OpenVpnEngine(context: Context) : TunnelEngine {
 
     // enableKillSwitch has no app-side Builder here (same limit as WireGuard); ics blocks unused address families.
     armed = false
+    revoked = false
+    VpnStatus.addLogListener(revokeListener)
     VpnStatus.addStateListener(stateListener)
     VpnStatus.addByteCountListener(byteCountListener)
     ProfileManager.setTemporaryProfile(appContext, profile)
@@ -159,6 +175,7 @@ class OpenVpnEngine(context: Context) : TunnelEngine {
       ended = null
     }
     control = null
+    VpnStatus.removeLogListener(revokeListener)
     VpnStatus.removeStateListener(stateListener)
     VpnStatus.removeByteCountListener(byteCountListener)
     clearPersisted(appContext)
@@ -183,11 +200,14 @@ class OpenVpnEngine(context: Context) : TunnelEngine {
       Intent()
         .setClassName(appContext, ServiceContracts.SERVICE_CLASS_NAME)
         .setAction(ServiceContracts.ACTION_RELEASE)
-        .putExtra(ServiceContracts.EXTRA_HOLD, hold),
+        .putExtra(ServiceContracts.EXTRA_HOLD, hold)
+        .putExtra(ServiceContracts.EXTRA_REVOKED, revoked)
+        .putExtra(ServiceContracts.EXTRA_ENGINE, session),
     )
   }
 
   companion object {
+    private val sessions = AtomicLong(0)
     private const val CONNECT_TIMEOUT_MS = 30_000L
     private const val STOP_WAIT_MS = 3_000L
 

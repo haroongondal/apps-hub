@@ -8,3 +8,5 @@ dependencies of its own; the Mac app and the Android app both load it.
   `vendor/engine/desktop.html`. Stylesheets use `../ui/web/...` (the `@apps-hub/ui` tokens), and
   the bundled fonts resolve through `vendor/fonts/` and `../ui/fonts/`.
 - Android: the mobile page and its build come in Phase 3 step 2 (SPEC §14).
+
+Brand colours from an image: `extractPalette` and `contrastOf` in `image-maths.js` (pure, tested in `test/palette.test.mjs`); the panel is in `app.js` (`#brandImg`). Nothing leaves the device.

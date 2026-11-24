@@ -1,0 +1,10 @@
+{
+  "who_is_home": [
+    { "person": "Sara", "present": 1, "last_seen_at": 1763900000000 },
+    { "person": "Haroon", "present": 0, "last_seen_at": 0 }
+  ],
+  "new_devices": [
+    { "first_seen_at": 1763900000000, "label": "iPhone or iPad", "acknowledged": 0 },
+    { "first_seen_at": 1763800000000, "label": "Unknown device", "acknowledged": 1 }
+  ]
+}

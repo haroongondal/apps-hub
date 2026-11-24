@@ -6,7 +6,7 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
-    "test": "node --test src/__tests__/fts-query.test.ts src/__tests__/library-folders.test.ts src/__tests__/library-items.test.ts src/__tests__/library-kinds.test.ts src/__tests__/library-reminders.test.ts src/__tests__/library-search.test.ts src/__tests__/library-tags.test.ts src/__tests__/migrate.test.ts src/__tests__/normalize.test.ts src/__tests__/orphan-dirs.test.ts src/__tests__/snippet.test.ts src/__tests__/sql-port.test.ts",
+    "test": "node --test src/__tests__/fts-query.test.ts src/__tests__/library-folders.test.ts src/__tests__/library-items.test.ts src/__tests__/library-kinds.test.ts src/__tests__/library-due.test.ts src/__tests__/library-reminders.test.ts src/__tests__/library-sources.test.ts src/__tests__/library-search.test.ts src/__tests__/library-tags.test.ts src/__tests__/migrate.test.ts src/__tests__/normalize.test.ts src/__tests__/orphan-dirs.test.ts src/__tests__/snippet.test.ts src/__tests__/sql-port.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

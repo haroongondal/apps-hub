@@ -7,7 +7,7 @@
     "start": "expo start",
     "android": "expo run:android",
     "prebuild": "expo prebuild --platform android",
-    "test": "node --test src/__tests__/brand.test.ts src/__tests__/settings.test.ts src/__tests__/setup.test.ts src/__tests__/step.test.ts src/__tests__/notifyForm.test.ts src/__tests__/aodForm.test.ts src/__tests__/island-settings.test.ts src/__tests__/island-status.test.ts",
+    "test": "node --test src/__tests__/brand.test.ts src/__tests__/settings.test.ts src/__tests__/setup.test.ts src/__tests__/step.test.ts src/__tests__/notifyForm.test.ts src/__tests__/aodForm.test.ts src/__tests__/island-settings.test.ts src/__tests__/island-status.test.ts src/__tests__/links.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -21,6 +21,7 @@
     "react-native-safe-area-context": "~5.6.0"
   },
   "devDependencies": {
+    "@apps-hub/app-link-contract": "workspace:*",
     "@types/node": "^22.10.0",
     "@types/react": "~19.1.0",
     "typescript": "~5.9.2"

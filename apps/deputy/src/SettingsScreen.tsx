@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { PermissionsAndroid, View } from 'react-native';
-import { Button, Field, Group, Header, Notice, Pill, Row, Screen, Text, confirmAction, space } from '@apps-hub/ui';
-import DeputyAgent, { type KnownModel, type ServiceState, type TreeDump } from 'deputy-agent';
+import { PermissionsAndroid, Switch, View } from 'react-native';
+import { Button, Field, Group, Header, Notice, Pill, Row, Screen, Text, confirmAction, space, useTheme } from '@apps-hub/ui';
+import DeputyAgent, { type KnownModel, type LinkShares, type ServiceState, type TreeDump } from 'deputy-agent';
 import { fromForm, toForm, type SettingsForm } from './settingsForm';
 import { setupComplete, setupRows, type SetupAction, type SetupRow } from './setup';
 
@@ -69,6 +69,7 @@ export function SettingsScreen({ state, refresh }: { state: ServiceState; refres
       </Group>
       {(keyOpen || !state.keySet) && <KeyPanel state={state} refresh={refresh} />}
       <ModelPanel refresh={refresh} />
+      <LinkSharesPanel />
       <DumpPanel enabled={state.accessibilityEnabled} />
       {state.accessibilityEnabled && (
         <Button
@@ -268,6 +269,48 @@ function KeyPanel({ state, refresh }: { state: ServiceState; refresh: () => void
           </Notice>
         )}
       </View>
+    </Group>
+  );
+}
+
+const LINK_SHARES: ReadonlyArray<{ key: keyof LinkShares; title: string; subtitle: string }> = [
+  {
+    key: 'waiting',
+    title: 'Share what is waiting with my other Haroon apps',
+    subtitle: 'The names of your repeating and saved tasks, drafts, and a task waiting for your OK. Never what is on your screen or in a message.',
+  },
+  {
+    key: 'runs',
+    title: 'Let Nexus read my run history',
+    subtitle: 'The tasks you typed, how they ended and when. Never what Deputy saw on screen or text shared with it.',
+  },
+];
+
+function LinkSharesPanel() {
+  const { c } = useTheme();
+  const [shares, setShares] = useState(() => DeputyAgent.getLinkShares());
+  const toggle = (key: keyof LinkShares, on: boolean) => {
+    DeputyAgent.setLinkShare(key, on);
+    setShares(DeputyAgent.getLinkShares());
+  };
+  return (
+    <Group title="Your other apps" footer="Both are off until you turn them on. Only apps you installed from your own Store can read them.">
+      {LINK_SHARES.map((s) => (
+        <Row
+          key={s.key}
+          title={s.title}
+          subtitle={s.subtitle}
+          trailing={
+            <Switch
+              value={shares[s.key]}
+              onValueChange={(on) => toggle(s.key, on)}
+              accessibilityLabel={s.title}
+              trackColor={{ false: c.line, true: c.accent }}
+              thumbColor={shares[s.key] ? c.surface : c.muted}
+            />
+          }
+        />
+      ))}
     </Group>
   );
 }

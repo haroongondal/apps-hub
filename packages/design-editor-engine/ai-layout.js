@@ -1,7 +1,7 @@
 // Pure request and reply handling for "Design with AI". No DOM, no Node API:
 // it loads as a plain <script> (globalThis.AiLayout) and through require() in node --test.
 (function (root) {
-  const MODEL = 'openai/gpt-oss-120b'; // Groq's; the app swaps in the model of whichever key it uses (ai-keys.js)
+  const MODEL = 'openai/gpt-oss-120b'; // Groq's; the Mac swaps in the model of whichever key it uses (its own ai-keys.js), the phone's AI hub picks the model
   const FONTS = ['Atkinson Hyperlegible Next', 'Jost', 'Playfair Display', 'Dancing Script'];
   const TYPES = ['text', 'rect', 'circle', 'star', 'line'];
   const ALIGNS = ['left', 'center', 'right'];
@@ -111,7 +111,16 @@
     return { bg: colour(input.bg, DEFAULT_BG), items };
   }
 
-  const AiLayout = { MODEL, FONTS, buildRequest, parseReply };
+  // The phone's four AI hub states (the Mac keeps its own keys and never calls this). open: which app the button opens.
+  const HUB_NEEDED = {
+    hubmissing: { message: 'AI needs AI hub.', button: 'Install AI hub', open: 'store' },
+    update: { message: 'AI hub needs an update.', button: 'Update AI hub', open: 'store' },
+    notallowed: { message: 'AI hub has not allowed Design Editor yet.', button: 'Allow Design Editor in AI hub', open: 'aihub' },
+    nokey: { message: 'AI hub has no key yet.', button: 'Add a key in AI hub', open: 'aihub' },
+  };
+  const hubNeeded = (error) => Object.hasOwn(HUB_NEEDED, error) ? HUB_NEEDED[error] : null;
+
+  const AiLayout = { MODEL, FONTS, buildRequest, parseReply, hubNeeded };
   root.AiLayout = AiLayout;
   if (typeof module !== 'undefined' && module.exports) module.exports = AiLayout;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

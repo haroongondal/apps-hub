@@ -1,0 +1,104 @@
+[
+  {
+    "name": "an address nobody has seen is new",
+    "ctx": { "selfIp": "192.168.1.10", "gatewayIp": "192.168.1.1", "now": 3000000000, "windowDays": 30 },
+    "alive": [{ "ip": "192.168.1.50", "port": 62078 }],
+    "known": [{ "ip": "192.168.1.20", "lastSeenAt": 2900000000, "tagged": false }],
+    "alerts": [],
+    "expect": ["192.168.1.50"]
+  },
+  {
+    "name": "false positive: this phone itself is never new",
+    "ctx": { "selfIp": "192.168.1.10", "gatewayIp": "192.168.1.1", "now": 3000000000, "windowDays": 30 },
+    "alive": [{ "ip": "192.168.1.10", "port": 80 }],
+    "known": [],
+    "alerts": [],
+    "expect": []
+  },
+  {
+    "name": "false positive: the router is never new",
+    "ctx": { "selfIp": "192.168.1.10", "gatewayIp": "192.168.1.1", "now": 3000000000, "windowDays": 30 },
+    "alive": [{ "ip": "192.168.1.1", "port": 80 }],
+    "known": [],
+    "alerts": [],
+    "expect": []
+  },
+  {
+    "name": "false positive: a device in the saved list seen within the window is known",
+    "ctx": { "selfIp": "192.168.1.10", "gatewayIp": "192.168.1.1", "now": 3000000000, "windowDays": 30 },
+    "alive": [{ "ip": "192.168.1.20", "port": 445 }],
+    "known": [{ "ip": "192.168.1.20", "lastSeenAt": 408000000, "tagged": false }],
+    "alerts": [],
+    "expect": []
+  },
+  {
+    "name": "a device last seen before the window counts as new again",
+    "ctx": { "selfIp": "192.168.1.10", "gatewayIp": "192.168.1.1", "now": 3000000000, "windowDays": 30 },
+    "alive": [{ "ip": "192.168.1.20", "port": 445 }],
+    "known": [{ "ip": "192.168.1.20", "lastSeenAt": 407999999, "tagged": false }],
+    "alerts": [],
+    "expect": ["192.168.1.20"]
+  },
+  {
+    "name": "false positive: a tagged phone is known however long ago it was seen",
+    "ctx": { "selfIp": "192.168.1.10", "gatewayIp": "192.168.1.1", "now": 3000000000, "windowDays": 30 },
+    "alive": [{ "ip": "192.168.1.30", "port": 62078 }],
+    "known": [{ "ip": "192.168.1.30", "lastSeenAt": 1, "tagged": true }],
+    "alerts": [],
+    "expect": []
+  },
+  {
+    "name": "false positive: a device already reported within the window is not reported twice",
+    "ctx": { "selfIp": "192.168.1.10", "gatewayIp": "192.168.1.1", "now": 3000000000, "windowDays": 30 },
+    "alive": [{ "ip": "192.168.1.50", "port": 62078 }],
+    "known": [],
+    "alerts": [{ "ip": "192.168.1.50", "firstSeenAt": 2990000000, "label": "iPhone or iPad", "acknowledged": false }],
+    "expect": []
+  },
+  {
+    "name": "false positive: a device marked as mine within the window stays known",
+    "ctx": { "selfIp": "192.168.1.10", "gatewayIp": "192.168.1.1", "now": 3000000000, "windowDays": 30 },
+    "alive": [{ "ip": "192.168.1.50", "port": 62078 }],
+    "known": [],
+    "alerts": [{ "ip": "192.168.1.50", "firstSeenAt": 408000000, "label": "iPhone or iPad", "acknowledged": true }],
+    "expect": []
+  },
+  {
+    "name": "a device marked as mine expires after the window like any report, so whatever holds that address now is new",
+    "ctx": { "selfIp": "192.168.1.10", "gatewayIp": "192.168.1.1", "now": 3000000000, "windowDays": 30 },
+    "alive": [{ "ip": "192.168.1.50", "port": 62078 }],
+    "known": [],
+    "alerts": [{ "ip": "192.168.1.50", "firstSeenAt": 5, "label": "iPhone or iPad", "acknowledged": true }],
+    "expect": ["192.168.1.50"]
+  },
+  {
+    "name": "an old unacknowledged report expires and the device is new again",
+    "ctx": { "selfIp": "192.168.1.10", "gatewayIp": "192.168.1.1", "now": 3000000000, "windowDays": 30 },
+    "alive": [{ "ip": "192.168.1.50", "port": 62078 }],
+    "known": [],
+    "alerts": [{ "ip": "192.168.1.50", "firstSeenAt": 5, "label": "iPhone or iPad", "acknowledged": false }],
+    "expect": ["192.168.1.50"]
+  },
+  {
+    "name": "false positive: one address answering twice is reported once",
+    "ctx": { "selfIp": "192.168.1.10", "gatewayIp": null, "now": 3000000000, "windowDays": 30 },
+    "alive": [{ "ip": "192.168.1.60", "port": 80 }, { "ip": "192.168.1.60", "port": 443 }],
+    "known": [],
+    "alerts": [],
+    "expect": ["192.168.1.60"]
+  },
+  {
+    "name": "only the unknown ones of a mixed sweep are new, in sweep order",
+    "ctx": { "selfIp": "192.168.1.10", "gatewayIp": "192.168.1.1", "now": 3000000000, "windowDays": 30 },
+    "alive": [
+      { "ip": "192.168.1.1", "port": 80 },
+      { "ip": "192.168.1.10", "port": 80 },
+      { "ip": "192.168.1.20", "port": 445 },
+      { "ip": "192.168.1.71", "port": null },
+      { "ip": "192.168.1.70", "port": 22 }
+    ],
+    "known": [{ "ip": "192.168.1.20", "lastSeenAt": 2999999999, "tagged": false }],
+    "alerts": [],
+    "expect": ["192.168.1.71", "192.168.1.70"]
+  }
+]

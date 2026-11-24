@@ -6,9 +6,11 @@
  * Note (Expo SDK 52+): requireNativeModule returns an object that IS an
  * EventEmitter, so listeners hang straight off the module.
  */
-import { tcpFetchArgsError, udpBroadcastArgsError, udpRequestArgsError } from '@apps-hub/core';
+import { parseDeputyOutcome, parseHomeWatchStatus, tcpFetchArgsError, udpBroadcastArgsError, udpRequestArgsError } from '@apps-hub/core';
 import type {
+  DeputyBinding,
   DnsResolution,
+  HomeWatchBinding,
   ListenerHandle,
   NetLensNativeBinding,
   ProbeOutcome,
@@ -116,6 +118,35 @@ export function createNetLensNativeBinding(): NetLensNativeBinding {
       if (problem) throw new Error(problem);
       const raw: unknown = await NetLensCore.tcpFetch(ip, port, request, timeoutMs, maxBytes);
       return typeof raw === 'string' ? raw : null;
+    },
+  };
+}
+
+export function createHomeWatchBinding(): HomeWatchBinding {
+  return {
+    async getHomeWatch() {
+      return parseHomeWatchStatus(await NetLensCore.getHomeWatch());
+    },
+    async setHomeWatch(settings, snapshot) {
+      return parseHomeWatchStatus(await NetLensCore.setHomeWatch({ ...settings }, snapshot ? { ...snapshot } : null));
+    },
+    async syncHome(home, snapshot) {
+      return parseHomeWatchStatus(await NetLensCore.syncHomeWatch({ ...home }, { ...snapshot }));
+    },
+    async markDeviceMine(ip) {
+      return parseHomeWatchStatus(await NetLensCore.markDeviceMine(ip));
+    },
+  };
+}
+
+export function createDeputyBinding(): DeputyBinding {
+  return {
+    async proposeDeputyTask({ task, context }) {
+      try {
+        return parseDeputyOutcome(await NetLensCore.proposeDeputyTask(task, context));
+      } catch {
+        return 'refused';
+      }
     },
   };
 }

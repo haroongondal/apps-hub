@@ -334,6 +334,7 @@ class MediaJobService : Service() {
     val before = store.load()
     val after = reduce(before, event)
     store.save(after)
+    if (event is QueueEvent.Done || event is QueueEvent.Fail) Heartbeat.touch(this)
     Log.i(TAG, "${event::class.simpleName}: ${before.size} -> ${after.size} ${after.groupingBy { it.state.wire }.eachCount()}")
     emit()
   }

@@ -1,5 +1,5 @@
 import { requireNativeModule } from 'expo-modules-core';
-import type { Job, MediaInfo, Output } from '@apps-hub/media-core';
+import type { Job, MediaInfo, Output, RawShare } from '@apps-hub/media-core';
 
 // SPEC §7.1: Phase 1 core plus the Phase 4 calls below.
 export interface CodecInfo {
@@ -14,6 +14,8 @@ export interface NativeJobStatus {
 }
 export interface JobProgressEvent { id: string; fraction: number; attempt: number }
 export interface QueueEvent { jobs: NativeJobStatus[] }
+// takeShare: copies of what other apps shared since the last call (already in the app's own folder); overCap and blocked count streams left out.
+export interface ShareRead { items: RawShare[]; overCap: number; blocked: number }
 export interface VisionToolEntry { tool: 'person' | 'object' | 'upscale'; name: string; url: string; bytes: number; ready: boolean }
 export interface VisionProgressEvent { id: string; fraction: number }
 export type CleanupKind = 'blurry' | 'copies' | 'lookalikes' | 'screenshots' | 'dark';
@@ -56,6 +58,13 @@ export interface DesignMediaModule {
   searchPhotos(query: string): Promise<string[]>; // content URIs, best first, at most 60
   similarPhotos(uri: string): Promise<string[]>; // photos that look like this one, not including it
   releasePhotoSearch(): Promise<void>; // frees the text model's memory
+  photosTaken(fromMs: number, toMs: number, uris: string[] | null): Promise<{ uri: string; takenAt: number }[]>; // gallery photos taken in [fromMs, toMs), oldest first, at most 500; uris narrows to those
+  // Hand-offs: each opens a screen in the other app, where the owner decides. Deputy's answer is one of handed_over, cancelled, not_installed, refused, busy.
+  proposeDeputyTask(task: string, apps: string[]): Promise<'handed_over' | 'cancelled' | 'not_installed' | 'refused' | 'busy'>;
+  sendToNexus(uris: string[]): Promise<'sent' | 'not_installed'>; // 1 to 10 gallery photos, read-only grants, Nexus asks before it adds them
+  // Design with AI's two buttons: opens the Store or AI hub's own screen, nothing is sent. target is 'store' or 'aihub'; any other word is refused.
+  // 'refused' also covers an app on the phone that is not signed with the owner's key.
+  openApp(target: string): Promise<'opened' | 'not_installed' | 'refused'>;
   // Clean up: groups from the photo index. A photo leaves the gallery only through Android's own trash dialog.
   cleanupGroups(options?: { blurThreshold?: number; lookalikeCosine?: number }): Promise<CleanupResult>; // photos still in the gallery only
   trashPhotos(uris: string[]): Promise<{ moved: number; uris: string[]; noted: boolean }>; // opens Android's dialog; 0 and [] when the owner says no; uris: the ones sent, for Undo; noted false: in Android's trash but not in Recently removed
@@ -69,10 +78,12 @@ export interface DesignMediaModule {
   installVisionModel(name: string): Promise<boolean>; // file name, like installPhotoModel
   runVision(id: string, op: 'cutout' | 'upscale', src: string, option: string): Promise<string>; // option 'person'|'object' or '2'|'4'; returns the PNG's absolute path
   cancelVision(id: string): Promise<void>;
+  takeShare(): Promise<ShareRead>; // from the intent the app was opened with, or the one that arrived while it was open
   saveJson(name: string, text: string, filePath: string | null): Promise<string>;
   saveExport(name: string, ext: string, base64: string): Promise<string>;
   addListener(name: 'onJobProgress', fn: (e: JobProgressEvent) => void): { remove(): void };
   addListener(name: 'onQueue', fn: (e: QueueEvent) => void): { remove(): void };
+  addListener(name: 'onShare', fn: () => void): { remove(): void };
   addListener(name: 'onVisionProgress', fn: (e: VisionProgressEvent) => void): { remove(): void };
 }
 

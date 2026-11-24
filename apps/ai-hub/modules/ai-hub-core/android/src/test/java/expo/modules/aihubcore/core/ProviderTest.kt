@@ -110,6 +110,9 @@ class ProviderTest {
     val http = Fake(HttpReply(400, """{"error":"$g1 and $g2 are invalid for model"}"""), ok)
     val e = failure { provider(http, g1, g2).chat(groqChat, history, maxTokens = 100) }
     assertEquals(AiError.Kind.BAD_REQUEST, e.kind)
+    assertEquals(400, e.httpCode)
+    assertEquals(Service.GROQ, e.service)
+    assertFalse(e.fellBack)
     assertTrue(e.message, e.message!!.contains("are invalid for model"))
     assertFalse(e.message, e.message!!.contains(g1) || e.message!!.contains(g2))
     assertEquals(1, http.calls.size)
@@ -210,6 +213,19 @@ class ProviderTest {
     assertEquals(2, twice.calls.size)
   }
 
+  @Test fun aFailureRecordsTheServiceTheStatusAndWhetherTheOtherServiceWasTried() {
+    val http = Fake(HttpReply(401, ""), HttpReply(413, "too large"))
+    val e = failure { provider(http, g1, m1).chat(groqChat, history, maxTokens = 100) }
+    assertEquals(AiError.Kind.BAD_REQUEST, e.kind)
+    assertEquals(Service.GEMINI, e.service)
+    assertEquals(413, e.httpCode)
+    assertTrue("Gemini was tried after Groq refused the key", e.fellBack)
+    val server = failure { provider(Fake(HttpReply(503, "")), g1).chat(groqChat, history, maxTokens = 100) }
+    assertEquals(AiError.Kind.SERVER, server.kind)
+    assertEquals(503, server.httpCode)
+    assertFalse(server.fellBack)
+  }
+
   @Test fun chatFallsBackToGeminiWhenEveryGroqKeyIsRefusedOrLimited() {
     for (out in listOf(HttpReply(401, ""), HttpReply(429, ""))) {
       val http = Fake(out, out, ok)
@@ -277,7 +293,7 @@ class ProviderTest {
   @Test fun transcribeUploadsAMultipartForm() {
     val http = Fake(HttpReply(200, """{"text":"hi there"}"""))
     val audio = byteArrayOf(0, 1, 2, -1)
-    assertEquals("hi there", provider(http, g1).transcribe(Job.TRANSCRIBE.default, audio, "note.m4a", "audio/mp4"))
+    assertEquals(Transcript("hi there"), provider(http, g1).transcribe(Job.TRANSCRIBE.default, audio, "note.m4a", "audio/mp4"))
     val call = http.calls.single()
     assertEquals("https://api.groq.com/openai/v1/audio/transcriptions", call.url)
     assertTrue(call.contentType, call.contentType.startsWith("multipart/form-data; boundary="))
@@ -338,5 +354,31 @@ class ProviderTest {
     )
     assertTrue(msg.hasImage)
     assertFalse(Msgs.user("plain").hasImage)
+  }
+
+  @Test fun embedSendsDimensionsOnlyWhenAsked() {
+    val http = Fake(HttpReply(200, """{"data":[{"index":0,"embedding":[1,0]}]}"""))
+    provider(http, m1).embed(Job.EMBED.default, listOf("a"), 768)
+    assertEquals("""{"model":"gemini-embedding-001","input":["a"],"dimensions":768}""", http.calls.single().text)
+  }
+
+  @Test fun transcribeWithSegmentsAsksForVerboseJsonAndKeepsStartEndText() {
+    val reply = """{"task":"transcribe","text":"hi there","segments":[{"id":0,"seek":0,"start":0.0,"end":1.5,"text":"hi","tokens":[1],"avg_logprob":-0.1},{"id":1,"start":1.5,"end":2.25,"text":" there"}]}"""
+    val http = Fake(HttpReply(200, reply))
+    val t = provider(http, g1).transcribe(Job.TRANSCRIBE.default, byteArrayOf(1), "note.m4a", "audio/mp4", segments = true)
+    assertEquals(Transcript("hi there", listOf(Segment(0.0, 1.5, "hi"), Segment(1.5, 2.25, " there"))), t)
+    val b = http.calls.single().contentType.substringAfter("boundary=")
+    assertTrue(String(http.calls.single().body).contains("--$b\r\nContent-Disposition: form-data; name=\"response_format\"\r\n\r\nverbose_json\r\n"))
+  }
+
+  @Test fun transcribeWithoutSegmentsLeavesTheFormatAlone() {
+    val http = Fake(HttpReply(200, """{"text":"hi"}"""))
+    provider(http, g1).transcribe(Job.TRANSCRIBE.default, byteArrayOf(1), "note.m4a", "audio/mp4")
+    assertFalse(String(http.calls.single().body).contains("response_format"))
+  }
+
+  @Test fun segmentsMissingFromTheReplyIsAServerError() {
+    val e = failure { provider(Fake(HttpReply(200, """{"text":"hi"}""")), g1).transcribe(Job.TRANSCRIBE.default, byteArrayOf(1), "a.m4a", "audio/mp4", segments = true) }
+    assertEquals(AiError.Kind.SERVER, e.kind)
   }
 }

@@ -1,0 +1,10 @@
+{
+  "pinned": [
+    { "id": 12, "text": "Dentist on Tuesday at 4 pm, bring the referral", "pinned_at": 1764000000000, "from_app": "com.whatsapp" },
+    { "id": 40, "text": "221B Baker Street, London NW1 6XE", "pinned_at": 1764000100000, "from_app": "" }
+  ],
+  "health": [
+    { "app_id": "clipboard", "accessibility": 1, "listener": null, "ai_source": "none", "last_seen_at": 1764000000000 },
+    { "app_id": "clipboard", "accessibility": 0, "listener": null, "ai_source": "none", "last_seen_at": null }
+  ]
+}

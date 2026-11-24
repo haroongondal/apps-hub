@@ -34,6 +34,12 @@ class HubStore private constructor(context: Context) {
     }
   }
 
+  // The service and the screens both write these files, so a read-change-write must not interleave. Null from `change` writes nothing.
+  @Synchronized
+  fun update(name: String, change: (String?) -> String?) {
+    change(get(name))?.let { put(name, it) }
+  }
+
   companion object {
     private val NAME = Regex("[a-z0-9_-]{1,64}")
 

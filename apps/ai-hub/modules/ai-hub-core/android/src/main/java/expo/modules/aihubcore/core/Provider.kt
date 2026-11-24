@@ -10,6 +10,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.double
 import kotlinx.serialization.json.float
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
@@ -24,6 +25,11 @@ data class Msg(val role: String, val json: JsonObject) {
   val hasImage: Boolean
     get() = (json["content"] as? JsonArray)?.any { (it as? JsonObject)?.get("type")?.jsonPrimitive?.contentOrNull == "image_url" } == true
 }
+
+data class Segment(val start: Double, val end: Double, val text: String)
+
+// `segments` is null unless the caller asked for them.
+data class Transcript(val text: String, val segments: List<Segment>? = null)
 
 data class ToolSpec(val name: String, val description: String, val parameters: JsonObject)
 
@@ -151,8 +157,12 @@ class Provider(
     return ProviderJson.parseChat(body, served)
   }
 
-  fun embed(choice: ModelChoice, texts: List<String>): List<FloatArray> {
-    val request = buildJsonObject { put("model", choice.model); put("input", JsonArray(texts.map(::JsonPrimitive))) }.toString().toByteArray()
+  fun embed(choice: ModelChoice, texts: List<String>, dimensions: Int? = null): List<FloatArray> {
+    val request = buildJsonObject {
+      put("model", choice.model)
+      put("input", JsonArray(texts.map(::JsonPrimitive)))
+      dimensions?.let { put("dimensions", it) }
+    }.toString().toByteArray()
     val (_, body) = send(listOf(choice), "embeddings", JSON) { request }
     return ProviderJson.readable(choice.service) {
       val data = Json.parseToJsonElement(body).jsonObject["data"]!!.jsonArray.map { it.jsonObject }.sortedBy { it["index"]!!.jsonPrimitive.int }
@@ -161,16 +171,25 @@ class Provider(
     }
   }
 
-  fun transcribe(choice: ModelChoice, audio: ByteArray, fileName: String, mime: String): String {
+  fun transcribe(choice: ModelChoice, audio: ByteArray, fileName: String, mime: String, segments: Boolean = false): Transcript {
     val boundary = "aihub-${UUID.randomUUID()}"
-    val request = ProviderJson.multipart(boundary, mapOf("model" to choice.model), fileName, mime, audio)
+    val fields = if (segments) mapOf("model" to choice.model, "response_format" to "verbose_json") else mapOf("model" to choice.model)
+    val request = ProviderJson.multipart(boundary, fields, fileName, mime, audio)
     val (_, body) = send(listOf(choice), "audio/transcriptions", "multipart/form-data; boundary=$boundary") { request }
-    return ProviderJson.readable(choice.service) { Json.parseToJsonElement(body).jsonObject["text"]!!.jsonPrimitive.content }
+    return ProviderJson.readable(choice.service) {
+      val root = Json.parseToJsonElement(body).jsonObject
+      val parts = if (!segments) null else root["segments"]!!.jsonArray.map { g ->
+        val o = g.jsonObject
+        Segment(o["start"]!!.jsonPrimitive.double, o["end"]!!.jsonPrimitive.double, o["text"]!!.jsonPrimitive.content)
+      }
+      Transcript(root["text"]!!.jsonPrimitive.content, parts)
+    }
   }
 
   private fun send(choices: List<ModelChoice>, path: String, contentType: String, request: (ModelChoice) -> ByteArray): Pair<ModelChoice, String> {
     val usable = choices.filter { ring.keys(it.service).isNotEmpty() }
-    if (usable.isEmpty()) throw AiError(AiError.Kind.AUTH, "No ${choices.first().service.label} key is set. Add one in AI hub.")
+    val first = choices.first()
+    if (usable.isEmpty()) throw AiError(AiError.Kind.AUTH, "No ${first.service.label} key is set. Add one in AI hub.", service = first.service)
     val names = usable.joinToString(" and ") { it.service.label }
     var waits = 0
     var refusedCode = 0
@@ -196,16 +215,16 @@ class Provider(
             }
             Verdict.STOP -> {
               ring.use(choice.service, i)
-              throw stopped(choice.service, reply)
+              throw stopped(choice.service, reply, choice != first)
             }
           }
         }
       }
       if (exhausted(wait != null) == Exhausted.REFUSED) {
-        throw AiError(AiError.Kind.AUTH, "$names refused every key (HTTP $refusedCode). Check your $names keys in AI hub.")
+        throw AiError(AiError.Kind.AUTH, "$names refused every key (HTTP $refusedCode). Check your $names keys in AI hub.", service = usable.last().service, httpCode = refusedCode, fellBack = usable.size > 1)
       }
       if (waits++ == MAX_RATE_WAITS) {
-        throw AiError(AiError.Kind.RATE, "Every $names key is at its rate limit. Wait a minute and try again, or add another key in AI hub.", wait)
+        throw AiError(AiError.Kind.RATE, "Every $names key is at its rate limit. Wait a minute and try again, or add another key in AI hub.", wait, usable.last().service, 429, usable.size > 1)
       }
       sleep(wait!!)
     }
@@ -220,9 +239,9 @@ class Provider(
         transport.post(service.baseUrl + path, headers, body, contentType)
       } catch (e: SocketTimeoutException) {
         // A read timeout means the model has the request and bills it, so it is never sent again.
-        throw AiError(AiError.Kind.TIMEOUT, "${service.label} took too long to answer. Try again later.")
+        throw AiError(AiError.Kind.TIMEOUT, "${service.label} took too long to answer. Try again later.", service = service)
       } catch (e: IOException) {
-        if (attempt == RETRY_DELAYS.size) throw AiError(AiError.Kind.OFFLINE, "AI hub couldn't reach ${service.label}. Check the phone's connection and try again.")
+        if (attempt == RETRY_DELAYS.size) throw AiError(AiError.Kind.OFFLINE, "AI hub couldn't reach ${service.label}. Check the phone's connection and try again.", service = service)
         sleep(RETRY_DELAYS[attempt++])
         continue
       }
@@ -234,12 +253,15 @@ class Provider(
     }
   }
 
-  private fun stopped(service: Service, r: HttpReply): AiError = when {
-    r.code in GATEWAY_TIMEOUTS -> AiError(AiError.Kind.TIMEOUT, "${service.label} took too long to answer. Try again later.")
-    r.code >= 500 -> AiError(AiError.Kind.SERVER, "${service.label} is busy or failing (HTTP ${r.code}). Try again later.")
+  private fun stopped(service: Service, r: HttpReply, fellBack: Boolean): AiError = when {
+    r.code in GATEWAY_TIMEOUTS -> AiError(AiError.Kind.TIMEOUT, "${service.label} took too long to answer. Try again later.", service = service, httpCode = r.code, fellBack = fellBack)
+    r.code >= 500 -> AiError(AiError.Kind.SERVER, "${service.label} is busy or failing (HTTP ${r.code}). Try again later.", service = service, httpCode = r.code, fellBack = fellBack)
     else -> AiError(
       AiError.Kind.BAD_REQUEST,
       "${service.label} rejected the request (HTTP ${r.code}): " + ring.all.fold(r.body) { b, k -> b.replace(k, "[key]") }.take(2_000),
+      service = service,
+      httpCode = r.code,
+      fellBack = fellBack,
     )
   }
 

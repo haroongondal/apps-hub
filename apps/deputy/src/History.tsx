@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { Button, Group, Notice, Pill, RecordMenu, Row, Sheet, Text, confirmAction, space, type Tone } from '@apps-hub/ui';
 import DeputyAgent, { type RunSummary, type ServiceState } from 'deputy-agent';
 import { StepRow } from './RunPanel';
+import { ScheduleSheet } from './ScheduleSheet';
 import { TaskSheet } from './SavedTasks';
 
 const STATUS: Record<RunSummary['status'], { label: string; tone: Tone }> = {
@@ -21,6 +22,7 @@ export function History({ state, refresh }: { state: ServiceState; refresh: () =
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [open, setOpen] = useState<RunSummary | null>(null);
   const [saving, setSaving] = useState<RunSummary | null>(null);
+  const [repeating, setRepeating] = useState<RunSummary | null>(null);
 
   useEffect(() => setRuns(DeputyAgent.listRuns(LIMIT)), [state]);
 
@@ -42,6 +44,11 @@ export function History({ state, refresh }: { state: ServiceState; refresh: () =
 
   const saveOpen = () => {
     setSaving(open);
+    setOpen(null);
+  };
+
+  const repeatOpen = () => {
+    setRepeating(open);
     setOpen(null);
   };
 
@@ -70,6 +77,7 @@ export function History({ state, refresh }: { state: ServiceState; refresh: () =
                     accessibilityLabel={`More actions for ${r.task}`}
                     actions={[
                       { label: 'Save as task', onPress: () => setSaving(r) },
+                      { label: 'Repeat this task', onPress: () => setRepeating(r) },
                       {
                         label: 'Delete',
                         onPress: () => removeRun(r),
@@ -87,13 +95,14 @@ export function History({ state, refresh }: { state: ServiceState; refresh: () =
           />
         ))}
       </Group>
-      {open && <RunSheet run={open} onClose={() => setOpen(null)} onSave={saveOpen} />}
+      {open && <RunSheet run={open} onClose={() => setOpen(null)} onSave={saveOpen} onRepeat={repeatOpen} />}
       {saving && <TaskSheet task={null} draft={{ name: saving.task.slice(0, 60), task: saving.task }} onClose={() => setSaving(null)} onSaved={refresh} />}
+      {repeating && <ScheduleSheet schedule={null} draft={{ name: repeating.task.slice(0, 60), task: repeating.task }} onClose={() => setRepeating(null)} onSaved={refresh} />}
     </>
   );
 }
 
-function RunSheet({ run, onClose, onSave }: { run: RunSummary; onClose: () => void; onSave: () => void }) {
+export function RunSheet({ run, onClose, onSave, onRepeat }: { run: RunSummary; onClose: () => void; onSave?: () => void; onRepeat?: () => void }) {
   const [events] = useState(() => DeputyAgent.getRunLog(run.runId));
   return (
     <Sheet visible onClose={onClose} title="Past task">
@@ -102,7 +111,8 @@ function RunSheet({ run, onClose, onSave }: { run: RunSummary; onClose: () => vo
         {run.summary ?? `${run.steps} steps, $${run.costUsd.toFixed(4)}`}
       </Notice>
       <Group>{events.map((e, i) => (e.type === 'step' ? <StepRow key={i} step={e} /> : null))}</Group>
-      <Button label="Save as task" variant="secondary" onPress={onSave} block />
+      {onSave && <Button label="Save as task" variant="secondary" onPress={onSave} block />}
+      {onRepeat && run.status !== 'running' && <Button label="Repeat this task" variant="secondary" onPress={onRepeat} block />}
     </Sheet>
   );
 }

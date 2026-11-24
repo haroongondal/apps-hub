@@ -202,7 +202,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -446,7 +454,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -675,7 +691,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -904,7 +928,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -1125,7 +1157,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -1363,7 +1403,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -1573,7 +1621,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -1791,7 +1847,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -2004,7 +2068,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -2214,7 +2286,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -2432,7 +2512,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -2643,7 +2731,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -2851,7 +2947,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -3059,7 +3163,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -3267,7 +3379,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -3475,7 +3595,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -3685,7 +3813,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -3906,7 +4042,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -4127,7 +4271,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -4335,7 +4487,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -4554,7 +4714,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -4818,7 +4986,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -5032,7 +5208,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -5245,7 +5429,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -5490,7 +5682,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -5700,7 +5900,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -5910,7 +6118,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -6120,7 +6336,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -6331,7 +6555,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -6542,7 +6774,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -6753,7 +6993,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -6963,7 +7211,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -7173,7 +7429,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -7412,7 +7676,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -7635,7 +7907,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -13852,7 +14132,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -14061,7 +14349,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -14280,7 +14576,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -14489,7 +14793,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -14726,7 +15038,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -14936,7 +15256,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -15146,7 +15474,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -15356,7 +15692,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -15566,7 +15910,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -15776,7 +16128,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -15984,7 +16344,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -16194,7 +16562,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -16404,7 +16780,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -16618,7 +17002,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -16828,7 +17220,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -17080,7 +17480,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -17313,7 +17721,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -17523,7 +17939,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -17731,7 +18155,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -17941,7 +18373,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -18157,7 +18597,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -18921,7 +19369,15 @@
      "name": "Theme 20",
      "face": "big-digits"
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -19061,7 +19517,15 @@
      "name": "B",
      "face": "stacked"
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -19197,7 +19661,15 @@
      "name": "First",
      "face": "stacked"
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -19398,7 +19870,15 @@
      "name": "Bad",
      "face": "stacked"
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -19564,7 +20044,15 @@
      "name": "B",
      "face": "big-digits"
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -19758,7 +20246,15 @@
      "name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
      "face": "stacked"
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -19934,7 +20430,15 @@
      "name": "B",
      "face": "stacked"
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -20150,7 +20654,15 @@
      "name": "C",
      "face": "stacked"
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -20303,7 +20815,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -20433,7 +20953,15 @@
      },
      "brightness": 0.02
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -20563,7 +21091,15 @@
      },
      "brightness": 0.02
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -20789,7 +21325,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -21009,7 +21553,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -21222,7 +21774,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -21437,7 +21997,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -21684,7 +22252,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -21894,7 +22470,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -22104,7 +22688,15 @@
       ]
      }
     }
-   ]
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
   }
  },
  {
@@ -22314,7 +22906,901 @@
       ]
      }
     }
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
+  }
+ },
+ {
+  "name": "links all on are kept",
+  "input": {
+   "links": {
+    "shieldPulse": true,
+    "waitingPulse": true,
+    "waitingAod": true,
+    "bubble": true,
+    "briefing": true,
+    "briefingPrivate": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ],
+   "links": {
+    "shieldPulse": true,
+    "waitingPulse": true,
+    "waitingAod": true,
+    "bubble": true,
+    "briefing": true,
+    "briefingPrivate": true
+   }
+  }
+ },
+ {
+  "name": "links of the wrong type give all off",
+  "input": {
+   "links": [
+    1,
+    2
    ]
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": false,
+    "briefingPrivate": false
+   }
+  }
+ },
+ {
+  "name": "links fields of the wrong type fall back to off",
+  "input": {
+   "links": {
+    "shieldPulse": 1,
+    "waitingPulse": "true",
+    "waitingAod": null,
+    "bubble": true,
+    "briefing": {},
+    "briefingPrivate": [
+     true
+    ]
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": true,
+    "briefing": false,
+    "briefingPrivate": false
+   }
+  }
+ },
+ {
+  "name": "unknown links fields are dropped",
+  "input": {
+   "links": {
+    "briefing": true,
+    "sendEverywhere": true
+   }
+  },
+  "expected": {
+   "version": 1,
+   "enabled": true,
+   "pattern": "pulse-ring",
+   "params": {
+    "thickness": 4,
+    "speed": 0.5,
+    "spread": 0.5,
+    "glow": 0.6,
+    "padding": 0,
+    "roundness": 1,
+    "mirrored": false,
+    "clockwise": true
+   },
+   "colors": {
+    "source": "albumArt",
+    "palette": [
+     "#22D3EE",
+     "#A78BFA"
+    ]
+   },
+   "edges": {
+    "auto": true,
+    "corners": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "insets": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "notify": {
+    "enabled": true,
+    "apps": {},
+    "defaultOn": true,
+    "style": "pulse",
+    "repeat": 2,
+    "durationMs": 1500,
+    "reminderMin": null,
+    "wakeScreen": false,
+    "quiet": {
+     "on": false,
+     "start": "22:00",
+     "end": "07:00"
+    }
+   },
+   "rules": {
+    "apps": [],
+    "fullscreen": true,
+    "landscape": false,
+    "calls": true,
+    "batterySaver": true,
+    "pocket": false
+   },
+   "aod": {
+    "enabled": false,
+    "timeoutSec": 30,
+    "trigger": "always",
+    "schedule": {
+     "on": false,
+     "start": "00:00",
+     "end": "07:00"
+    },
+    "themeId": "night",
+    "slots": [],
+    "dots": {
+     "on": true,
+     "kinds": {
+      "charging": true,
+      "lowBattery": true,
+      "call": true,
+      "whatsapp": true,
+      "instagram": true,
+      "message": true,
+      "email": true,
+      "other": true,
+      "alarm": true,
+      "media": true
+     },
+     "count": true
+    },
+    "chargeEffect": "sweep",
+    "wakeOnCharge": true
+   },
+   "themes": [
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "night",
+     "name": "Night",
+     "face": "big-digits",
+     "colours": {
+      "source": "wallpaper",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-wave"
+     },
+     "brightness": 0.02,
+     "id": "pulse",
+     "name": "Pulse",
+     "face": "ring-analog",
+     "colours": {
+      "source": "albumArt",
+      "palette": [
+       "#22D3EE",
+       "#A78BFA"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.6,
+     "edge": {
+      "on": false,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "glass",
+     "name": "Glass",
+     "face": "stacked",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#A78BFA",
+       "#22D3EE"
+      ]
+     }
+    },
+    {
+     "faceOptions": {
+      "size": "m",
+      "position": "centre",
+      "h24": true,
+      "date": true,
+      "battery": true,
+      "alarm": false,
+      "seconds": false
+     },
+     "photo": false,
+     "dim": 0.5,
+     "edge": {
+      "on": true,
+      "pattern": "pulse-ring"
+     },
+     "brightness": 0.02,
+     "id": "mono",
+     "name": "Mono",
+     "face": "minimal-line",
+     "colours": {
+      "source": "palette",
+      "palette": [
+       "#FFFFFF"
+      ]
+     }
+    }
+   ],
+   "links": {
+    "shieldPulse": false,
+    "waitingPulse": false,
+    "waitingAod": false,
+    "bubble": false,
+    "briefing": true,
+    "briefingPrivate": false
+   }
   }
  }
 ]

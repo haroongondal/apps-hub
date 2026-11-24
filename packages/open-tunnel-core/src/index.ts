@@ -9,3 +9,4 @@ export * from './vpngate.ts';
 export * from './vpngate-service.ts';
 export * from './latency-prober.ts';
 export * from './fitness.ts';
+export * from './best-relay.ts';

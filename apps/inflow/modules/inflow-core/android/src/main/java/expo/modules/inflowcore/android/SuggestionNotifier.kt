@@ -13,6 +13,7 @@ import android.provider.CalendarContract
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import expo.modules.inflowcore.R
+import expo.modules.inflowcore.applink.AppLinkTarget
 import expo.modules.inflowcore.core.AUTOPILOT_META
 import expo.modules.inflowcore.core.AutopilotSettings
 import expo.modules.inflowcore.core.RunPlan
@@ -123,6 +124,8 @@ object SuggestionNotifier {
   private fun askDeputy(ctx: Context, id: Long, settings: AutopilotSettings): String? {
     val look = settings.lookIn.ifEmpty { defaultLookIn(ctx) }
     val i = Intent().setComponent(ComponentName(DEPUTY, DEPUTY_ACTIVITY)).putExtra("suggestionId", id).putExtra("lookIn", look.toTypedArray())
+    // An app that took Deputy's package name first, or a lookalike signed with another key, is "not installed": never started, never an implicit fallback.
+    if (!AppLinkTarget.trustedActivity(ctx, i)) return "Deputy isn't installed."
     return start(ctx, i, "Deputy isn't installed.")
   }
 

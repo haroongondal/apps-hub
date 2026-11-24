@@ -62,24 +62,110 @@ export function isGenericDeviceName(name: string): boolean {
  * non-empty hostname or mdnsName. A generic name ({@link isGenericDeviceName}) never matches.
  * Returns only the rows that changed.
  */
-export function carryPersonTags(devices: readonly ReconciledDevice[]): ReconciledDevice[] {
+export function carryPersonTags(
+  devices: readonly ReconciledDevice[],
+  serviceNamesByIp?: ReadonlyMap<string, readonly string[]>,
+): ReconciledDevice[] {
+  const changed = new Map<number, ReconciledDevice>();
+  for (const c of carryMatches(devices, serviceNamesByIp).filter((m) => !m.suggest)) {
+    changed.set(c.to, { ...devices[c.to], person: devices[c.from].person });
+    changed.set(c.from, { ...devices[c.from], person: null });
+  }
+  return [...changed.entries()].sort((a, b) => a[0] - b[0]).map(([, d]) => d);
+}
+
+export interface TagCarry {
+  person: string;
+  from: ReconciledDevice;
+  device: ReconciledDevice;
+  reason: string;
+}
+
+export function personTagCarries(
+  devices: readonly ReconciledDevice[],
+  serviceNamesByIp?: ReadonlyMap<string, readonly string[]>,
+): TagCarry[] {
+  return tagMoves(devices, serviceNamesByIp, false);
+}
+
+/** Moves the owner should confirm: a row that only calls itself "<person>'s …" may be their laptop or a guest's phone. */
+export function personTagSuggestions(
+  devices: readonly ReconciledDevice[],
+  serviceNamesByIp?: ReadonlyMap<string, readonly string[]>,
+): TagCarry[] {
+  return tagMoves(devices, serviceNamesByIp, true);
+}
+
+function tagMoves(
+  devices: readonly ReconciledDevice[],
+  serviceNamesByIp: ReadonlyMap<string, readonly string[]> | undefined,
+  suggest: boolean,
+): TagCarry[] {
+  return carryMatches(devices, serviceNamesByIp)
+    .filter((c) => c.suggest === suggest)
+    .map((c) => ({
+      person: tagOf(devices[c.from]),
+      from: { ...devices[c.from], person: null },
+      device: { ...devices[c.to], person: devices[c.from].person },
+      reason: c.reason,
+    }));
+}
+
+export function ownerOfName(name: string | null): string | null {
+  const owner = /^(.{1,32}?)['’]s\s+\S/u.exec((name ?? '').trim())?.[1].trim() ?? '';
+  return /\p{L}/u.test(owner) && !isGenericDeviceName(owner) ? owner : null;
+}
+
+// Signals in order; a later one runs only when the one before matched no row at all, so the old
+// name match never changes. Bonjour names ("Haroon's iPhone") come from this scan, cleaned, by IP.
+function carryMatches(
+  devices: readonly ReconciledDevice[],
+  serviceNamesByIp: ReadonlyMap<string, readonly string[]> = new Map(),
+): { from: number; to: number; reason: string; suggest: boolean }[] {
   const candidates = devices
     .map((d, i) => ({ d, i }))
     .filter(({ d }) => d.seenThisScan && !tagOf(d));
-  const changed = new Map<number, ReconciledDevice>();
-  devices.forEach((old, oldIndex) => {
+  const services = (d: ReconciledDevice): readonly string[] => serviceNamesByIp.get(d.lastIp) ?? [];
+  const used = new Set<number>();
+  const found: { from: number; to: number; reason: string; suggest: boolean }[] = [];
+  devices.forEach((old, from) => {
     if (old.seenThisScan || !tagOf(old)) return;
     const host = matchKey(old.hostname);
     const mdns = matchKey(old.mdnsName);
-    const matches = candidates.filter(
-      ({ d }) =>
-        (host !== '' && nameKey(d.hostname) === host) || (mdns !== '' && nameKey(d.mdnsName) === mdns),
-    );
-    if (matches.length !== 1 || changed.has(matches[0].i)) return;
-    changed.set(matches[0].i, { ...matches[0].d, person: old.person });
-    changed.set(oldIndex, { ...old, person: null });
+    const person = tagOf(old).toLowerCase();
+    const sameName = (n: string | null): boolean => matchKey(n) !== '' && (matchKey(n) === host || matchKey(n) === mdns);
+    const steps: ((d: ReconciledDevice) => string | null)[] = [
+      (d) =>
+        host !== '' && nameKey(d.hostname) === host
+          ? `Same name on the network, ${d.hostname}`
+          : mdns !== '' && nameKey(d.mdnsName) === mdns
+            ? `Same name on the network, ${d.mdnsName}`
+            : null,
+      (d) => {
+        const name = services(d).find(sameName);
+        return name ? `It announces the same name, ${name}` : null;
+      },
+      (d) => {
+        const name = [d.hostname, d.mdnsName, ...services(d)].find((n) => ownerOfName(n)?.toLowerCase() === person);
+        return name ? `It calls itself ${name}` : null;
+      },
+    ];
+    for (const [n, step] of steps.entries()) {
+      const matches = candidates.flatMap(({ d, i }) => {
+        const reason = step(d);
+        return reason === null ? [] : [{ i, reason }];
+      });
+      if (matches.length === 0) continue;
+      if (matches.length === 1 && !used.has(matches[0].i)) {
+        // The owner word is only a suggestion: it never moves the tag (and so never takes the row) by itself.
+        const suggest = n === steps.length - 1;
+        if (!suggest) used.add(matches[0].i);
+        found.push({ from, to: matches[0].i, reason: matches[0].reason, suggest });
+      }
+      return;
+    }
   });
-  return [...changed.entries()].sort((a, b) => a[0] - b[0]).map(([, d]) => d);
+  return found;
 }
 
 /** Phones sleep their radios but still answer or refuse on one of these. */

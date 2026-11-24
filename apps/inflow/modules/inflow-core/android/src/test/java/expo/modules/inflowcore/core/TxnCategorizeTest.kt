@@ -1,5 +1,6 @@
 package expo.modules.inflowcore.core
 
+import expo.modules.aihubclient.core.Kinds
 import java.time.Instant
 import java.time.ZoneId
 import kotlinx.serialization.json.Json
@@ -112,16 +113,15 @@ class TxnCategorizeTest {
   private var spent = 0
   private var cap = false
 
-  private fun post(url: String, headers: Map<String, String>, body: String): HttpReply {
+  private fun post(json: String): String {
     calls++
-    val user = Json.parseToJsonElement(body).jsonObject["messages"]!!.jsonArray[1].jsonObject["content"]!!.jsonPrimitive.content
+    val user = FakeHub.user(json)
     val ids = user.lines().filter { it.startsWith("{") }.map { Json.parseToJsonElement(it).jsonObject["id"]!!.jsonPrimitive.content.toLong() }
     sentIds += ids
-    val content = Json.encodeToString(kotlinx.serialization.serializer<String>(), answer(ids))
-    return HttpReply(200, """{"choices":[{"message":{"role":"assistant","content":$content}}],"usage":{"prompt_tokens":10,"completion_tokens":5}}""")
+    return FakeHub.reply(answer(ids))
   }
 
-  private val provider = OpenAiCompatProvider("https://x.example/v1", "m", listOf("k"), null, ::post, {})
+  private val provider = FakeHub.ai(hub = ::post)
 
   private fun run(max: Int = 5, hasProvider: Boolean = true) =
     TxnCategorize(store, { if (hasProvider) provider else null }, { spent++ }, { cap }, karachi).run(max)
@@ -200,7 +200,7 @@ class TxnCategorizeTest {
 
   @Test fun aRefusedRequestStopsTheRunWithoutCountingATry() {
     val a = add()
-    val refusing = OpenAiCompatProvider("https://x.example/v1", "m", listOf("k"), null, { _, _, _ -> HttpReply(400, "bad model") }, {})
+    val refusing = FakeHub.ai { FakeHub.fail(Kinds.INVALID) }
     assertEquals(0, TxnCategorize(store, { refusing }, { spent++ }, { false }, karachi).run())
     assertNull(store.tries[a])
     assertNull(txn(a).category)
@@ -208,14 +208,14 @@ class TxnCategorizeTest {
 
   @Test fun aTimeoutKeepsTheTxnsForLater() {
     val a = add()
-    val slow = OpenAiCompatProvider("https://x.example/v1", "m", listOf("k"), null, { _, _, _ -> throw java.net.SocketTimeoutException("Read timed out") }, {})
+    val slow = FakeHub.ai { FakeHub.fail(Kinds.TIMEOUT) }
     assertEquals(0, TxnCategorize(store, { slow }, { spent++ }, { false }, karachi).run())
     assertNull(store.tries[a])
   }
 
-  @Test fun anApiErrorKeepsTheTxnsForLater() {
+  @Test fun aHubWithoutAKeyKeepsTheTxnsForLater() {
     val a = add()
-    val failing = OpenAiCompatProvider("https://x.example/v1", "m", listOf("k"), null, { _, _, _ -> HttpReply(401, "no") }, {})
+    val failing = FakeHub.ai { FakeHub.fail(Kinds.NO_KEY) }
     assertEquals(0, TxnCategorize(store, { failing }, { spent++ }, { false }, karachi).run())
     assertNull(store.tries[a])
     assertNull(txn(a).category)

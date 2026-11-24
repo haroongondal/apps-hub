@@ -76,16 +76,20 @@ export function ItemRow({
   item,
   snippet,
   where,
+  origin,
   onOpen,
   actions,
 }: {
   item: Item;
   snippet: string | null;
   where: string | null;
+  /** "From Inflow message, 3 Nov" for an item read from another app: it says more than the kind, date and size. */
+  origin?: string | null;
   onOpen: () => void;
   actions: RecordAction[];
 }) {
-  const subtitle = where ? `${describeItem(item)} · in ${where}` : describeItem(item);
+  const what = origin ?? describeItem(item);
+  const subtitle = where ? `${what} · in ${where}` : what;
   return (
     <Group>
       <Row

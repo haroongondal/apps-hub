@@ -1,0 +1,69 @@
+[
+  {
+    "name": "a first answer makes an unknown person present",
+    "awayAfter": 3,
+    "start": { "present": false, "misses": 3, "lastSeenAt": 0 },
+    "steps": [{ "answered": true, "now": 1000 }],
+    "expect": [{ "present": true, "misses": 0, "lastSeenAt": 1000 }]
+  },
+  {
+    "name": "one or two misses keep a present person home",
+    "awayAfter": 3,
+    "start": { "present": true, "misses": 0, "lastSeenAt": 1000 },
+    "steps": [{ "answered": false, "now": 2000 }, { "answered": false, "now": 3000 }],
+    "expect": [
+      { "present": true, "misses": 1, "lastSeenAt": 1000 },
+      { "present": true, "misses": 2, "lastSeenAt": 1000 }
+    ]
+  },
+  {
+    "name": "the third miss in a row turns the person away",
+    "awayAfter": 3,
+    "start": { "present": true, "misses": 2, "lastSeenAt": 1000 },
+    "steps": [{ "answered": false, "now": 4000 }, { "answered": false, "now": 5000 }],
+    "expect": [
+      { "present": false, "misses": 3, "lastSeenAt": 1000 },
+      { "present": false, "misses": 4, "lastSeenAt": 1000 }
+    ]
+  },
+  {
+    "name": "a sleeping phone that misses, answers, misses does not flap",
+    "awayAfter": 3,
+    "start": { "present": true, "misses": 0, "lastSeenAt": 1000 },
+    "steps": [
+      { "answered": false, "now": 2000 },
+      { "answered": false, "now": 3000 },
+      { "answered": true, "now": 4000 },
+      { "answered": false, "now": 5000 },
+      { "answered": false, "now": 6000 }
+    ],
+    "expect": [
+      { "present": true, "misses": 1, "lastSeenAt": 1000 },
+      { "present": true, "misses": 2, "lastSeenAt": 1000 },
+      { "present": true, "misses": 0, "lastSeenAt": 4000 },
+      { "present": true, "misses": 1, "lastSeenAt": 4000 },
+      { "present": true, "misses": 2, "lastSeenAt": 4000 }
+    ]
+  },
+  {
+    "name": "an away person comes home on one answer",
+    "awayAfter": 3,
+    "start": { "present": false, "misses": 7, "lastSeenAt": 1000 },
+    "steps": [{ "answered": true, "now": 9000 }],
+    "expect": [{ "present": true, "misses": 0, "lastSeenAt": 9000 }]
+  },
+  {
+    "name": "an answer stamped before the last sighting keeps the later time",
+    "awayAfter": 3,
+    "start": { "present": true, "misses": 1, "lastSeenAt": 5000 },
+    "steps": [{ "answered": true, "now": 4000 }],
+    "expect": [{ "present": true, "misses": 0, "lastSeenAt": 5000 }]
+  },
+  {
+    "name": "awayAfter 1 turns away on the first miss",
+    "awayAfter": 1,
+    "start": { "present": true, "misses": 0, "lastSeenAt": 1000 },
+    "steps": [{ "answered": false, "now": 2000 }],
+    "expect": [{ "present": false, "misses": 1, "lastSeenAt": 1000 }]
+  }
+]

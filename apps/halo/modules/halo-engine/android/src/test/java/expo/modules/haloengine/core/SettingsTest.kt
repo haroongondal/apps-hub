@@ -32,6 +32,13 @@ class SettingsTest {
       val e = o["expected"]!!.jsonObject
       fun JsonObject.nums(k: String) = this[k]!!.jsonArray.map { it.jsonPrimitive.double }
       assertEquals("$name enabled", e.b("enabled"), s.enabled)
+      val l = e["links"]!!.jsonObject
+      val links = mapOf(
+        "shieldPulse" to s.links.shieldPulse, "waitingPulse" to s.links.waitingPulse, "waitingAod" to s.links.waitingAod,
+        "bubble" to s.links.bubble, "briefing" to s.links.briefing, "briefingPrivate" to s.links.briefingPrivate,
+      )
+      assertEquals("$name links keys", l.keys, links.keys)
+      for ((k, v) in links) assertEquals("$name links.$k", l.b(k), v)
       assertEquals("$name pattern", e.str("pattern"), s.pattern)
       val p = e["params"]!!.jsonObject
       val params = mapOf(
@@ -165,6 +172,11 @@ class SettingsTest {
     assertTrue(off.copy(enabled = true).serviceWanted)
     assertTrue(off.copy(aod = SettingsAod(enabled = true)).serviceWanted)
     assertTrue(off.copy(notify = SettingsNotify(enabled = true)).serviceWanted)
+    assertTrue(off.copy(links = SettingsLinks(shieldPulse = true)).serviceWanted)
+    assertTrue(off.copy(links = SettingsLinks(waitingPulse = true)).serviceWanted)
+    assertTrue(off.copy(links = SettingsLinks(bubble = true)).serviceWanted)
+    // The always-on rows need the always-on screen, which already wants the service.
+    assertTrue(!off.copy(links = SettingsLinks(waitingAod = true, briefing = true, briefingPrivate = true)).serviceWanted)
   }
 
   @Test

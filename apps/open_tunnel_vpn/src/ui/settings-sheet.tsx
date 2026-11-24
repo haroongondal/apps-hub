@@ -19,12 +19,24 @@ import {
   space,
 } from '@apps-hub/ui';
 
+import type { KillSwitchStatus, NetworkInfo } from 'open-tunnel-native';
 import type { TunnelSettings } from '../data/settings-store.ts';
+import { lockdownHint } from '../tunnel/kill-switch.ts';
+import { describeNetwork, isTrusted, trustNetwork } from '../tunnel/trusted-wifi.ts';
 
 export interface SettingsSheetProps {
   visible: boolean;
   onClose(): void;
   settings: TunnelSettings;
+  killSwitch: KillSwitchStatus;
+  /** The phone's own network while Trusted Wi-Fi watches it; null otherwise. */
+  network: NetworkInfo | null;
+  trustedWifiError: string | null;
+  shieldsError: string | null;
+  onChangeShields(enabled: boolean): void;
+  onChangeTrustedWifi(enabled: boolean): void;
+  onTrustNetwork(): void;
+  onForgetNetwork(ssid: string): void;
   onChangeKillSwitch(enabled: boolean): void;
   onAddDisallowedApp(packageName: string): void;
   onRemoveDisallowedApp(packageName: string): void;
@@ -38,15 +50,23 @@ const KILL_SWITCH_OPTIONS = [
 
 function killSwitchDetail(platform: string): string {
   if (platform === 'ios') {
-    return 'The tunnel uses the system on-demand rule to hold the connection while this is on.';
+    return 'iPhone reconnects the VPN by itself and keeps traffic inside it while this is on.';
   }
-  return 'The engine drops packets that try to bypass the tunnel. The system always-on switch adds OS-level blocking.';
+  return 'If the VPN drops, TunnelWall blocks internet until a relay connects or you stop blocking.';
 }
 
 export function SettingsSheet({
   visible,
   onClose,
   settings,
+  killSwitch,
+  network,
+  trustedWifiError,
+  shieldsError,
+  onChangeShields,
+  onChangeTrustedWifi,
+  onTrustNetwork,
+  onForgetNetwork,
   onChangeKillSwitch,
   onAddDisallowedApp,
   onRemoveDisallowedApp,
@@ -77,28 +97,115 @@ export function SettingsSheet({
   return (
     <Sheet visible={visible} onClose={onClose} title="Settings">
       <Group
-        title="Kill switch"
-        footer="Applies on the next connect. Changing it does not alter a running tunnel."
+        title="When the VPN drops"
+        footer="Applies on the next connect. Changing it does not alter a running connection."
       >
         <Row
-          title="Block traffic without the tunnel"
+          title="Block internet while the VPN is off"
           subtitle={killSwitchDetail(Platform.OS)}
           trailing={
             <Segmented
               options={KILL_SWITCH_OPTIONS}
               value={settings.killSwitchEnabled ? 'on' : 'off'}
               onChange={(key) => onChangeKillSwitch(key === 'on')}
-              accessibilityLabel="Kill switch"
+              accessibilityLabel="Block internet while the VPN is off"
             />
           }
         />
-        <Row
-          title="Always-on VPN settings"
-          subtitle="Opens the system screen for the OS-level switch"
-          onPress={onOpenSystemSettings}
-          accessibilityHint="Deep-links to the system VPN settings"
-        />
+        {Platform.OS === 'android' ? (
+          <Row
+            {...lockdownHint(killSwitch)}
+            onPress={onOpenSystemSettings}
+            accessibilityHint="Opens Android's VPN settings"
+          />
+        ) : (
+          <Row
+            title="VPN settings"
+            subtitle="Opens the settings for TunnelWall"
+            onPress={onOpenSystemSettings}
+            accessibilityHint="Opens the system settings"
+          />
+        )}
       </Group>
+
+      {Platform.OS === 'android' && (
+        <Group
+          title="Shields"
+          footer="Off unless you turn it on. When on, TunnelWall connects by itself on networks you don't trust, and Halo shows a red pulse while you're on one. It watches only while TunnelWall is open or connected. Halo learns only whether the network is trusted, never its name."
+        >
+          {Number(Platform.Version) < 31 ? (
+            <Row title="Shields" subtitle="Needs Android 12 or newer." />
+          ) : (
+            <Row
+              title="Shields"
+              subtitle="Warn me and protect me on networks I don't trust."
+              trailing={
+                <Segmented
+                  options={KILL_SWITCH_OPTIONS}
+                  value={settings.shieldsEnabled ? 'on' : 'off'}
+                  onChange={(key) => onChangeShields(key === 'on')}
+                  accessibilityLabel="Shields: warn me and protect me on networks I don't trust"
+                />
+              }
+            />
+          )}
+          {shieldsError !== null && (
+            <View style={{ paddingHorizontal: space.lg, paddingBottom: space.md }}>
+              <Notice tone="warn">{shieldsError}</Notice>
+            </View>
+          )}
+        </Group>
+      )}
+
+      {Platform.OS === 'android' && (
+        <Group
+          title="Trusted Wi-Fi"
+          footer="Off unless you turn it on. When on, TunnelWall connects to the best relay by itself on any network that is not a trusted Wi-Fi, while TunnelWall is open or connected. Wi-Fi names stay on this phone."
+        >
+          {Number(Platform.Version) < 31 ? (
+            <Row title="Connect on other networks" subtitle="Needs Android 12 or newer." />
+          ) : (
+            <Row
+              title="Connect on other networks"
+              subtitle="Turning this on asks for precise location: Android shows the Wi-Fi name only to apps that have it."
+              trailing={
+                <Segmented
+                  options={KILL_SWITCH_OPTIONS}
+                  value={settings.trustedWifiEnabled ? 'on' : 'off'}
+                  onChange={(key) => onChangeTrustedWifi(key === 'on')}
+                  accessibilityLabel="Connect on networks that are not trusted"
+                />
+              }
+            />
+          )}
+          {trustedWifiError !== null && (
+            <View style={{ paddingHorizontal: space.lg, paddingBottom: space.md }}>
+              <Notice tone="warn">{trustedWifiError}</Notice>
+            </View>
+          )}
+          {(settings.trustedWifiEnabled || settings.shieldsEnabled) && (
+            <Row
+              title="This network"
+              subtitle={describeNetwork(network, settings.trustedNetworks)}
+              trailing={
+                network !== null &&
+                !isTrusted(network, settings.trustedNetworks) &&
+                trustNetwork(network, settings.trustedNetworks) !== null ? (
+                  <Button label="Trust" variant="secondary" size="sm" onPress={onTrustNetwork} />
+                ) : undefined
+              }
+            />
+          )}
+          {settings.trustedNetworks.map((entry) => (
+            <Row
+              key={entry.ssid}
+              title={entry.ssid}
+              subtitle={entry.bssids.length === 1 ? 'Trusted on 1 access point' : `Trusted on ${entry.bssids.length} access points`}
+              trailing={<Button label="Forget" variant="danger" size="sm" onPress={() => onForgetNetwork(entry.ssid)} />}
+            />
+          ))}
+        </Group>
+      )}
 
       {Platform.OS === 'android' && (
         <Group

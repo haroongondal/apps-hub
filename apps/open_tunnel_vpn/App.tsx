@@ -9,14 +9,17 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, PermissionsAndroid, Platform, View } from 'react-native';
 import { Header, Screen, TabBar, ThemeProvider } from '@apps-hub/ui';
 
-import { LatencyProber, VpnGateService, type VpnNode } from 'open-tunnel-core';
+import { LatencyProber, VpnGateService, connectRankedRelay, type RelayAttempt, type VpnNode } from 'open-tunnel-core';
 import { openAppDatabase, type AppDatabase } from './src/data/open-database.ts';
 import type { TunnelSettings } from './src/data/settings-store.ts';
 import { xhrVpnGateFetcher } from './src/data/vpngate-fetcher.ts';
 import { FirewallScreen } from './src/firewall/firewall-screen.tsx';
 import { serverHoldsSlot } from './src/firewall/status.ts';
-import { firewallBinding, openTunnelBinding, nativeTcpProbe } from './src/tunnel/native-tcp-probe.ts';
-import { MAX_ATTEMPTS, isAuthError, pickRelayCandidates } from './src/tunnel/relay-failover.ts';
+import type { KillSwitchStatus, NetworkInfo } from 'open-tunnel-native';
+import { killSwitchView } from './src/tunnel/kill-switch.ts';
+import { autoConnectDecision, forgetNetwork, trustNetwork, untrustedNow } from './src/tunnel/trusted-wifi.ts';
+import { firewallBinding, openTunnelBinding, nativeTcpProbe, protectionBinding } from './src/tunnel/native-tcp-probe.ts';
+import { MAX_ATTEMPTS, bestRelayFailure, isAuthError } from './src/tunnel/relay-failover.ts';
 import {
   createTunnelClient,
   OpenTunnelError,
@@ -73,6 +76,13 @@ function OpenTunnelApp() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [killSwitch, setKillSwitch] = useState<KillSwitchStatus>({ blocking: false, alwaysOn: null, lockdown: null });
+  const [network, setNetwork] = useState<NetworkInfo | null>(null);
+  const [trustedWifiError, setTrustedWifiError] = useState<string | null>(null);
+  const [shieldsError, setShieldsError] = useState<string | null>(null);
+  const lastNetworkKey = useRef<string | null>(null);
+  // Turning Trusted Wi-Fi on never connects on the network the user is on right then; they can mark it first.
+  const skipNextNetwork = useRef(false);
   const mountedRef = useRef(true);
   const failedIds = useRef(new Set<string>());
 
@@ -98,6 +108,24 @@ function OpenTunnelApp() {
       handle.remove();
     };
   }, [client]);
+
+  useEffect(() => {
+    const handle = protectionBinding.addOnKillSwitchChanged((blocking) =>
+      setKillSwitch((current) => ({ ...current, blocking })),
+    );
+    return () => handle.remove();
+  }, []);
+
+  // Always-on and lockdown are read by the VPN service when it runs, so they are re-read on every state change.
+  useEffect(() => {
+    let cancelled = false;
+    void protectionBinding.getKillSwitchStatus().then((status) => {
+      if (!cancelled) setKillSwitch(status);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [tunnel.state]);
 
   useEffect(() => {
     if (!FIREWALL_TAB) return;
@@ -204,7 +232,9 @@ function OpenTunnelApp() {
         // Switching relays never double-starts: a live tunnel gets an
         // explicit stop before the new start (plan §5).
         const current = client.getSnapshot();
-        if (current.state === 'connected' || current.state === 'reasserting' || current.state === 'connecting') {
+        const switching = current.state === 'connected' || current.state === 'reasserting' || current.state === 'connecting';
+        // With the kill switch on, Android's service replaces the engine itself and blocks traffic in between; a stop would lift the block.
+        if (switching && !(Platform.OS === 'android' && config.enableKillSwitch)) {
           await client.stopTunnel();
         }
         await client.startTunnel(config);
@@ -233,17 +263,20 @@ function OpenTunnelApp() {
       const ranked = refetched !== null ? inCountry(refetched) : await prober.probeAndScoreNodes(shown, { concurrency: 8 });
       const rankedIds = new Set(ranked.map((node) => node.id));
       if (mountedRef.current) setNodes((all) => [...ranked, ...all.filter((node) => !rankedIds.has(node.id))]);
-      // VPN Gate lists relays that are down or refuse this client, so a failed start moves on to the next one.
-      let candidates = pickRelayCandidates(ranked, failedIds.current, MAX_ATTEMPTS);
-      // When every candidate already failed, a stale cache is the likely
-      // cause (relays churn within hours): refresh the list once and
-      // re-rank before giving up. `retriedCache` keeps this a single retry,
-      // never a loop.
-      let retriedCache = false;
-      if (candidates.length === 0 && !retriedCache && database !== null) {
+      const options = {
+        failedIds: failedIds.current,
+        maxAttempts: MAX_ATTEMPTS,
+        async tryConnect(node: VpnNode): Promise<RelayAttempt> {
+          await connect(node);
+          const state = await settled(client);
+          return state === 'connected' ? 'connected' : state === 'error' ? 'failed' : 'cancelled';
+        },
+      };
+      let result = await connectRankedRelay(ranked, options);
+      // Every relay already failed: a stale cache is the likely cause (relays churn within hours), so refresh once.
+      if (result.outcome === 'none-left' && database !== null) {
         const lastFetchedAt = await database.nodes.lastFetchedAtMs();
         if (lastFetchedAt !== null && Date.now() - lastFetchedAt >= AUTO_REFRESH_AFTER_MS) {
-          retriedCache = true;
           const refreshed = await refreshList(database);
           if (refreshed !== null) {
             const reRanked = inCountry(refreshed);
@@ -251,17 +284,12 @@ function OpenTunnelApp() {
             if (mountedRef.current) {
               setNodes((all) => [...reRanked, ...all.filter((node) => !reRankedIds.has(node.id))]);
             }
-            candidates = pickRelayCandidates(reRanked, failedIds.current, MAX_ATTEMPTS);
+            result = await connectRankedRelay(reRanked, options);
           }
         }
       }
-      if (candidates.length === 0) {
-        setActionError('Every relay here has already failed. Pull down to refresh the list, or choose another country.');
-      }
-      for (const candidate of candidates) {
-        await connect(candidate);
-        if ((await settled(client)) !== 'error') return;
-      }
+      const failure = bestRelayFailure(result);
+      if (failure !== null && mountedRef.current) setActionError(failure);
     } catch (error) {
       if (mountedRef.current) setActionError(describeLocalError(error));
     } finally {
@@ -284,6 +312,97 @@ function OpenTunnelApp() {
     const auth = tunnel.code !== null && isAuthError(tunnel.code);
     if (was === 'connected' || was === 'reasserting' || auth) void autoSelect(true);
   }, [tunnel.state, tunnel.code, activeNode, autoSelect]);
+
+  const shieldsOn = Platform.OS === 'android' && settings?.shieldsEnabled === true;
+  const watchingNetwork = Platform.OS === 'android' && (settings?.trustedWifiEnabled === true || shieldsOn);
+  useEffect(() => {
+    if (!watchingNetwork) {
+      setNetwork(null);
+      lastNetworkKey.current = null;
+      return;
+    }
+    const handle = protectionBinding.addOnNetworkChanged(setNetwork);
+    protectionBinding.startNetworkWatch().catch((error: unknown) => {
+      if (mountedRef.current) setTrustedWifiError(error instanceof Error ? error.message : String(error));
+    });
+    return () => {
+      handle.remove();
+      void protectionBinding.stopNetworkWatch();
+    };
+  }, [watchingNetwork]);
+
+  useEffect(() => {
+    if (network === null || settings === null) return;
+    const decision = autoConnectDecision(lastNetworkKey.current, {
+      enabled: settings.trustedWifiEnabled,
+      network,
+      trusted: settings.trustedNetworks,
+      tunnelState: tunnel.state,
+      scanning,
+    });
+    lastNetworkKey.current = decision.key;
+    if (skipNextNetwork.current) {
+      skipNextNetwork.current = false;
+      return;
+    }
+    if (decision.connect) void autoSelect();
+  }, [network]);
+
+  // Halo reads this through the shield share; only two flags leave the JS side, never the network itself.
+  const trustedNetworks = settings?.trustedNetworks;
+  useEffect(() => {
+    if (Platform.OS !== 'android' || trustedNetworks === undefined) return;
+    if (shieldsOn && network === null) return;
+    const untrusted = shieldsOn && network !== null && untrustedNow(network, trustedNetworks);
+    protectionBinding.publishShield(shieldsOn, untrusted).then(
+      () => mountedRef.current && setShieldsError(null),
+      () => mountedRef.current && setShieldsError("Halo can't see Shields right now. Turn Shields off and on again."),
+    );
+  }, [shieldsOn, network, trustedNetworks]);
+
+  const changeTrustedWifi = useCallback(
+    async (enabled: boolean): Promise<boolean> => {
+      if (database === null) return false;
+      setTrustedWifiError(null);
+      if (enabled && !(await requestPreciseLocation())) {
+        setTrustedWifiError('Trusted Wi-Fi stays off: Android shows the Wi-Fi name only to apps allowed precise location.');
+        return false;
+      }
+      // A watch that already runs has decided the current network, so it never connects there anyway.
+      skipNextNetwork.current = enabled && !watchingNetwork;
+      await database.settings.setTrustedWifiEnabled(enabled);
+      setSettings((current) => (current === null ? current : { ...current, trustedWifiEnabled: enabled }));
+      return true;
+    },
+    [database, watchingNetwork],
+  );
+
+  // One switch: on turns on Trusted Wi-Fi auto-connect too (asking for location then), off turns both off.
+  const changeShields = useCallback(
+    async (enabled: boolean) => {
+      if (database === null) return;
+      setShieldsError(null);
+      // Auto-connect first: the watch must not start (and decide this network) before Trusted Wi-Fi knows it is on.
+      const autoConnectSet = enabled === settings?.trustedWifiEnabled || (await changeTrustedWifi(enabled));
+      await database.settings.setShieldsEnabled(enabled);
+      setSettings((current) => (current === null ? current : { ...current, shieldsEnabled: enabled }));
+      if (!autoConnectSet) {
+        setTrustedWifiError(
+          "Shields is on, but auto-connect is off: without precise location TunnelWall can't tell your Wi-Fi apart, so it warns on every network.",
+        );
+      }
+    },
+    [database, settings, changeTrustedWifi],
+  );
+
+  const saveTrustedNetworks = useCallback(
+    async (next: ReturnType<typeof forgetNetwork>) => {
+      if (database === null) return;
+      await database.settings.setTrustedNetworks(next);
+      setSettings((current) => (current === null ? current : { ...current, trustedNetworks: next }));
+    },
+    [database],
+  );
 
   const selectCountry = useCallback(
     (code: string | null) => {
@@ -369,6 +488,8 @@ function OpenTunnelApp() {
             }}
             loadError={loadError}
             actionError={actionError}
+            killSwitch={killSwitchView(tunnel.state, killSwitch.blocking, scanning)}
+            onStopBlocking={disconnect}
             onAutoSelect={() => void autoSelect()}
             onOpenServers={() => setSheet('servers')}
             onOpenSettings={() => setSheet('settings')}
@@ -413,6 +534,17 @@ function OpenTunnelApp() {
           visible={sheet === 'settings'}
           onClose={() => setSheet('none')}
           settings={settings}
+          killSwitch={killSwitch}
+          network={network}
+          trustedWifiError={trustedWifiError}
+          shieldsError={shieldsError}
+          onChangeShields={(enabled) => void changeShields(enabled)}
+          onChangeTrustedWifi={(enabled) => void changeTrustedWifi(enabled)}
+          onTrustNetwork={() => {
+            const next = network === null ? null : trustNetwork(network, settings.trustedNetworks);
+            if (next !== null) void saveTrustedNetworks(next);
+          }}
+          onForgetNetwork={(ssid) => void saveTrustedNetworks(forgetNetwork(ssid, settings.trustedNetworks))}
           onChangeKillSwitch={(enabled) => void changeKillSwitch(enabled)}
           onAddDisallowedApp={(packageName) => void addDisallowedApp(packageName)}
           onRemoveDisallowedApp={(packageName) => void removeDisallowedApp(packageName)}
@@ -434,6 +566,17 @@ function describeLocalError(error: unknown): string {
   if (error instanceof OpenTunnelError) return `${error.code}: ${error.message}`;
   if (error instanceof Error) return error.message;
   return `the connect attempt failed (${typeof error})`;
+}
+
+async function requestPreciseLocation(): Promise<boolean> {
+  if (Platform.OS !== 'android') return false;
+  try {
+    const { ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION } = PermissionsAndroid.PERMISSIONS;
+    const result = await PermissionsAndroid.requestMultiple([ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION]);
+    return result[ACCESS_FINE_LOCATION] === PermissionsAndroid.RESULTS.GRANTED;
+  } catch {
+    return false;
+  }
 }
 
 // A denial only hides the connection notice; the tunnel still runs.

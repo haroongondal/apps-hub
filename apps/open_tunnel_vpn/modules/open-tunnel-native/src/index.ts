@@ -27,9 +27,12 @@ import {
   type FirewallRuleKind,
   type FirewallStatus,
   type FirewallVerdict,
+  type KillSwitchStatus,
   type NativeAppRule,
+  type NetworkInfo,
   type NativeLogRow,
   type OpenTunnelNativeApi,
+  type ProtectionNativeApi,
   type VpnProtocol,
   type VpnStatusPayload,
   type VpnStatusState,
@@ -52,10 +55,13 @@ export type {
   FirewallRuleKind,
   FirewallStatus,
   FirewallVerdict,
+  KillSwitchStatus,
   NativeAppRule,
   NativeLogRow,
+  NetworkInfo,
   OpenTunnelErrorCode,
   OpenTunnelNativeApi,
+  ProtectionNativeApi,
   VpnProtocol,
   VpnStatusPayload,
   VpnStatusState,
@@ -494,4 +500,95 @@ export function createFirewallBinding(options?: BindingOptions): FirewallApi {
   if (platform !== 'android') return unsupportedFirewall(platform);
   const native = resolveNativeModule(platform);
   return native == null ? unsupportedFirewall(platform) : bindFirewall(native);
+}
+
+const NO_BLOCK: KillSwitchStatus = { blocking: false, alwaysOn: null, lockdown: null };
+
+const flag = (value: unknown): boolean | null => (typeof value === 'boolean' ? value : null);
+
+/** Anything malformed reads as not blocking and unknown, never as protected. */
+export function normalizeKillSwitchStatus(raw: unknown): KillSwitchStatus {
+  if (raw === null || typeof raw !== 'object') return NO_BLOCK;
+  const value = raw as Record<string, unknown>;
+  return { blocking: value.blocking === true, alwaysOn: flag(value.alwaysOn), lockdown: flag(value.lockdown) };
+}
+
+const OFFLINE: NetworkInfo = { connected: false, wifi: false, ssid: null, bssid: null };
+
+const text = (value: unknown): string | null => (typeof value === 'string' && value.length > 0 ? value : null);
+
+/** A malformed payload is no network: it can never match a trusted one. */
+export function normalizeNetworkInfo(raw: unknown): NetworkInfo {
+  if (raw === null || typeof raw !== 'object') return OFFLINE;
+  const value = raw as Record<string, unknown>;
+  if (value.connected !== true) return OFFLINE;
+  const wifi = value.wifi === true;
+  return { connected: true, wifi, ssid: wifi ? text(value.ssid) : null, bssid: wifi ? text(value.bssid) : null };
+}
+
+/** Kill switch and network state: the in-app blocking interface, Android's Always-on reading, the phone's own network. */
+export interface ProtectionApi {
+  getKillSwitchStatus(): Promise<KillSwitchStatus>;
+  addOnKillSwitchChanged(listener: (blocking: boolean) => void): ListenerHandle;
+  /** Rejects `ERR_NOT_SUPPORTED` on iOS and Android 11 and older. */
+  startNetworkWatch(): Promise<void>;
+  stopNetworkWatch(): Promise<void>;
+  addOnNetworkChanged(listener: (network: NetworkInfo) => void): ListenerHandle;
+  /** Saves what the Shields share tells Halo (two flags, nothing about the network). Rejects `ERR_NOT_SUPPORTED` on iOS. */
+  publishShield(on: boolean, untrustedNow: boolean): Promise<void>;
+}
+
+export function bindProtection(native: ProtectionNativeApi): ProtectionApi {
+  return {
+    async getKillSwitchStatus() {
+      return normalizeKillSwitchStatus(await native.getKillSwitchStatus());
+    },
+    addOnKillSwitchChanged(listener) {
+      const subscription = native.addListener('onKillSwitchChanged', (payload) =>
+        listener(normalizeKillSwitchStatus(payload).blocking),
+      );
+      return { remove: () => subscription.remove() };
+    },
+    async startNetworkWatch() {
+      await native.startNetworkWatch();
+    },
+    async stopNetworkWatch() {
+      await native.stopNetworkWatch();
+    },
+    addOnNetworkChanged(listener) {
+      const subscription = native.addListener('onNetworkChanged', (payload) => listener(normalizeNetworkInfo(payload)));
+      return { remove: () => subscription.remove() };
+    },
+    async publishShield(on, untrustedNow) {
+      await native.publishShield(on, on && untrustedNow);
+    },
+  };
+}
+
+function unavailableProtection(): ProtectionApi {
+  return {
+    async getKillSwitchStatus() {
+      return NO_BLOCK;
+    },
+    addOnKillSwitchChanged() {
+      return { remove: () => undefined };
+    },
+    async startNetworkWatch() {
+      throw new OpenTunnelError(OPEN_TUNNEL_ERROR_CODES.NOT_SUPPORTED, "Trusted Wi-Fi isn't available in this runtime.");
+    },
+    async stopNetworkWatch() {},
+    addOnNetworkChanged() {
+      return { remove: () => undefined };
+    },
+    async publishShield() {
+      throw new OpenTunnelError(OPEN_TUNNEL_ERROR_CODES.NOT_SUPPORTED, "Shields isn't available in this runtime.");
+    },
+  };
+}
+
+export function createProtectionBinding(options?: BindingOptions): ProtectionApi {
+  const platform = options?.platform ?? runtimePlatform();
+  if (platform !== 'android' && platform !== 'ios') return unavailableProtection();
+  const native = resolveNativeModule(platform);
+  return native == null ? unavailableProtection() : bindProtection(native);
 }

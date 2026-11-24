@@ -1,0 +1,6 @@
+{
+  "authority": "com.haroon.inflow.autopilot",
+  "path": "debits",
+  "columns": ["id", "amount_minor", "at", "merchant", "account"],
+  "maxRows": 200
+}

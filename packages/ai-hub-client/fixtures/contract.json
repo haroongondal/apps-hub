@@ -1,0 +1,126 @@
+{
+  "requests": {
+    "chat": {
+      "apiVersion": 1,
+      "requestId": "chat-1",
+      "job": "chat",
+      "priority": "foreground",
+      "messages": [
+        {
+          "role": "system",
+          "content": "Be brief."
+        },
+        {
+          "role": "user",
+          "content": "Hi"
+        }
+      ],
+      "tools": [
+        {
+          "name": "look",
+          "description": "Look something up",
+          "parameters": {
+            "type": "object"
+          }
+        }
+      ],
+      "maxTokens": 300
+    },
+    "vision": {
+      "apiVersion": 1,
+      "requestId": "vision-1",
+      "job": "vision",
+      "priority": "foreground",
+      "messages": [
+        {
+          "role": "user",
+          "content": "What is this?"
+        }
+      ],
+      "mime": "image/jpeg"
+    },
+    "embed": {
+      "apiVersion": 1,
+      "requestId": "embed-1",
+      "job": "embed",
+      "priority": "background",
+      "texts": [
+        "a",
+        "b"
+      ]
+    },
+    "embedDimensions": {
+      "apiVersion": 2,
+      "requestId": "embed-2",
+      "job": "embed",
+      "priority": "background",
+      "texts": [
+        "a"
+      ],
+      "dimensions": 768
+    },
+    "transcribe": {
+      "apiVersion": 1,
+      "requestId": "audio-1",
+      "job": "transcribe",
+      "priority": "foreground",
+      "fileName": "note.m4a",
+      "mime": "audio/mp4"
+    },
+    "transcribeSegments": {
+      "apiVersion": 2,
+      "requestId": "audio-2",
+      "job": "transcribe",
+      "priority": "foreground",
+      "fileName": "note.m4a",
+      "mime": "audio/mp4",
+      "segments": true
+    }
+  },
+  "replies": {
+    "chat": {
+      "text": "hello",
+      "toolCalls": [
+        {
+          "id": "c1",
+          "name": "look",
+          "args": {
+            "q": "a"
+          }
+        }
+      ],
+      "usage": {
+        "inputTokens": 10,
+        "cachedTokens": 2,
+        "outputTokens": 5
+      },
+      "model": "gemini-3.5-flash-lite"
+    },
+    "embed": {
+      "vectorsB64": [
+        "AAAAPwAAgD8=",
+        "AAAAwAAAgD4="
+      ],
+      "dims": 2,
+      "model": "gemini-embedding-001"
+    },
+    "transcribe": {
+      "text": "hi"
+    },
+    "transcribeSegments": {
+      "text": "hi there",
+      "segments": [
+        {
+          "start": 0.5,
+          "end": 1.5,
+          "text": "hi"
+        },
+        {
+          "start": 1.5,
+          "end": 2.25,
+          "text": " there"
+        }
+      ]
+    }
+  }
+}

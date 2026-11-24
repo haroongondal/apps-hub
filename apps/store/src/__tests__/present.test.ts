@@ -28,6 +28,20 @@ const installed = (over: Partial<Installed> = {}): Installed => ({
 });
 const old = installed({ versionCode: 4, versionName: '0.1.0' });
 
+const commit = '8b8db0d' + 'a'.repeat(33);
+const withCommit: StoreApp = { ...app, android: { ...app.android!, commit } };
+
+test('version lines add the short commit of the published build, and hide it when there is none', () => {
+  assert.deepEqual(versionLines(withCommit, installed()), [
+    { label: 'Installed', version: '0.2.0 (5)' },
+    { label: 'Build from commit', version: '8b8db0d' },
+  ]);
+  assert.deepEqual(versionLines(withCommit, null).at(-1), { label: 'Build from commit', version: '8b8db0d' });
+  assert.deepEqual(versionLines(withCommit, old).at(-1), { label: 'Available build from commit', version: '8b8db0d' });
+  assert.equal(versionLines(withCommit, installed({ versionCode: 6 })).length, 1);
+  assert.equal(versionLines(app, installed()).length, 1);
+});
+
 test('version lines show installed and, when newer, available', () => {
   assert.deepEqual(versionLines(app, null), [{ label: 'Available', version: '0.2.0 (5)' }]);
   assert.deepEqual(versionLines(app, installed()), [{ label: 'Installed', version: '0.2.0 (5)' }]);

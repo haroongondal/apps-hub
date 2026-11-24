@@ -8,10 +8,15 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import expo.modules.clipboardcore.core.CaptureGate
+import expo.modules.clipboardcore.core.ClipLinks
 import expo.modules.clipboardcore.core.ClipKind
+import expo.modules.clipboardcore.core.Expiry
 
 private const val STRONGROOM = "com.haroon.strongroom"
 private const val DISMISSED = "dismissed_fingerprint"
+private const val RETENTION = "retention_days"
+private const val NEXUS_PINNED = "nexus_reads_pinned"
+private const val LAST_SEEN = "last_seen_at"
 
 data class Clip(
   val id: Long,
@@ -22,25 +27,32 @@ data class Clip(
   val source: String?,
   val via: String,
   val grabMs: Long?,
+  val pinned: Boolean,
 ) {
   fun toMap() = mapOf(
     "id" to id, "at" to at, "kind" to kind, "text" to text, "mime" to mime,
-    "source" to source, "via" to via, "grabMs" to grabMs,
+    "source" to source, "via" to via, "grabMs" to grabMs, "pinned" to pinned,
   )
 }
 
-class ClipStore private constructor(context: Context) : SQLiteOpenHelper(context, "clips.db", null, 1) {
+class ClipStore private constructor(context: Context) : SQLiteOpenHelper(context, "clips.db", null, 2) {
   @Volatile private var lastFingerprint: Int? = null
   private val prefs = context.getSharedPreferences("clip_store", Context.MODE_PRIVATE)
 
   override fun onCreate(db: SQLiteDatabase) {
     db.execSQL(
       "CREATE TABLE clips (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, kind TEXT NOT NULL, " +
-        "text TEXT, mime TEXT, source TEXT, via TEXT NOT NULL, grab_ms INTEGER, pinned INTEGER NOT NULL DEFAULT 0)",
+        "text TEXT, mime TEXT, source TEXT, via TEXT NOT NULL, grab_ms INTEGER, pinned INTEGER NOT NULL DEFAULT 0, pinned_at INTEGER)",
     )
   }
 
-  override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+  // Version 2 adds pinned_at; clips pinned before it count as pinned when they were saved.
+  override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+    if (oldVersion < 2) {
+      db.execSQL("ALTER TABLE clips ADD COLUMN pinned_at INTEGER")
+      db.execSQL("UPDATE clips SET pinned_at = at WHERE pinned = 1")
+    }
+  }
 
   fun capture(resolver: ContentResolver, clip: ClipData?, source: String?, via: String, grabMs: Long?): Boolean {
     if (clip == null || clip.itemCount == 0 || source == STRONGROOM) return false
@@ -63,6 +75,7 @@ class ClipStore private constructor(context: Context) : SQLiteOpenHelper(context
     if (CaptureGate.skip(via, fingerprint, lastFingerprint, dismissed)) return false
     lastFingerprint = fingerprint
     val db = writableDatabase
+    prune(db)
     if (!kind.hidden) {
       db.rawQuery("SELECT kind, text FROM clips ORDER BY at DESC, id DESC LIMIT 1", null).use { c ->
         if (c.moveToFirst() && c.getString(0) == kind.id && c.getString(1) == text) return false
@@ -110,18 +123,80 @@ class ClipStore private constructor(context: Context) : SQLiteOpenHelper(context
     text?.let { prefs.edit().putInt(DISMISSED, it.hashCode()).apply() }
   }
 
-  fun recent(limit: Int): List<Clip> =
-    readableDatabase.rawQuery(
-      "SELECT id, at, kind, text, mime, source, via, grab_ms FROM clips ORDER BY at DESC, id DESC LIMIT ?",
+  /** Pinned clips first, then newest first. Expired clips are deleted before reading. */
+  @Synchronized
+  fun recent(limit: Int): List<Clip> {
+    val db = writableDatabase
+    prune(db)
+    return db.rawQuery(
+      "SELECT id, at, kind, text, mime, source, via, grab_ms, pinned FROM clips ORDER BY pinned DESC, at DESC, id DESC LIMIT ?",
       arrayOf(limit.toString()),
     ).use { c ->
       buildList {
         while (c.moveToNext()) {
           add(Clip(c.getLong(0), c.getLong(1), c.getString(2), c.getString(3), c.getString(4), c.getString(5),
-            c.getString(6), if (c.isNull(7)) null else c.getLong(7)))
+            c.getString(6), if (c.isNull(7)) null else c.getLong(7), c.getInt(8) != 0))
         }
       }
     }
+  }
+
+  @Synchronized
+  fun setPinned(id: Long, pinned: Boolean) {
+    val values = ContentValues().apply { Expiry.pinColumns(pinned, System.currentTimeMillis()).forEach { (k, v) -> put(k, v) } }
+    writableDatabase.update("clips", values, "id = ?", arrayOf(id.toString()))
+  }
+
+  // Read-only: no prune here, so a share query never writes (the app deletes expired rows, a read does not).
+  @Synchronized
+  fun pinnedRows(sinceId: Long): List<Array<Any?>> =
+    readableDatabase.rawQuery(
+      "SELECT id, kind, text, pinned, COALESCE(pinned_at, at), source FROM clips " +
+        "WHERE pinned = 1 AND kind = 'text' AND text IS NOT NULL AND id > ? ORDER BY id ASC LIMIT ?",
+      arrayOf(sinceId.toString(), ClipLinks.PINNED_MAX_ROWS.toString()),
+    ).use { c ->
+      buildList {
+        while (c.moveToNext()) {
+          ClipLinks.pinnedRow(c.getLong(0), c.getString(1), c.getString(2), c.getInt(3) != 0, c.getLong(4), c.getString(5))?.let(::add)
+        }
+      }
+    }
+
+  fun nexusReadsPinned(): Boolean = prefs.getBoolean(NEXUS_PINNED, false)
+
+  fun setNexusReadsPinned(on: Boolean) {
+    prefs.edit().putBoolean(NEXUS_PINNED, on).commit()
+  }
+
+  fun heartbeat() {
+    prefs.edit().putLong(LAST_SEEN, System.currentTimeMillis()).apply()
+  }
+
+  fun lastSeenAt(): Long? = prefs.getLong(LAST_SEEN, 0L).takeIf { it > 0L }
+
+  fun retentionDays(): Int = Expiry.days(if (prefs.contains(RETENTION)) prefs.getInt(RETENTION, 0) else null)
+
+  @Synchronized
+  fun setRetentionDays(days: Int) {
+    prefs.edit().putInt(RETENTION, Expiry.days(days)).apply()
+    prune(writableDatabase)
+  }
+
+  private fun prune(db: SQLiteDatabase) {
+    val now = System.currentTimeMillis()
+    val days = retentionDays()
+    val expired = db.rawQuery("SELECT id, kind, at, pinned, pinned_at FROM clips", null).use { c ->
+      buildList { while (c.moveToNext()) if (Expiry.expired(c.getString(1), Expiry.savedAt(c.getString(1), c.getLong(2), if (c.isNull(4)) null else c.getLong(4)), c.getInt(3) != 0, now, days)) add(c.getLong(0)) }
+    }
+    if (expired.isEmpty()) return
+    db.beginTransaction()
+    try {
+      expired.forEach { db.delete("clips", "id = ?", arrayOf(it.toString())) }
+      db.setTransactionSuccessful()
+    } finally {
+      db.endTransaction()
+    }
+  }
 
   /** The clip's text, moved to the top, or null when it has none to put back (hidden, image, file). */
   @Synchronized

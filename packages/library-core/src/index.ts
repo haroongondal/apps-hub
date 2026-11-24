@@ -1,8 +1,8 @@
 export { LibraryError } from './errors.ts';
 export type { LibraryErrorCode } from './errors.ts';
 export { ftsQuery } from './fts-query.ts';
-export { Library } from './library.ts';
-export type { ActivePlaceReminder, Folder, Item, ItemKind, LibraryDeps, PlaceReminder, ReminderTrigger, SearchHit, Tag } from './library.ts';
+export { Library, SOURCE_APPS, SOURCE_FOLDERS } from './library.ts';
+export type { ActivePlaceReminder, DueItem, Folder, Item, ItemKind, ItemSource, LibraryDeps, PlaceReminder, ReminderTrigger, SearchHit, SourceApp, Tag } from './library.ts';
 export { migrate } from './migrate.ts';
 export { normalizeForSearch } from './normalize.ts';
 export { ITEM_ID, orphanDirs } from './orphan-dirs.ts';

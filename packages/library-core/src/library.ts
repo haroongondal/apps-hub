@@ -52,6 +52,27 @@ export interface LibraryDeps {
   now(): number;
   newId(): string;
 }
+/** Apps Nexus reads items from (Ask my life). */
+export type SourceApp = 'inflow' | 'clipboard' | 'deputy';
+export const SOURCE_FOLDERS: Readonly<Record<SourceApp, string>> = { inflow: 'From Inflow', clipboard: 'From Clipboard', deputy: 'From Deputy' };
+export interface ItemSource {
+  app: SourceApp;
+  sourceId: number;
+  sourceAt: number;
+}
+export interface DueItem {
+  itemId: string;
+  title: string;
+  dueAt: number;
+}
+
+export const SOURCE_APPS: readonly SourceApp[] = ['inflow', 'clipboard', 'deputy'];
+
+const isSourceApp = (app: unknown): app is SourceApp => SOURCE_APPS.includes(app as SourceApp);
+const isTime = (ms: unknown): ms is number => Number.isSafeInteger(ms) && (ms as number) >= 0;
+function checkApp(app: unknown): asserts app is SourceApp {
+  if (!isSourceApp(app)) throw new LibraryError('invalid_source', `Nexus does not read items from "${String(app)}"`);
+}
 
 const MAX_TITLE = 200;
 const MAX_NAME = 100;
@@ -300,6 +321,8 @@ export class Library {
     sort?: 'recent' | 'title';
     limit?: number;
     offset?: number;
+    /** Leaves out items read from other apps (item_sources). */
+    ownOnly?: boolean;
   }): Promise<Item[]> {
     const order = q.sort === 'title' ? 'i.title COLLATE NOCASE, i.rid' : 'i.updated_at DESC, i.rid DESC';
     const kind = q.kind ?? null;
@@ -309,9 +332,10 @@ export class Library {
        WHERE (? = 1 OR i.folder_id IS ?)
          AND (? IS NULL OR i.kind = ?)
          AND (? IS NULL OR EXISTS (SELECT 1 FROM item_tags t WHERE t.item_id = i.id AND t.tag_id = ?))
+         AND (? = 0 OR NOT EXISTS (SELECT 1 FROM item_sources s WHERE s.item_id = i.id))
        ORDER BY ${order}
        LIMIT ? OFFSET ?`,
-      [q.everywhere ? 1 : 0, q.folderId ?? null, kind, kind, tagId, tagId, q.limit ?? DEFAULT_LIST_LIMIT, q.offset ?? 0],
+      [q.everywhere ? 1 : 0, q.folderId ?? null, kind, kind, tagId, tagId, q.ownOnly ? 1 : 0, q.limit ?? DEFAULT_LIST_LIMIT, q.offset ?? 0],
     );
     return rows.map(toItem);
   }
@@ -523,6 +547,111 @@ export class Library {
 
   async removeReminder(id: string): Promise<void> {
     await this.db.run('DELETE FROM reminders WHERE id = ?', [id]);
+  }
+
+  async putSourceItem(input: ItemSource & { title: string; body: string }): Promise<{ item: Item; created: boolean; changed: boolean }> {
+    checkApp(input.app);
+    if (!Number.isSafeInteger(input.sourceId) || input.sourceId <= 0) throw new LibraryError('invalid_source', 'The source id must be a positive whole number');
+    if (!isTime(input.sourceAt)) throw new LibraryError('invalid_date', 'The source date must be a time in ms since 1970');
+    const title = cleanName(input.title, MAX_TITLE, 'Title');
+    const body = indexedBody(input.body);
+    const { app, sourceId, sourceAt } = input;
+    return this.db.transaction(async (tx) => {
+      const known = await tx.first(
+        `SELECT s.item_id, s.source_at, i.title, f.body FROM item_sources s
+         JOIN items i ON i.id = s.item_id JOIN items_fts f ON f.rowid = i.rid WHERE s.app = ? AND s.source_id = ?`,
+        [app, sourceId],
+      );
+      if (known) {
+        const id = known.item_id as string;
+        const changed = known.title !== title || known.source_at !== sourceAt || known.body !== body;
+        if (changed) {
+          await tx.run('UPDATE items SET title = ?, updated_at = ? WHERE id = ?', [title, this.deps.now(), id]);
+          await tx.run('UPDATE items_fts SET title = ?, body = ? WHERE rowid = ?', [normalizeForSearch(title), body, await ridOf(tx, id)]);
+          await tx.run('UPDATE item_sources SET source_at = ? WHERE item_id = ?', [sourceAt, id]);
+        }
+        return { item: (await itemIn(tx, id))!, created: false, changed };
+      }
+      const folderId = await this.sourceFolder(tx, app);
+      const id = this.deps.newId();
+      const now = this.deps.now();
+      await tx.run('INSERT INTO items (id, kind, title, folder_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)', [id, 'note', title, folderId, now, now]);
+      await tx.run('INSERT INTO items_fts (rowid, title, body) VALUES (?, ?, ?)', [await ridOf(tx, id), normalizeForSearch(title), body]);
+      await tx.run('INSERT INTO item_sources (item_id, app, source_id, source_at) VALUES (?, ?, ?, ?)', [id, app, sourceId, sourceAt]);
+      return { item: (await itemIn(tx, id))!, created: true, changed: true };
+    });
+  }
+
+  // Found by name, so a folder the owner renamed stays theirs and the next item makes a new one.
+  private async sourceFolder(tx: SqlPort, app: SourceApp): Promise<string> {
+    const name = SOURCE_FOLDERS[app];
+    const found = await tx.first('SELECT id FROM folders WHERE parent_id IS NULL AND name = ? COLLATE NOCASE', [name]);
+    if (found) return found.id as string;
+    const id = this.deps.newId();
+    await tx.run('INSERT INTO folders (id, name, parent_id, created_at) VALUES (?, ?, NULL, ?)', [id, name, this.deps.now()]);
+    return id;
+  }
+
+  async sourceOf(itemId: string): Promise<ItemSource | null> {
+    const row = await this.db.first('SELECT app, source_id, source_at FROM item_sources WHERE item_id = ?', [itemId]);
+    return row ? { app: row.app as SourceApp, sourceId: row.source_id as number, sourceAt: row.source_at as number } : null;
+  }
+
+  async listSourceIds(app: SourceApp): Promise<{ sourceId: number; itemId: string }[]> {
+    checkApp(app);
+    const rows = await this.db.all('SELECT source_id, item_id FROM item_sources WHERE app = ? ORDER BY source_id', [app]);
+    return rows.map((r) => ({ sourceId: r.source_id as number, itemId: r.item_id as string }));
+  }
+
+  async deleteSourceItem(app: SourceApp, sourceId: number): Promise<boolean> {
+    checkApp(app);
+    return this.db.transaction(async (tx) => {
+      const row = await tx.first('SELECT item_id FROM item_sources WHERE app = ? AND source_id = ?', [app, sourceId]);
+      if (!row) return false;
+      await tx.run('DELETE FROM items WHERE id = ?', [row.item_id]);
+      await pruneTags(tx);
+      return true;
+    });
+  }
+
+  async deleteAllFromSource(app: SourceApp): Promise<number> {
+    checkApp(app);
+    return this.db.transaction(async (tx) => {
+      const n = (await tx.first('SELECT COUNT(*) AS n FROM item_sources WHERE app = ?', [app]))!.n as number;
+      await tx.run('DELETE FROM items WHERE id IN (SELECT item_id FROM item_sources WHERE app = ?)', [app]);
+      await pruneTags(tx);
+      await tx.run(
+        `DELETE FROM folders WHERE parent_id IS NULL AND name = ? COLLATE NOCASE
+           AND NOT EXISTS (SELECT 1 FROM items WHERE folder_id = folders.id)
+           AND NOT EXISTS (SELECT 1 FROM folders c WHERE c.parent_id = folders.id)`,
+        [SOURCE_FOLDERS[app]],
+      );
+      return n;
+    });
+  }
+
+  async setDue(itemId: string, dueAt: number | null): Promise<void> {
+    if (dueAt !== null && !isTime(dueAt)) throw new LibraryError('invalid_date', 'The due date must be a time in ms since 1970');
+    await this.db.transaction(async (tx) => {
+      await ridOf(tx, itemId);
+      if (dueAt === null) await tx.run('DELETE FROM item_due WHERE item_id = ?', [itemId]);
+      else await tx.run('INSERT INTO item_due (item_id, due_at) VALUES (?, ?) ON CONFLICT(item_id) DO UPDATE SET due_at = excluded.due_at', [itemId, dueAt]);
+    });
+  }
+
+  async getDue(itemId: string): Promise<number | null> {
+    return ((await this.db.first('SELECT due_at FROM item_due WHERE item_id = ?', [itemId]))?.due_at as number | undefined) ?? null;
+  }
+
+  /** [startMs, endMs). Items read from other apps are left out: the titles shared onward must be the owner's own. */
+  async dueBetween(startMs: number, endMs: number): Promise<DueItem[]> {
+    const rows = await this.db.all(
+      `SELECT d.item_id, i.title, d.due_at FROM item_due d JOIN items i ON i.id = d.item_id
+       WHERE d.due_at >= ? AND d.due_at < ? AND NOT EXISTS (SELECT 1 FROM item_sources s WHERE s.item_id = d.item_id)
+       ORDER BY d.due_at, i.title COLLATE NOCASE, d.item_id`,
+      [startMs, endMs],
+    );
+    return rows.map((r) => ({ itemId: r.item_id as string, title: r.title as string, dueAt: r.due_at as number }));
   }
 
   /** Trims, dedupes ignoring case (an existing tag keeps its spelling), creates new tags, drops unused ones. */

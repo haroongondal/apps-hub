@@ -19,7 +19,14 @@ function ago(at: number, now: number): string {
 
 export function clipSubtitle(clip: Clip, now: number): string {
   const parts = [ago(clip.at, now)];
+  if (clip.pinned) parts.unshift('Pinned');
   if (clip.source) parts.push(clip.source);
   if (clip.via === 'app') parts.push('saved when you opened Clipboard');
   return parts.join(' · ');
+}
+
+export const KEEP_CHOICES = [7, 30, 90, 365] as const;
+
+export function keepLabel(days: number): string {
+  return days === 365 ? '1 year' : `${days} days`;
 }

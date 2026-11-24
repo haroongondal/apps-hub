@@ -12,38 +12,61 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.FileProvider
 import androidx.fragment.app.FragmentActivity
 import expo.modules.kotlin.Promise
+import expo.modules.kotlin.activityresult.AppContextActivityResultLauncher
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.inflowcore.android.AiConfig
 import expo.modules.inflowcore.android.AiRunner
+import expo.modules.inflowcore.applink.AppLinkTarget
+import expo.modules.inflowcore.android.BriefingRefresh
+import expo.modules.inflowcore.android.DigestAlarm
 import expo.modules.inflowcore.android.Lock
 import expo.modules.inflowcore.android.GmailClient
 import expo.modules.inflowcore.android.Gallery
 import expo.modules.inflowcore.android.GmailSync
+import expo.modules.inflowcore.android.DoctorPdf
+import expo.modules.inflowcore.android.DoctorRunner
+import expo.modules.inflowcore.android.HealthConnectReader
 import expo.modules.inflowcore.android.InflowListener
+import expo.modules.inflowcore.android.HubLaunch
 import expo.modules.inflowcore.android.MediaStore
+import expo.modules.inflowcore.android.MedicineReminders
+import expo.modules.inflowcore.android.ProposeBill
+import expo.modules.inflowcore.android.ProposeStart
 import expo.modules.inflowcore.android.ReportNotifier
+import expo.modules.inflowcore.android.SqlHealthStore
 import expo.modules.inflowcore.android.SqlReportStore
 import expo.modules.inflowcore.android.SqlMediaIndex
 import expo.modules.inflowcore.android.SmsImporter
 import expo.modules.inflowcore.android.SqlItemStore
+import expo.modules.inflowcore.android.SqlJournalStore
+import expo.modules.inflowcore.android.SqlMedicineStore
 import expo.modules.inflowcore.android.SqlLedgerStore
 import expo.modules.inflowcore.android.SqlSuggestionStore
 import expo.modules.inflowcore.android.SuggestionNotifier
 import expo.modules.inflowcore.android.StoreHolder
 import expo.modules.inflowcore.core.AiBatch
 import expo.modules.inflowcore.core.AiChannels
-import expo.modules.inflowcore.core.AiModels
 import expo.modules.inflowcore.core.AppSetting
 import expo.modules.inflowcore.core.AUTOPILOT_META
 import expo.modules.inflowcore.core.AutopilotSettings
 import expo.modules.inflowcore.core.AutopilotSettingsInput
+import expo.modules.inflowcore.core.Briefing
 import expo.modules.inflowcore.core.Categories
+import expo.modules.inflowcore.core.Digest
+import expo.modules.inflowcore.core.NexusShares
+import expo.modules.inflowcore.core.DoctorPayload
+import expo.modules.inflowcore.core.DoctorRange
 import expo.modules.inflowcore.core.Edits
+import expo.modules.inflowcore.core.HealthForAsk
 import expo.modules.inflowcore.core.GmailPolicy
-import expo.modules.inflowcore.core.Prices
+import expo.modules.inflowcore.core.HealthAggregate
+import expo.modules.inflowcore.core.Journal
+import expo.modules.inflowcore.core.Medicines
+import expo.modules.inflowcore.core.ProposeReply
+import expo.modules.inflowcore.core.ProposeToDeputy
 import expo.modules.inflowcore.core.RawMedia
 import expo.modules.inflowcore.core.Retention
 import expo.modules.inflowcore.core.SuggestionMoves
@@ -52,6 +75,9 @@ import expo.modules.inflowcore.core.toMap
 import expo.modules.inflowcore.core.toRow
 import kotlinx.coroutines.Dispatchers
 import java.io.File
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeParseException
 import kotlinx.coroutines.withContext
 
 private const val CAPTURED_EVENT = "onCaptured"
@@ -85,6 +111,17 @@ class InflowCoreModule : Module() {
     if (id >= 0) openReport = id
   }
 
+  private lateinit var healthPermissions: AppContextActivityResultLauncher<ArrayList<String>, Set<String>>
+  private lateinit var createPdf: AppContextActivityResultLauncher<String, Uri?>
+  private lateinit var proposeTask: AppContextActivityResultLauncher<ProposeStart, ProposeReply>
+
+  private fun day(text: String): String =
+    try {
+      LocalDate.parse(text).toString()
+    } catch (e: DateTimeParseException) {
+      throw CodedException("BAD_DAY", "Use a date like 2026-03-10.", null)
+    }
+
   private fun settingFor(store: SqlItemStore, pkg: String): AppSetting = store.appSetting(pkg) ?: Retention.default(pkg, InflowListener.label(context, pkg))
 
   /** Tells JS the list may have changed, with the number of waiting suggestions (expired ones are swept first). */
@@ -104,6 +141,9 @@ class InflowCoreModule : Module() {
         sendSuggestions()
       }
       StoreHolder.backfill(context)
+      StoreHolder.heartbeat(context)
+      InflowListener.executor.execute { runCatching { StoreHolder.get(context).getOrNull()?.let { AiConfig(it).cleanup() } } }
+      MedicineReminders.rearm(context)
       // Decrypted copies handed to a viewer live only until the next start; files no row names are swept (rolled-back saves).
       InflowListener.executor.execute {
         runCatching {
@@ -115,9 +155,19 @@ class InflowCoreModule : Module() {
 
     OnNewIntent { intent -> readOpenReport(intent) }
 
+    RegisterActivityContracts {
+      healthPermissions = registerForActivityResult(HealthConnectReader.PermissionContract())
+      createPdf = registerForActivityResult(DoctorPdf.CreateContract())
+      proposeTask = registerForActivityResult(ProposeBill.Contract())
+    }
+
     OnDestroy {
       StoreHolder.onCaptured = null
       runCatching { clearOpened() }
+    }
+
+    OnActivityEntersForeground {
+      StoreHolder.heartbeat(context)
     }
 
     // The app locks when it goes to the background, so the decrypted copies go too; a copy younger than the grace stays
@@ -462,38 +512,18 @@ class InflowCoreModule : Module() {
       AiConfig(store()).status()
     }
 
-    Function("knownModels") { ->
-      AiModels.KNOWN.map { mapOf("name" to it.name, "baseUrl" to it.baseUrl, "model" to it.model) }
+    // The buttons under "AI needs AI hub", "Allow Inflow in AI hub" and "Add a key in AI hub". False: that app is not installed or is not ours, and the screen says to open it by hand.
+    Function("openStore") { ->
+      HubLaunch.openStore(context)
     }
 
-    // `prices` is null for a model Inflow knows. Returns the validation copy, or null once saved (a thrown message would reach JS wrapped by Expo).
-    Function("setAiModel") { baseUrl: String, model: String, prices: Map<String, Any?>? ->
-      val custom = prices?.let { Prices(price(it, "inputPerM"), price(it, "cachedPerM"), price(it, "outputPerM")) }
-      AiModels.validate(baseUrl, model, custom) ?: run {
-        AiConfig(store()).setModel(baseUrl, model, custom)
-        null
-      }
+    Function("openAiHub") { ->
+      HubLaunch.openAiHub(context)
     }
 
-    // Returns the error copy, or null once the key is saved. It is never returned to JS again except its last four characters.
-    Function("addAiKey") { apiKey: String ->
-      val key = apiKey.trim()
-      when {
-        key.isEmpty() -> "Paste your API key first."
-        key.length > 300 || key.any(Char::isWhitespace) -> "That doesn't look like an API key. Copy it again, without spaces."
-        else -> {
-          AiConfig(store()).addKey(key)
-          null
-        }
-      }
-    }
-
-    Function("removeAiKey") { id: Long ->
-      AiConfig(store()).removeKey(id)
-    }
-
-    AsyncFunction("testAiKey") Coroutine { id: Long ->
-      withContext(Dispatchers.IO) { AiRunner.test(context, id) }
+    // AI is the owner's switch; the first time it goes on sets aiSince (R44).
+    Function("setAiOn") { on: Boolean ->
+      AiConfig(store()).setOn(on)
     }
 
     // Returns the error copy, or null once saved.
@@ -563,6 +593,15 @@ class InflowCoreModule : Module() {
       SuggestionNotifier.run(context, id).also { sendSuggestions() }
     }
 
+    // Pay with Deputy: a bill goes to Deputy's draft screen (PROPOSE_TASK, startActivityForResult from this Activity). Nothing is paid here.
+    AsyncFunction("proposeToDeputy") Coroutine { id: Long ->
+      val activity = appContext.currentActivity ?: return@Coroutine ProposeToDeputy.UNAVAILABLE
+      val start = withContext(Dispatchers.IO) { val items = store(); ProposeBill.start(items, SqlSuggestionStore(items.db), id, System.currentTimeMillis(), ZoneId.systemDefault()) }
+        ?: throw CodedException("BILL_GONE", "That bill is no longer waiting.", null)
+      val intent = start.intent()
+      ProposeToDeputy.run({ AppLinkTarget.trustedActivity(activity, intent) }, { proposeTask.launch(start) })
+    }
+
     Function("skipSuggestion") { id: Long ->
       SuggestionMoves.move(SqlSuggestionStore(store().db), id, SuggestionState.SKIPPED, System.currentTimeMillis())
       SuggestionNotifier.cancel(context, id)
@@ -585,7 +624,161 @@ class InflowCoreModule : Module() {
     AsyncFunction("ask") Coroutine { question: String ->
       withContext(Dispatchers.IO) { AiRunner.ask(context, question) }
     }
+
+    AsyncFunction("healthStatus") Coroutine { ->
+      withContext(Dispatchers.IO) { HealthConnectReader.status(context) }
+    }
+
+    // Health Connect's own screen; resolves with whether all three are granted afterwards (false at once when Health Connect is not ready).
+    AsyncFunction("requestHealthPermissions") Coroutine { ->
+      if (HealthConnectReader.availability(context) != "available") return@Coroutine false
+      healthPermissions.launch(ArrayList(HealthConnectReader.PERMISSIONS))
+      withContext(Dispatchers.IO) { HealthConnectReader.granted(context) } == HealthConnectReader.PERMISSIONS
+    }
+
+    // Reads the last `days` local days (1 to 90) and replaces them in the store; only called while the app is open.
+    AsyncFunction("refreshHealth") Coroutine { days: Int ->
+      withContext(Dispatchers.IO) { HealthConnectReader.refresh(context, store(), days.coerceIn(1, HealthAggregate.MAX_DAYS)) }
+    }
+
+    Function("healthDays") { fromDay: String, toDay: String ->
+      SqlHealthStore(store().db).days(day(fromDay), day(toDay)).map { it.toMap() }
+    }
+
+    // Stopped medicines last; they keep their history.
+    Function("medicines") { ->
+      SqlMedicineStore(store()).medicines().map { it.toMap() }
+    }
+
+    // Create (id null) or update; returns the problem in plain words, or null once saved. Saving works without the notification permission.
+    Function("saveMedicine") { m: Map<String, Any?> ->
+      val s = store()
+      s.inTransaction { Medicines.save(SqlMedicineStore(s), m, System.currentTimeMillis()) }.also { if (it == null) MedicineReminders.rearm(context) }
+    }
+
+    Function("stopMedicine") { id: Long ->
+      SqlMedicineStore(store()).stop(id)
+      MedicineReminders.cancelAll(context, id)
+      MedicineReminders.rearm(context)
+    }
+
+    // The medicine and its whole dose history, in one transaction.
+    Function("deleteMedicine") { id: Long ->
+      SqlMedicineStore(store()).delete(id)
+      MedicineReminders.cancelAll(context, id)
+      MedicineReminders.rearm(context)
+    }
+
+    Function("dosesBetween") { fromDay: String, toDay: String ->
+      val from = LocalDate.parse(day(fromDay))
+      val to = LocalDate.parse(day(toDay))
+      if (to.isBefore(from) || to.isAfter(from.plusDays(366))) throw CodedException("BAD_RANGE", "Pick a range of at most a year, ending on or after its start.", null)
+      Medicines.dosesBetween(SqlMedicineStore(store()), from, to, System.currentTimeMillis(), ZoneId.systemDefault()).map { it.toMap() }
+    }
+
+    // Taken or skipped, also later as a correction; returns the problem in plain words, or null once saved.
+    Function("markDose") { medicineId: Long, dueAt: Long, status: String ->
+      val s = store()
+      s.inTransaction { Medicines.markFromApp(SqlMedicineStore(s), medicineId, dueAt, status, System.currentTimeMillis(), ZoneId.systemDefault()) }.also {
+        if (it == null) {
+          MedicineReminders.cancel(context, medicineId, dueAt)
+          MedicineReminders.rearm(context)
+        }
+      }
+    }
+
+    Function("adherence") { period: String ->
+      if (period != "week" && period != "month") throw CodedException("BAD_PERIOD", "Pick week or month.", null)
+      Medicines.adherence(SqlMedicineStore(store()), period, System.currentTimeMillis(), ZoneId.systemDefault()).toMap()
+    }
+
+    // False when notifications or the medicine reminders channel are off: medicines still save, reminders cannot show. askNotifications asks.
+    Function("medicineRemindersAllowed") { ->
+      MedicineReminders.allowed(context)
+    }
+
+    Function("journalList") { beforeAt: Long?, limit: Int ->
+      Journal.list(SqlJournalStore(store()), beforeAt, limit).map { it.toMap() }
+    }
+
+    Function("saveJournal") { entry: Map<String, Any?> ->
+      Journal.save(SqlJournalStore(store()), entry, System.currentTimeMillis())
+    }
+
+    Function("deleteJournal") { id: Long ->
+      SqlJournalStore(store()).delete(id)
+    }
+
+    AsyncFunction("doctorPreview") Coroutine { fromDay: String, toDay: String, include: Map<String, Any?> ->
+      withContext(Dispatchers.IO) { DoctorRunner.of(context, store()).preview(fromDay, toDay, include) }
+    }
+
+    // Only on the owner's tap after the preview; refuses when the data no longer hashes to what they saw.
+    AsyncFunction("doctorSummarize") Coroutine { fromDay: String, toDay: String, include: Map<String, Any?>, hash: String ->
+      withContext(Dispatchers.IO) { DoctorRunner.of(context, store()).summarize(fromDay, toDay, include, hash) }
+    }
+
+    // True once saved, false when the owner closed the file picker.
+    AsyncFunction("saveDoctorPdf") Coroutine { summary: String, fromDay: String, toDay: String ->
+      val range = DoctorRange.parse(fromDay, toDay).getOrElse { throw CodedException("BAD_RANGE", it.message, null) }
+      val text = DoctorPayload.cleanReply(summary)
+      if (text.isEmpty()) throw CodedException("NO_SUMMARY", "Make the summary first.", null)
+      val uri = createPdf.launch(DoctorPdf.fileName(range)) ?: return@Coroutine false
+      if (!withContext(Dispatchers.IO) { DoctorPdf.save(context, uri, text, range) }) {
+        throw CodedException("PDF_FAILED", "Inflow couldn't save the PDF. Try again, or pick another folder.", null)
+      }
+      true
+    }
+
+    Function("healthInAsk") { ->
+      HealthForAsk.on(store().meta(HealthForAsk.META))
+    }
+
+    Function("setHealthInAsk") { on: Boolean ->
+      if (on) store().setMeta(HealthForAsk.META, "1") else store().deleteMeta(HealthForAsk.META)
+    }
+
+    Function("healthInBriefing") { ->
+      Briefing.on(store().meta(Briefing.HEALTH_META))
+    }
+
+    Function("setHealthInBriefing") { on: Boolean ->
+      if (on) store().setMeta(Briefing.HEALTH_META, "1") else store().deleteMeta(Briefing.HEALTH_META)
+      BriefingRefresh.settingChanged(context)
+    }
+
+    Function("briefingShare") { ->
+      Briefing.on(store().meta(Briefing.SHARE_META))
+    }
+
+    Function("setBriefingShare") { on: Boolean ->
+      if (on) store().setMeta(Briefing.SHARE_META, "1") else store().deleteMeta(Briefing.SHARE_META)
+      BriefingRefresh.settingChanged(context)
+    }
+
+    Function("digest") { ->
+      Briefing.on(store().meta(Digest.META))
+    }
+
+    Function("setDigest") { on: Boolean ->
+      if (on) store().setMeta(Digest.META, "1") else store().deleteMeta(Digest.META)
+      DigestAlarm.rearm(context)
+    }
+
+    Function("nexusAsk") { ->
+      Briefing.on(store().meta(NexusShares.ASK_META))
+    }
+
+    Function("setNexusAsk") { on: Boolean ->
+      if (on) store().setMeta(NexusShares.ASK_META, "1") else store().deleteMeta(NexusShares.ASK_META)
+    }
+
+    Function("nexusDebits") { ->
+      Briefing.on(store().meta(NexusShares.DEBITS_META))
+    }
+
+    Function("setNexusDebits") { on: Boolean ->
+      if (on) store().setMeta(NexusShares.DEBITS_META, "1") else store().deleteMeta(NexusShares.DEBITS_META)
+    }
   }
 }
-
-private fun price(m: Map<String, Any?>, key: String): Double = (m[key] as? Number)?.toDouble() ?: Double.NaN

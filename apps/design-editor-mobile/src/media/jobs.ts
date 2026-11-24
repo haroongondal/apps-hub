@@ -35,11 +35,14 @@ export async function pickFiles(accept: ('video' | 'audio' | 'image')[], multipl
     type: accept.flatMap(a => (a === 'image' ? ['image/png', 'image/jpeg'] : [`${a}/*`])), copyToCacheDirectory: false, multiple,
   });
   if (res.canceled) return [];
+  for (const asset of res.assets) await DesignMedia.persistAccess(asset.uri);
+  return probeFiles(res.assets.map(a => a.uri));
+}
+
+// Both ways in, the picker and the share sheet, end here: the tool screen only ever sees probed files.
+export async function probeFiles(uris: string[]): Promise<MediaInfo[]> {
   const infos: MediaInfo[] = [];
-  for (const asset of res.assets) {
-    await DesignMedia.persistAccess(asset.uri);
-    infos.push(await DesignMedia.probe(asset.uri));
-  }
+  for (const uri of uris) infos.push(await DesignMedia.probe(uri));
   return infos;
 }
 
@@ -49,7 +52,7 @@ async function askNotifications() {
   try { await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS); } catch { /* jobs still run */ }
 }
 
-export async function startJobs(items: { info: MediaInfo; plan: Plan }[]): Promise<void> {
+export async function startJobs(items: { info: MediaInfo; plan: Plan }[]): Promise<string[]> {
   await askNotifications();
   const stamp = Date.now();
   const jobs: Job[] = items.map(({ info, plan }, i) => ({
@@ -60,6 +63,7 @@ export async function startJobs(items: { info: MediaInfo; plan: Plan }[]): Promi
   await FileSystem.writeAsStringAsync(STORE(), JSON.stringify(Object.fromEntries(keep)));
   await DesignMedia.enqueue(JSON.stringify(jobs), false);
   await refreshQueue();
+  return jobs.map(j => j.id);
 }
 
 export async function tryAgain(id: string): Promise<boolean> {

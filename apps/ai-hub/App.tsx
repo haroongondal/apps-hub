@@ -4,6 +4,7 @@ import { BRAND } from './src/brand';
 import { AppsGroup } from './src/AppsGroup';
 import { KeysGroup } from './src/KeysGroup';
 import { ModelsGroup } from './src/ModelsGroup';
+import { RecentGroup } from './src/RecentGroup';
 
 export default function App() {
   return (
@@ -13,6 +14,7 @@ export default function App() {
         <KeysGroup />
         <ModelsGroup />
         <AppsGroup />
+        <RecentGroup />
       </Screen>
     </ThemeProvider>
   );

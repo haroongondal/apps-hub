@@ -1,5 +1,19 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- No permissions here: INTERNET/ACCESS_NETWORK_STATE/FOREGROUND_SERVICE/
+    <!-- INTERNET/ACCESS_NETWORK_STATE/FOREGROUND_SERVICE/
          FOREGROUND_SERVICE_SPECIAL_USE/POST_NOTIFICATIONS are declared by the
          app manifest (see apps/open_tunnel_vpn/android/app/src/main). -->
+    <permission android:name="com.haroon.permission.AUTOPILOT" android:protectionLevel="signature" />
+    <uses-permission android:name="com.haroon.permission.AUTOPILOT" />
+    <queries>
+        <package android:name="com.haroon.halo" />
+    </queries>
+    <application>
+        <provider
+            android:name=".TunnelLinkProvider"
+            android:authorities="com.haroon.opentunnel.applink"
+            android:exported="true"
+            android:permission="com.haroon.permission.AUTOPILOT"
+            android:readPermission="com.haroon.permission.AUTOPILOT"
+            android:writePermission="com.haroon.permission.AUTOPILOT" />
+    </application>
 </manifest>

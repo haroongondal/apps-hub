@@ -47,9 +47,6 @@ button.on { background: var(--cobalt-tint); border-color: var(--cobalt); color: 
 button.danger { color: var(--danger); }
 input[type=number], select, input[type=text], input[type=password], textarea { border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; background: var(--surface); min-width: 0; }
 textarea { width: 100%; resize: vertical; font-size: 16px; }
-#aiKey { flex: 1; }
-.keys { list-style: none; margin: 6px 0; padding: 0; }
-.keys li { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; padding: 4px 0; }
 input[type=color] { width: 32px; height: 28px; padding: 2px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
 input[type=range] { width: 100%; accent-color: var(--cobalt); }
 
@@ -212,6 +209,8 @@ body.embedded .toast { bottom: calc(var(--rail) + 12px); }
       <h3>Colours</h3>
       <div class="swatches" id="brandColors"></div>
       <div class="row" style="margin-top:8px"><input type="color" id="brandPick" value="#2f54d8" aria-label="Brand colour"><button id="brandAdd">Add colour</button></div>
+      <label class="drop" id="brandFromImage" style="margin-top:8px;padding:10px">Add colours from an image<input type="file" id="brandImg" accept="image/*" hidden></label>
+      <div id="brandFound"></div>
       <p class="hint">Tap a colour to use it on the selected item. Press and hold a colour to remove it.</p>
       <h3>Fonts</h3>
       <div class="row"><label for="brandHeading">Headings</label><select id="brandHeading"></select></div>
@@ -234,13 +233,8 @@ body.embedded .toast { bottom: calc(var(--rail) + 12px); }
       <textarea id="aiPrompt" rows="4" maxlength="2000" aria-label="Describe the design" placeholder="A poster for a Saturday farmers market, green and cream"></textarea>
       <button class="primary" id="aiGo" style="width:100%;margin-top:8px">Generate</button>
       <p class="hint" id="aiStatus" role="status"></p>
-      <p class="hint">Sends your description to Groq or Gemini, whichever key you add. With several keys, the next one is used when a key is refused or at its limit. Nothing else leaves the device.</p>
-      <ul id="aiKeyList" class="keys"></ul>
-      <div id="aiKeyRow" hidden>
-        <h3>Add an API key</h3>
-        <div class="row"><input type="password" id="aiKey" autocomplete="off" spellcheck="false" aria-label="Groq or Gemini API key"><button id="aiSave">Save key</button></div>
-      </div>
-      <button id="aiChange" hidden>Add another key</button>
+      <button id="aiHubBtn" hidden></button>
+      <p class="hint">AI runs through AI hub. Your description is sent to Groq or Gemini, whichever AI hub uses for chat. Nothing else leaves the device.</p>
     </section>
   </aside>
 

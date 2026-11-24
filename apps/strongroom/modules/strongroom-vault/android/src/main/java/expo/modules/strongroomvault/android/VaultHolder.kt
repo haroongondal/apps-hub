@@ -199,6 +199,7 @@ object VaultHolder {
         f.delete() // a stale index could still offer a removed login; empty until the next refresh
       }
     }
+    ExpiryShare.refresh(context) { v.all() }
   }
 
   fun addPending(context: Context, p: PendingSave): Boolean {
@@ -360,15 +361,15 @@ object VaultHolder {
   private fun bootCount(context: Context): Int? =
     Settings.Global.getInt(context.contentResolver, Settings.Global.BOOT_COUNT, -1).takeIf { it >= 0 }
 
-  private fun file(context: Context, name: String) = AtomicFile(File(context.filesDir, name))
+  internal fun file(context: Context, name: String) = AtomicFile(File(context.filesDir, name))
 
-  private fun AtomicFile.readOrNull(): ByteArray? = try {
+  internal fun AtomicFile.readOrNull(): ByteArray? = try {
     readFully()
   } catch (e: IOException) {
     null
   }
 
-  private fun AtomicFile.write(bytes: ByteArray) {
+  internal fun AtomicFile.write(bytes: ByteArray) {
     val out = startWrite()
     try {
       out.write(bytes)

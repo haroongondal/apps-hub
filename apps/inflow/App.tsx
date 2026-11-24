@@ -5,9 +5,14 @@ import InflowCore, { type ItemFilter, type PartyTotal, type ReportRow, type Stat
 import { AppsScreen } from './src/AppsScreen.tsx';
 import { AskScreen } from './src/AskScreen.tsx';
 import { ContactsScreen } from './src/ContactsScreen.tsx';
+import { DoctorScreen } from './src/DoctorScreen.tsx';
+import { HealthScreen } from './src/HealthScreen.tsx';
 import { HomeScreen } from './src/HomeScreen.tsx';
+import { JournalScreen } from './src/JournalScreen.tsx';
 import { ListScreen } from './src/ListScreen.tsx';
 import { LockScreen } from './src/LockScreen.tsx';
+import { appStateDecision } from './src/lockGrace.ts';
+import { MedicinesScreen } from './src/MedicinesScreen.tsx';
 import { MoneyScreen } from './src/MoneyScreen.tsx';
 import { partyTitle } from './src/money.ts';
 import { PartyScreen } from './src/PartyScreen.tsx';
@@ -17,6 +22,7 @@ import { LOAD_ERROR } from './src/messages.ts';
 import { SettingsScreen } from './src/SettingsScreen.tsx';
 import { SetupScreen } from './src/SetupScreen.tsx';
 import { TodosScreen } from './src/TodosScreen.tsx';
+import { VitalsScreen } from './src/VitalsScreen.tsx';
 import { setupComplete, setupRows } from './src/setup.ts';
 
 type Tab = 'home' | 'money' | 'ask' | 'settings';
@@ -24,6 +30,11 @@ type Route =
   | { kind: 'items'; filter: ItemFilter; title: string }
   | { kind: 'contacts'; pkg: string; title: string; promo: boolean }
   | { kind: 'apps' }
+  | { kind: 'health' }
+  | { kind: 'vitals' }
+  | { kind: 'medicines' }
+  | { kind: 'journal' }
+  | { kind: 'doctor' }
   | { kind: 'party'; name: string | null; own: boolean; title: string }
   | { kind: 'report'; id: number; title: string };
 
@@ -76,14 +87,17 @@ function Root() {
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s) => {
+      const decision = appStateDecision(s, Date.now());
       if (s === 'background') {
+        if (decision !== 'lock') return;
         setLocked(true);
         setStack([]);
         setTodosOpen(false);
         setTab('home');
       } else if (s === 'active') {
+        if (decision === 'lock') setLocked(true);
         refresh();
-        if (!lockedRef.current) openTappedReport();
+        if (decision !== 'lock' && !lockedRef.current) openTappedReport();
       }
     });
     return () => sub.remove();
@@ -143,6 +157,11 @@ function Root() {
     return <ContactsScreen key={stack.length} title={top.title} pkg={pkg} promo={top.promo} onBack={back} onOpen={open} onOpenPromotions={() => openContacts(pkg, 'Promotions', true)} />;
   }
   if (top?.kind === 'apps') return <AppsScreen key={stack.length} onBack={back} onOpen={open} onOpenContacts={openContacts} />;
+  if (top?.kind === 'health') return <HealthScreen key={stack.length} onBack={back} onOpenVitals={() => push({ kind: 'vitals' })} onOpenMedicines={() => push({ kind: 'medicines' })} onOpenJournal={() => push({ kind: 'journal' })} onOpenDoctor={() => push({ kind: 'doctor' })} />;
+  if (top?.kind === 'vitals') return <VitalsScreen key={stack.length} onBack={back} />;
+  if (top?.kind === 'medicines') return <MedicinesScreen key={stack.length} onBack={back} />;
+  if (top?.kind === 'journal') return <JournalScreen key={stack.length} onBack={back} />;
+  if (top?.kind === 'doctor') return <DoctorScreen key={stack.length} onBack={back} />;
   if (top?.kind === 'report') return <ReportScreen key={stack.length} id={top.id} title={top.title} onBack={back} />;
   if (top?.kind === 'party') return <PartyScreen key={stack.length} title={top.title} name={top.name} own={top.own} onBack={back} />;
 
@@ -152,7 +171,7 @@ function Root() {
     <>
       <View style={{ flex: 1 }}>
         {tab === 'home' ? (
-          <HomeScreen status={status} refreshStatus={refresh} onOpen={open} onOpenContacts={openContacts} onOpenMoney={() => setTab('money')} onOpenApps={() => push({ kind: 'apps' })} onOpenTodos={() => setTodosOpen(true)} />
+          <HomeScreen status={status} refreshStatus={refresh} onOpen={open} onOpenContacts={openContacts} onOpenMoney={() => setTab('money')} onOpenApps={() => push({ kind: 'apps' })} onOpenTodos={() => setTodosOpen(true)} onOpenHealth={() => push({ kind: 'health' })} />
         ) : tab === 'money' ? (
           <MoneyScreen status={status} onOpenParty={openParty} onOpenReport={openReport} />
         ) : tab === 'ask' ? (

@@ -76,6 +76,72 @@ Claude's calls are marked *(My call.)* in DESIGN.md.
 
 ## Session log
 
+- 2026-11-24 (eco/clipboard, P5 of the ecosystem wave, not released): links
+  to other apps (packages/app-link-contract).
+  - **`pinned` share** on `com.haroon.clipboard.applink` (`ClipLinkProvider`,
+    rows in pure `core/ClipLinks.kt`): `{id, text, pinned_at, from_app}` of
+    pinned text clips only (kind `text`, never secret/code/image/file; the SQL
+    filters and `ClipLinks.pinnedRow` re-checks each row), text cut at 2000
+    characters (never on half a surrogate pair), at most 200 rows, oldest id
+    first, paged with `pinned/<sinceId>`. Served only when
+    `AppLinkCaller.allowed` passes (else SecurityException) AND
+    `ContentProvider.getCallingPackage()` is `com.haroon.pdfeditor` (Nexus) AND
+    the switch "Let Nexus read my pinned clips" is on; otherwise an empty
+    cursor. The switch is off by default (prefs `nexus_reads_pinned`); its
+    subtitle says Nexus may send the clips to AI with Ask my life. This is the
+    first route from Clipboard to an app with internet. `from_app` is the copy
+    source package, `""` when unknown *(my call: the brief's type is string,
+    not string?)*. Schema v2 adds `pinned_at` (set on pin, cleared on unpin;
+    clips pinned before v2 get their saved time) *(my call)*. The share query
+    never writes (no prune: pinned clips never expire).
+  - **Health row** at `health` (`appHealthShare('clipboard')`): `clipboard`,
+    accessibility 1/0 from `ENABLED_ACCESSIBILITY_SERVICES`, listener null,
+    ai_source `none`, last_seen_at from a heartbeat written when the module
+    starts (app open) and when `CaptureService` connects. Same-key callers
+    always get it.
+  - **Add to Inflow** on a recognised IBAN only (`SmartAction.todo` from
+    `ibanTodo()` in `src/inflow.ts`): a button next to Copy IBAN, plus the
+    row menu and the accessibility action. Native `addToInflow(title, note,
+    source)` re-validates against `InflowTodo.SPEC` and starts
+    `com.haroon.inflow.action.ADD_TODO` (setPackage `com.haroon.inflow`) with
+    `startActivityForResult` from the current Activity, so Inflow's
+    `AppLinkActivityCaller` sees the calling package. Extras: title
+    "Pay account " + IBAN in groups of four, note "From Clipboard", source
+    "Clipboard". Answers: added, cancelled, not_installed
+    (ActivityNotFoundException), refused (SecurityException, bad extras or an
+    unknown code), busy (a second tap while one is open; nothing shown).
+    Inflow shows its own Add to-do screen and adds nothing until the owner taps
+    Add. No `<queries>` added: starting an activity needs no package visibility
+    *(my call, per the brief)*.
+  - Manifest: `<permission>` (signature) + `<uses-permission>` AUTOPILOT in the
+    clipboard-core manifest; canonical `AppLinkGuard.kt` and `AppLinkCaller.kt`
+    copied in (package line only; `AppLinkActivityCaller` not needed, Clipboard
+    hosts no action). Merged release manifest still has no INTERNET.
+  - Tests: `src/__tests__/links.test.ts` (share equals
+    `android/src/test/resources/applink/pinned.share.json`, sample rows,
+    auditManifest, provider order guard then calling package, read-only),
+    `src/__tests__/inflow.test.ts` (ADD_TODO fixture spec, IBAN-only, hidden
+    clips get nothing, outcome words); JVM `ClipLinksTest` (fixture binding of
+    both shares, reader rule, sinceId parsing, row filter and cap,
+    caller-decisions table, every add-todo-extras case, result codes).
+    clipboard ts 31 (21), JVM 43 (32), app-link-contract 133.
+
+- 2026-11-23 (eco/clipboard worktree, not released): Phase 1 items and smart
+  actions. Expiry with a "Keep clips for" setting (7/30/90 days, 1 year;
+  default 30; codes 10 minutes; pinned never) in pure `core/Expiry.kt`; pin/
+  unpin (existing `pinned` column, no schema change); INTERNET dropped from
+  release (main manifest no longer asks, `src/release` removes the one
+  expo-filesystem merges in, debug and debugOptimized add it for Metro;
+  `src/__tests__/manifest.test.ts` guards it; merged release manifest checked
+  with `:app:processReleaseMainManifest`); spike logging removed; source taken
+  from a toast's own package (`CopySignal.source`); setup copy mentions
+  "Allow restricted settings" and Autostart. "Turn on" can't open our own
+  service page: `ACTION_ACCESSIBILITY_DETAILS_SETTINGS` is a system API (not
+  in the SDK 36 stubs), so it opens the list with Settings' highlight extras.
+  Smart actions (DESIGN §2): `src/smart.ts` + `core/OpenTarget.kt`. Not done:
+  images copied into storage (needs a FileProvider to paste back and a
+  thumbnail; separate slice). Phone checks not run.
+
 - 2026-11-13: owner asked for a movable bubble ("it hides some important
   content or button while typing"). Built the drag into `android/Bubble.kt`
   (touch handler: tap = open/close as before, any direction past the slop
@@ -103,7 +169,7 @@ Claude's calls are marked *(My call.)* in DESIGN.md.
   the old Store-installer `<queries>` hunk dropped — main's #32 replaced it
   with `QUERY_ALL_PACKAGES`), re-verified (`pnpm test` 19 packages all
   `fail 0`, typecheck exit 0, ui tokens/contrast suite green) and opened
-  **PR #34 → main: https://github.com/haroongondal/apps-hub/pull/34**.
+  **PR #34 → main: https://github.com/haroongondal/apps-hub/pull/34** (merged as 6c541896).
 
 - 2026-10-31: phone diagnosis, system auto-clear override, brainstorm, design
   written, worktree created.
@@ -182,8 +248,42 @@ Claude's calls are marked *(My call.)* in DESIGN.md.
 
 ## Current state + exact next step
 
-**PR #34 open (https://github.com/haroongondal/apps-hub/pull/34)**: Clipboard
-0.2.2 (7) — draggable bubble — against main, rebased onto #32. Clipboard
+**2026-11-24 (AppLinkTarget):** `AddToInflow` now calls
+`AppLinkTarget.trustedActivity(activity, intent)` (copy-in, package line only,
+plus `AppLinkTargetTest`) before `startActivityForResult`; false means the
+existing `not_installed` outcome and nothing is sent (`InflowTodo.launch`,
+tested with a fake decision). The module manifest has `<queries>` for
+`com.haroon.inflow`; the release manifest still has no INTERNET. The `pinned`
+share is a provider, not a reader, so it is unchanged. Phone, Store-signed
+builds only: with Inflow uninstalled the not-installed words show and nothing
+is sent; with Store-signed Clipboard and Inflow Add to Inflow works as before.
+
+**2026-11-24 (P5):** `eco/clipboard` also holds the `pinned` share, the
+health row and Add to Inflow (session log). Not merged or released; needs
+Store-signed builds of Clipboard, Nexus and Inflow (debug builds fail closed).
+Next: security-engineer review (first Clipboard data route to an app with
+internet) and invariant-reviewer, then the phone checks: (1) as the shell,
+`adb shell content query --uri content://com.haroon.clipboard.applink/pinned`
+must fail with a permission denial; (2) with the switch off, Nexus "Ask my
+life" shows Clipboard as off / reads no rows; switch on, pin a text clip, it
+appears in Nexus; a copied Strongroom password or a 6-digit code pinned (if
+the UI allows) never appears; unpin, it is no longer served; (3) the Store
+health screen shows Clipboard's accessibility state and a recent last seen;
+(4) copy `PK36 SCBL 0000 0011 2345 6702`, tap Add to Inflow: Inflow's Add
+to-do screen opens with "Pay account PK36 SCBL 0000 0011 2345 6702"; back
+out shows "Nothing was added to Inflow."; tap Add shows "Added to your
+to-dos in Inflow." and the to-do is in Inflow; with Inflow uninstalled the
+not-installed words show. Then the older checks below.
+
+**2026-11-23:** branch `eco/clipboard` holds Phase 1 (expiry setting, pin,
+no INTERNET in release, logging removed, setup copy) and smart actions; not
+merged or released. Next: the phone checks listed in that branch's report
+(phone, tracking number, IBAN, address rows; a Strongroom copy shows no
+buttons; a pinned clip survives a shorter "Keep clips for"), then images into
+storage (FileProvider + thumbnail). Older state below.
+
+**PR #34 merged to main as 6c541896** (https://github.com/haroongondal/apps-hub/pull/34):
+Clipboard 0.2.2 (7), the draggable bubble, rebased onto #32. Clipboard
 0.2.2 (7) is in the Store; the phone may still have 0.2.0 (5) or 0.2.1 (6) —
 both update to 7 through the Store's Install button. Next: drag the bubble
 on the phone, then WhatsApp copy button (S3), S5 after a full day, then

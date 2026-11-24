@@ -5,6 +5,17 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+    <!-- App links between the owner's apps (packages/app-link-contract): the health row, and starting Deputy's draft screen. -->
+    <permission android:name="com.haroon.permission.AUTOPILOT" android:protectionLevel="signature" />
+    <uses-permission android:name="com.haroon.permission.AUTOPILOT" />
+    <!-- AppLinkTarget checks Deputy (task proposals) and Nexus (photos) before each hand-off; Android 11+ hides them without this.
+         The Store and AI hub are opened from Design with AI's buttons (OpenApp). -->
+    <queries>
+        <package android:name="com.haroon.deputy" />
+        <package android:name="com.haroon.pdfeditor" />
+        <package android:name="com.haroon.store" />
+        <package android:name="com.haroon.aihub" />
+    </queries>
     <application>
         <!-- ONNX Runtime's AAR adds a start-up telemetry sender (Microsoft 1DS); this app sends no telemetry. -->
         <provider
@@ -15,5 +26,11 @@
             android:name="expo.modules.designmedia.android.MediaJobService"
             android:exported="false"
             android:foregroundServiceType="mediaProcessing" />
+        <provider
+            android:name="expo.modules.designmedia.android.DesignLinkProvider"
+            android:authorities="com.haroon.designeditor.applink"
+            android:exported="true"
+            android:readPermission="com.haroon.permission.AUTOPILOT"
+            android:writePermission="com.haroon.permission.AUTOPILOT" />
     </application>
 </manifest>

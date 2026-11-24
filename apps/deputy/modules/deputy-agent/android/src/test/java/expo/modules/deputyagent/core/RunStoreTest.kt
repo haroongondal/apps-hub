@@ -156,8 +156,8 @@ class RunStoreTest {
     clock += 1_000
     s.start("r2", "free storage", "m", "on_demand")
     val (open, done) = s.list(10)
-    assertEquals(RunSummary("r2", "free storage", clock, "running", null, 0.0, 0), open)
-    assertEquals(RunSummary("r1", "next alarm", clock - 1_000, "done", "07:30", 0.02, 2), done)
+    assertEquals(RunSummary("r2", "free storage", clock, "running", null, 0.0, 0, "on_demand", null), open)
+    assertEquals(RunSummary("r1", "next alarm", clock - 1_000, "done", "07:30", 0.02, 2, "on_demand", clock - 1_000), done)
     assertEquals(listOf("r2"), s.list(1).map { it.runId })
   }
 

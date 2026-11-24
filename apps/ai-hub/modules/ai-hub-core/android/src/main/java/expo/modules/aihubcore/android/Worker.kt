@@ -12,9 +12,12 @@ import expo.modules.aihubcore.IAiHubCallback
 import expo.modules.aihubcore.core.Admission
 import expo.modules.aihubcore.core.AiError
 import expo.modules.aihubcore.core.BadRequest
+import expo.modules.aihubcore.core.CallLog
 import expo.modules.aihubcore.core.Job
 import expo.modules.aihubcore.core.KeyRing
+import expo.modules.aihubcore.core.LoggedCall
 import expo.modules.aihubcore.core.ModelChoice
+import expo.modules.aihubcore.core.PendingApps
 import expo.modules.aihubcore.core.Provider
 import expo.modules.aihubcore.core.Queue
 import expo.modules.aihubcore.core.QueueItem
@@ -168,10 +171,12 @@ class Worker(context: Context) {
       settle(p) { it.onResult(id, result) }
     } catch (e: AiError) {
       if (e.kind == AiError.Kind.RATE) hold(item.service, e.retryAfterMs)
+      recordFailure(p, e.kind.name.lowercase(), e.service, e.httpCode, e.fellBack)
       settle(p) { it.onError(id, e.kind.name.lowercase(), e.message.orEmpty()) }
     } catch (e: BadRequest) {
       settle(p) { it.onError(id, "invalid", e.message.orEmpty()) }
     } catch (e: Exception) {
+      recordFailure(p, "internal", null, null, false)
       settle(p) { it.onError(id, "internal", "AI hub hit an unexpected error. Try again.") }
     } catch (e: OutOfMemoryError) {
       settle(p) { it.onError(id, "too_large", "This ${p.request.attachmentName} is too big. Send a smaller one.") }
@@ -193,11 +198,11 @@ class Worker(context: Context) {
       Job.CHAT, Job.VISION -> {
         val messages = if (r.job == Job.VISION) withImage(r.messages, r.mime!!, Base64.encodeToString(read(p), Base64.NO_WRAP)) else r.messages
         val turn = provider.chat(choice, messages, r.tools, r.maxTokens)
-        record(p.pkg, turn.served.service, turn.usage.inputTokens, turn.usage.outputTokens)
+        record(p.pkg, r.job, turn.served.service, turn.usage.inputTokens, turn.usage.outputTokens)
         Results.chat(turn)
       }
-      Job.EMBED -> Results.embed(provider.embed(choice, r.texts), choice.model) { Base64.encodeToString(it, Base64.NO_WRAP) }.also { record(p.pkg, choice.service, 0, 0) }
-      Job.TRANSCRIBE -> Results.transcribe(provider.transcribe(choice, read(p), r.fileName!!, r.mime!!)).also { record(p.pkg, choice.service, 0, 0) }
+      Job.EMBED -> Results.embed(provider.embed(choice, r.texts, r.dimensions), choice.model) { Base64.encodeToString(it, Base64.NO_WRAP) }.also { record(p.pkg, r.job, choice.service, 0, 0) }
+      Job.TRANSCRIBE -> Results.transcribe(provider.transcribe(choice, read(p), r.fileName!!, r.mime!!, r.segments)).also { record(p.pkg, r.job, choice.service, 0, 0) }
     }
   }
 
@@ -216,11 +221,32 @@ class Worker(context: Context) {
   @Synchronized
   private fun ring(): KeyRing = ring.reuseFor(vault.list()).also { ring = it }
 
-  // A lost usage count must never fail the caller's request, so a write error is dropped.
+  // A lost usage count or log row must never fail the caller's request, so a write error is dropped.
   @Synchronized
-  private fun record(pkg: String, service: Service, inputTokens: Long, outputTokens: Long) {
+  private fun record(pkg: String, job: Job, service: Service, inputTokens: Long, outputTokens: Long) {
+    val now = System.currentTimeMillis()
     runCatching {
-      store.put("usage", Usage.fromJson(store.get("usage")).record(pkg, Settings.key(service), inputTokens, outputTokens, System.currentTimeMillis()).toJson())
+      store.put("usage", Usage.fromJson(store.get("usage")).record(pkg, Settings.key(service), inputTokens, outputTokens, now).toJson())
+    }
+    runCatching {
+      store.update("call_log") { CallLog.toJson(CallLog.add(CallLog.parse(it), LoggedCall(pkg, job.name.lowercase(), Settings.key(service), now))) }
+    }
+  }
+
+  // A failed request gets a row too, so the owner can see which call failed and why (kind and HTTP status only, never the provider's text).
+  private fun recordFailure(p: Pending, error: String, service: Service?, httpCode: Int?, fellBack: Boolean) {
+    val job = p.request.job
+    val used = service ?: runCatching { models().getValue(job).service }.getOrNull() ?: return
+    runCatching {
+      store.update("call_log") {
+        CallLog.toJson(CallLog.add(CallLog.parse(it), LoggedCall(p.pkg, job.name.lowercase(), Settings.key(used), System.currentTimeMillis(), error, httpCode, fellBack)))
+      }
+    }
+  }
+
+  fun notePending(pkg: String) {
+    runCatching {
+      store.update("pending") { PendingApps.record(PendingApps.parse(it), pkg, System.currentTimeMillis())?.let(PendingApps::toJson) }
     }
   }
 

@@ -4,6 +4,8 @@ import {
   type Folder,
   type Item,
   type ItemKind,
+  type ItemSource,
+  type SourceApp,
   type Library,
   type Tag,
 } from '@apps-hub/library-core';
@@ -35,9 +37,13 @@ export interface LibraryData {
   rows: LibraryRow[];
   /** Items kept out of Nexus. Nexus failing to open must not stop the Library, so it reads as none. */
   keptOut: Set<string>;
+  /** Items read from other apps, by item id: they are copies, so the Library offers no rename or delete for them. */
+  sources: Map<string, ItemSource>;
+  /** The folder being shown no longer exists, for instance because it held what a switched-off source had left. */
+  gone: boolean;
 }
 
-const EMPTY: LibraryData = { loading: true, error: null, path: [], tags: [], kinds: [], rows: [], keptOut: new Set() };
+const EMPTY: LibraryData = { loading: true, error: null, path: [], tags: [], kinds: [], rows: [], keptOut: new Set(), sources: new Map(), gone: false };
 
 export function errorMessage(error: unknown): string {
   if (error instanceof LibraryError && error.code === 'too_new') {
@@ -74,14 +80,18 @@ export function useLibraryData(q: LibraryQuery) {
       const kind = q.kind ?? undefined;
       const tagId = q.tagId ?? undefined;
       const filtered = kind !== undefined || tagId !== undefined;
-      const [path, tags, kindRows, keptOut] = await Promise.all([
+      const [path, tags, kindRows, keptOut, sourceRows] = await Promise.all([
         q.folderId ? lib.folderPath(q.folderId) : Promise.resolve<Folder[]>([]),
         lib.listTags(),
         lib.db.all('SELECT DISTINCT kind FROM items'),
         openKnowledge()
           .then((kn) => kn.excludedIds())
           .catch(() => new Set<string>()),
+        lib.db.all('SELECT item_id, app, source_id, source_at FROM item_sources'),
       ]);
+      const sources = new Map(
+        sourceRows.map((r) => [r.item_id as string, { app: r.app as SourceApp, sourceId: r.source_id as number, sourceAt: r.source_at as number }] as const),
+      );
       let rows: LibraryRow[];
       if (ftsQuery(q.text) !== null) {
         const hits = await lib.search(q.text, { kind, tagId });
@@ -103,10 +113,11 @@ export function useLibraryData(q: LibraryQuery) {
         ];
       }
       if (run === latest.current) {
-        setData({ loading: false, error: null, path, tags, kinds: kindRows.map((r) => r.kind as ItemKind), rows, keptOut });
+        setData({ loading: false, error: null, path, tags, kinds: kindRows.map((r) => r.kind as ItemKind), rows, keptOut, sources, gone: false });
       }
     } catch (error) {
-      if (run === latest.current) setData((d) => ({ ...d, loading: false, error: errorMessage(error) }));
+      const gone = error instanceof LibraryError && error.code === 'not_found' && q.folderId !== null;
+      if (run === latest.current) setData((d) => ({ ...d, loading: false, error: gone ? null : errorMessage(error), gone }));
     }
   }, [q.folderId, q.text, q.kind, q.tagId, q.sort]);
 

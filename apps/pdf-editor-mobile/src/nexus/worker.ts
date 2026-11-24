@@ -4,13 +4,13 @@ import { AppState } from 'react-native';
 import { newId } from '../library/ids';
 import { openLibrary } from '../library/open-library';
 
-import { ai, hasKeys } from './ai';
+import { ai, aiReady, recheckHub } from './ai';
 import { content } from './content';
+import { workerPool } from './worker-pool';
 
 const WORKERS = 3;
 
 let opening: Promise<Knowledge> | null = null;
-let running = 0;
 let turn: Promise<void> = Promise.resolve();
 // kick and recover take turns, so no worker of ours can claim a job while recover runs.
 const inTurn = (step: () => Promise<void>) => (turn = turn.then(step, step));
@@ -30,29 +30,20 @@ export function onQueueChange(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
-const emit = () => listeners.forEach((l) => l());
+export const emit = () => listeners.forEach((l) => l());
 
-async function work(kn: Knowledge) {
-  try {
-    // Stops on idle, on a pause (no key, offline, rate limit) and when the app leaves the foreground.
-    while ((await kn.runNext()) === 'ran' && AppState.currentState === 'active') emit();
-  } catch (err) {
-    console.warn('Nexus worker stopped', err);
-  } finally {
-    running--;
-    emit();
-  }
-}
+// Each loop stops on idle, on a pause (AI hub needs the owner or is not answering, rate limit) and when the app leaves the foreground; the first pause stops them all.
+const poolFor = (kn: Knowledge) => workerPool({ size: WORKERS, runNext: () => kn.runNext(), active: () => AppState.currentState === 'active', onTick: emit, onIdle: emit });
+let pool: ReturnType<typeof workerPool> | null = null;
+const running = () => pool?.running() ?? 0;
 
-/** Without a key nothing leaves the phone: queued items wait until one is saved. */
+/** Without AI hub ready nothing leaves the phone: queued items wait until it is. */
 export function kick(): Promise<void> {
   return inTurn(async () => {
-    if (!(await hasKeys())) return emit();
+    if (!(await aiReady())) return emit();
     const kn = await openKnowledge();
-    while (running < WORKERS) {
-      running++;
-      void work(kn);
-    }
+    pool ??= poolFor(kn);
+    pool.start();
   });
 }
 
@@ -74,10 +65,11 @@ export async function takeBack(itemId: string): Promise<void> {
 
 export function startWorker(): () => void {
   const resume = async () => {
+    recheckHub(); // the owner may have installed, allowed or added a key in AI hub while Nexus was away
     try {
       // With none of our workers running, every 'running' row belongs to a dead process.
       await inTurn(async () => {
-        if (running === 0) await (await openKnowledge()).recover(0);
+        if (running() === 0) await (await openKnowledge()).recover(0);
       });
       await kick();
     } catch (err) {

@@ -1,0 +1,24 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.nexuslinks'
+version = '0.1.0'
+
+android {
+  namespace "expo.modules.nexuslinks"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+  lintOptions {
+    abortOnError false
+  }
+}
+
+dependencies {
+  testImplementation("junit:junit:4.13.2")
+  // Parses today.json and reads the shared JSON fixtures in tests; the app already ships this version through ai-hub-client (Apache-2.0).
+  implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
+}

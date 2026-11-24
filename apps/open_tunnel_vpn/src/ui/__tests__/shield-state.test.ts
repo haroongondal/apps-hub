@@ -75,12 +75,12 @@ test('disconnecting copy states the transition instead of deferring wording', ()
 test('error copy sends the next tap to a fresh relay', () => {
   assert.equal(shieldCopy(snapshot('error'), null, false).subtitle, 'Tap to find another relay');
   assert.equal(shieldCopy(snapshot('error'), null, true).subtitle, 'Measuring relays');
-  assert.equal(shieldCopy(snapshot('error'), null, false).action, 'Connects the fastest relay that answers');
+  assert.equal(shieldCopy(snapshot('error'), null, false).action, 'Connects to the best relay that answers');
 });
 
 test('disconnected copy points at the relay to connect or a fresh scan', () => {
   assert.equal(shieldCopy(snapshot('disconnected'), node(), false).subtitle, 'Tap to connect to JP · Japan');
-  assert.equal(shieldCopy(snapshot('disconnected'), null, false).subtitle, 'Tap to find the fastest relay');
+  assert.equal(shieldCopy(snapshot('disconnected'), null, false).subtitle, 'Tap to connect to the best relay');
   assert.equal(shieldCopy(snapshot('disconnected'), null, true).subtitle, 'Measuring relays');
   assert.equal(shieldCopy(snapshot('disconnected'), null, false).title, 'Not connected');
 });

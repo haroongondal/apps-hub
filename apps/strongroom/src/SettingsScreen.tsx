@@ -13,6 +13,11 @@ const MINUTES = [
   { key: '15', label: '15 minutes' },
 ] as const;
 
+const LABELS = [
+  { key: 'dates', label: 'Dates only' },
+  { key: 'names', label: 'Show names' },
+] as const;
+
 const BROWSERS: Record<string, string> = { 'com.android.chrome': 'Chrome', 'org.mozilla.firefox': 'Firefox' };
 
 const MIUI = (() => {
@@ -23,7 +28,7 @@ const MIUI = (() => {
   }
 })();
 
-export type SettingsFlow = 'password' | 'fingerprint' | 'newKey' | 'import' | 'authenticator' | 'sync' | 'emailRecovery' | 'export' | 'imports' | 'deleteAll';
+export type SettingsFlow = 'password' | 'fingerprint' | 'newKey' | 'import' | 'authenticator' | 'sync' | 'emailRecovery' | 'export' | 'imports' | 'deleteAll' | 'check';
 
 interface Props {
   status: Status;
@@ -88,6 +93,15 @@ export function SettingsScreen({ status, refresh, notice, onOpen }: Props) {
         if (granted !== PermissionsAndroid.RESULTS.GRANTED) return;
       }
       Vault.setSmsFill(on);
+      refresh();
+    } catch (e) {
+      fail(e);
+    }
+  };
+
+  const setExpiryShare = (on: boolean, names: boolean) => {
+    try {
+      Vault.setExpiryShare(on, names);
       refresh();
     } catch (e) {
       fail(e);
@@ -182,11 +196,46 @@ export function SettingsScreen({ status, refresh, notice, onOpen }: Props) {
         <SyncSettingsRow onOpen={() => onOpen('sync')} />
       </Group>
       <Group title="Your passwords">
+        <Row title="Password check" subtitle="Find passwords that are reused, easy to guess or well known." onPress={() => onOpen('check')} />
         <Row title="Import from Google" subtitle="Move your saved passwords out of Google Password Manager." onPress={() => onOpen('import')} />
         <Row title="Import from Google Authenticator" subtitle="Move your authenticator codes into Strongroom." onPress={() => onOpen('authenticator')} />
         <Row title="Imported files" subtitle="Delete what one import brought in." onPress={() => onOpen('imports')} />
         <Row title="Export all" subtitle="Save every login, card and note to a file." onPress={() => onOpen('export')} />
         <Row title="Delete all passwords" subtitle="Empty the vault." onPress={() => onOpen('deleteAll')} />
+      </Group>
+      <Group
+        title="Your other apps"
+        footer={
+          status.expiryShare
+            ? status.expiryNames
+              ? 'Your other Haroon apps see each card name you typed and when the card runs out, even while Strongroom is locked. Never numbers, security codes or passwords.'
+              : 'Your other Haroon apps see only "Card" and when each card runs out, even while Strongroom is locked. Never names, numbers, security codes or passwords.'
+            : 'Off: your other apps see nothing from Strongroom except that it is installed and when it last ran.'
+        }
+      >
+        <Row
+          title="Share expiry dates with my other Haroon apps"
+          subtitle="So a reminder app can tell you before a card runs out."
+          trailing={
+            <Switch
+              value={status.expiryShare}
+              onValueChange={(on) => setExpiryShare(on, status.expiryNames)}
+              accessibilityLabel="Share expiry dates with my other Haroon apps"
+              trackColor={{ false: c.line, true: c.accent }}
+              thumbColor={c.surface}
+            />
+          }
+        />
+        {status.expiryShare && (
+          <View style={{ padding: space.md }}>
+            <Segmented
+              options={LABELS}
+              value={status.expiryNames ? 'names' : 'dates'}
+              onChange={(key) => setExpiryShare(true, key === 'names')}
+              accessibilityLabel="What your other apps see for each card"
+            />
+          </View>
+        )}
       </Group>
       <Button label="Lock now" variant="secondary" onPress={lockNow} block />
       <Group title="Checks" footer="Autofill fills a browser only when Strongroom recognises it.">

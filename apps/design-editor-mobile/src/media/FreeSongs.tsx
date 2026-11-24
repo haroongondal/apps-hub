@@ -37,19 +37,22 @@ export function FreeSongs({ onPick }: { onPick: (song: PickedSong) => Promise<vo
   });
 
   const search = (next: number) => run(async () => {
-    if (!query.trim()) throw new Error('Type what you are looking for.');
     const got = await searchSongs(query, token ?? '', next);
     setHits(next === 1 ? got.hits : [...hits, ...got.hits]);
     setPage(next);
     setHasMore(got.hasMore);
   });
 
+  // With a key saved, open on the most popular songs instead of an empty list.
+  useEffect(() => { if (token) search(1); }, [token]);
+
   const add = (hit: SongHit) => run(async () => onPick(await downloadSong(hit)));
 
   if (token === null) return null;
   if (!token) {
     return (
-      <Group title="Free songs" footer="Free songs come from Freesound. Get a free key at freesound.org, then paste it here. It stays on this phone.">
+      <Group title="Free songs" footer="Free songs come from Freesound. The key stays on this phone.">
+        <Notice tone="accent">No songs show until you add a free key. Make a free account at freesound.org, open its key page, copy your key and paste it below. Then the songs appear here.</Notice>
         <Field label="Freesound key" value={keyDraft} onChangeText={setKeyDraft} autoCapitalize="none" autoCorrect={false} secureTextEntry />
         <Button label="Save key" variant="secondary" busy={busy} onPress={saveKey} />
         {error ? <Notice tone="warn">{error}</Notice> : null}
@@ -57,7 +60,7 @@ export function FreeSongs({ onPick }: { onPick: (song: PickedSong) => Promise<vo
     );
   }
   return (
-    <Group title="Free songs" footer="Only songs with no credit needed (Creative Commons 0) are listed.">
+    <Group title="Free songs" footer="Popular songs are listed first. Type words to search. Only songs with no credit needed (Creative Commons 0) are listed.">
       <Field label="Search songs" value={query} onChangeText={setQuery} returnKeyType="search" onSubmitEditing={() => search(1)} />
       <Button label="Search" variant="secondary" busy={busy} onPress={() => search(1)} accessibilityHint="Finds free songs that match the words" />
       {error ? <Notice tone="warn">{error}</Notice> : null}

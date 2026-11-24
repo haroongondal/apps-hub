@@ -1,0 +1,6 @@
+{
+  "authority": "com.haroon.deputy.applink",
+  "path": "runs",
+  "columns": ["id", "task", "state", "finished_at"],
+  "maxRows": 200
+}

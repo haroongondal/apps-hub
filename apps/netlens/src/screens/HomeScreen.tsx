@@ -9,6 +9,7 @@ import { Button, Group, Header, Notice, Pill, Row, Screen, Text, space } from '@
 
 import { peopleStatus, probeHome, type PersonStatus, type ReconciledDevice } from '@apps-hub/core';
 
+import { BackgroundChecks } from '../components/BackgroundChecks';
 import { useNetworkScan } from '../scan/ScanProvider';
 
 /** Sockets stay bounded: at most this many people are probed at once. */
@@ -25,7 +26,7 @@ export function lastSeenText(lastSeenAt: number, now: number): string {
 }
 
 export default function HomeScreen() {
-  const { phase, devices, errorNote, store, runScan, binding } = useNetworkScan();
+  const { phase, devices, errorNote, store, runScan, binding, homeWatch, tagReasons, tagSuggestions, moveTag } = useNetworkScan();
   const [override, setOverride] = useState<ReadonlySet<string>>(new Set());
   const [probing, setProbing] = useState(false);
   // True from the press until the scan it started reaches done or error.
@@ -97,12 +98,20 @@ export default function HomeScreen() {
 
   const now = Date.now();
   const people = useMemo(() => peopleStatus(devices), [devices]);
-  const homeCount = people.filter((p) => p.home || override.has(p.person)).length;
+  const watch = homeWatch.status?.supported && homeWatch.status.settings.whoIsHome ? homeWatch.status.people : [];
+  const watchedHome = new Set(watch.filter((w) => w.present).map((w) => w.label.toLowerCase()));
+  const isHome = (p: PersonStatus): boolean => p.home || override.has(p.person) || watchedHome.has(p.person.toLowerCase());
+  const lastSeen = (p: PersonStatus): number =>
+    Math.max(p.lastSeenAt, ...watch.filter((w) => w.label.toLowerCase() === p.person.toLowerCase()).map((w) => w.lastSeenAt));
+  const homeCount = people.filter(isHome).length;
   const busy = scanning || probing;
 
   return (
     <Screen scroll>
-      <Header title="Who's home" subtitle="Updates while HomeNet is open." />
+      <Header
+        title="Who's home"
+        subtitle={watch.length > 0 ? 'Updates while HomeNet is open, and about every 15 minutes in the background.' : 'Updates while HomeNet is open.'}
+      />
 
       {errorNote !== null ? (
         <Notice tone="danger" title={phase === 'error' ? "The check didn't finish" : 'HomeNet hit a problem'}>
@@ -133,19 +142,40 @@ export default function HomeScreen() {
       ) : (
         <Group footer={`${homeCount} of ${people.length} home`}>
           {people.map((p) => {
-            const home = p.home || override.has(p.person);
+            const home = isHome(p);
+            const reason = p.deviceIds.map((id) => tagReasons.get(id)).find((r) => r !== undefined);
+            const seen = home ? null : lastSeenText(lastSeen(p), now);
+            const subtitle = [seen, reason ? `Matched: ${reason}` : null].filter(Boolean).join('. ') || undefined;
+            const suggestion = home ? undefined : tagSuggestions.find((s) => s.person.toLowerCase() === p.person.toLowerCase());
             return (
               <Row
                 key={p.person}
                 title={p.person}
-                subtitle={home ? undefined : lastSeenText(p.lastSeenAt, now)}
+                subtitle={subtitle}
                 trailing={home ? <Pill label="Home" tone="ok" /> : undefined}
-                accessibilityLabel={`${p.person}, ${home ? 'home' : lastSeenText(p.lastSeenAt, now)}`}
-              />
+                accessibilityLabel={`${p.person}, ${home ? 'home' : seen}${reason ? `, matched: ${reason}` : ''}`}
+              >
+                {suggestion ? (
+                  <View style={{ gap: space.sm }}>
+                    <Text variant="meta" tone="muted">
+                      {`Another device on your Wi-Fi answered. ${suggestion.reason}. Is it ${p.person}'s?`}
+                    </Text>
+                    <Button
+                      label={`Yes, it's ${p.person}'s`}
+                      variant="secondary"
+                      size="sm"
+                      accessibilityHint={`Moves ${p.person}'s tag to this device`}
+                      onPress={() => moveTag(suggestion)}
+                    />
+                  </View>
+                ) : null}
+              </Row>
             );
           })}
         </Group>
       )}
+
+      <BackgroundChecks />
     </Screen>
   );
 }

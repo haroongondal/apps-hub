@@ -1,7 +1,8 @@
-import type { AppInfo, JobKey, ServiceKey } from 'ai-hub-core';
+import type { AppInfo, CallInfo, JobKey, ServiceKey } from 'ai-hub-core';
 
 export const STRONGROOM = 'com.haroon.strongroom';
 export const BLOCKED_TEXT = 'Blocked: passwords never leave Strongroom.';
+export const PENDING_TEXT = 'Asked to use AI. Allow?';
 export const KEYS_UNREADABLE = "Your saved keys couldn't be opened";
 
 export const SERVICE_LABEL: Record<ServiceKey, string> = { groq: 'Groq', gemini: 'Gemini' };
@@ -39,6 +40,26 @@ export function usageText(app: Pick<AppInfo, 'calls' | 'inputTokens' | 'outputTo
   if (app.calls === 0) return 'No calls yet';
   const calls = `${formatCount(app.calls)} ${app.calls === 1 ? 'call' : 'calls'}`;
   return `${calls}, ${formatCount(app.inputTokens)} tokens in, ${formatCount(app.outputTokens)} out`;
+}
+
+const FAILURE_TEXT: Record<string, string> = {
+  auth: 'key refused',
+  rate: 'rate limit',
+  bad_request: 'request rejected',
+  server: 'service error',
+  offline: 'no connection',
+  timeout: 'timed out',
+  internal: 'AI hub error',
+};
+
+export function requestText(call: Pick<CallInfo, 'job' | 'service' | 'time' | 'error' | 'code' | 'fellBack'>, now: number): string {
+  const job = JOBS.find((j) => j.key === call.job)?.label ?? 'Request';
+  const service = SERVICE_LABEL[call.service] ?? call.service;
+  const when = lastUsedText(call.time, now);
+  if (!call.error) return `${job} with ${service}. ${when}`;
+  const why = FAILURE_TEXT[call.error] ?? 'unexpected error';
+  const status = call.code ? ` (HTTP ${call.code})` : '';
+  return `${job} with ${service} failed: ${why}${status}${call.fellBack ? ', other service tried too' : ''}. ${when}`;
 }
 
 // Expo wraps a native failure as "Call to function ... rejected.\n→ Caused by: <message>".

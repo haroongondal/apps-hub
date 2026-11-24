@@ -472,6 +472,28 @@ public class NetlensCoreModule: Module {
       }
     }
 
+    // Background checks need Android's WorkManager; iOS answers with a typed "not supported", never a made-up state.
+    AsyncFunction("getHomeWatch") { () -> [String: Any] in
+      ["supported": false]
+    }
+
+    AsyncFunction("setHomeWatch") { (_: [String: Any], _: [String: Any]?) -> [String: Any] in
+      ["supported": false]
+    }
+
+    AsyncFunction("syncHomeWatch") { (_: [String: Any], _: [String: Any]) -> [String: Any] in
+      ["supported": false]
+    }
+
+    AsyncFunction("markDeviceMine") { (_: String) -> [String: Any] in
+      ["supported": false]
+    }
+
+    // Deputy is an Android app; there is nothing to hand a task to on iOS.
+    AsyncFunction("proposeDeputyTask") { (_: String, _: String) -> [String: Any] in
+      ["supported": false]
+    }
+
     OnDestroy { }
   }
 }

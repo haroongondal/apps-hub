@@ -1,0 +1,11 @@
+{
+  "name": "audio-chunks",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Nexus: cuts a recording into pieces without re-encoding, so long recordings fit the transcription upload limit (Expo local module, Android)",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "expo-modules-core": "~3.0.30"
+  }
+}

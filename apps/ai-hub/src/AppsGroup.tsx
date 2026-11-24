@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Group, Notice, Row, Segmented, Text, space } from '@apps-hub/ui';
 import { apps, setAppEnabled, type AppInfo } from 'ai-hub-core';
-import { BLOCKED_TEXT, STRONGROOM, lastUsedText, plainError, usageText } from './format.ts';
+import { useRefreshOnForeground } from './useRefreshOnForeground.ts';
+import { BLOCKED_TEXT, PENDING_TEXT, STRONGROOM, lastUsedText, plainError, usageText } from './format.ts';
 
 export function AppsGroup() {
   const [list, setList] = useState<AppInfo[]>([]);
@@ -12,6 +13,7 @@ export function AppsGroup() {
   useEffect(() => {
     refresh();
   }, []);
+  useRefreshOnForeground(refresh);
 
   const toggle = async (app: AppInfo, enabled: boolean) => {
     setError(null);
@@ -30,7 +32,11 @@ export function AppsGroup() {
           app.packageName === STRONGROOM ? (
             <Row key={app.packageName} title={app.label} subtitle={BLOCKED_TEXT} />
           ) : (
-            <Row key={app.packageName} title={app.label} subtitle={`${usageText(app)}. ${lastUsedText(app.lastUsed, Date.now())}.`}>
+            <Row
+              key={app.packageName}
+              title={app.label}
+              subtitle={app.pending ? PENDING_TEXT : `${usageText(app)}. ${lastUsedText(app.lastUsed, Date.now())}.`}
+            >
               <Segmented
                 accessibilityLabel={`AI for ${app.label}`}
                 options={[
@@ -44,7 +50,7 @@ export function AppsGroup() {
           ),
         )}
       </Group>
-      {list.length === 0 && <Text tone="muted">No app has used the hub yet.</Text>}
+      {list.length === 0 && <Text tone="muted">No app has asked to use AI yet.</Text>}
       {error && <Notice tone="danger">{error}</Notice>}
     </View>
   );

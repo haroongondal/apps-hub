@@ -17,9 +17,14 @@ import expo.modules.deputyagent.android.AgentRuntime
 import expo.modules.deputyagent.android.DeputyAccessibilityService
 import expo.modules.deputyagent.android.KeyVault
 import expo.modules.deputyagent.android.OwnerStore
+import expo.modules.deputyagent.android.Schedules
 import expo.modules.deputyagent.android.StopChip
+import expo.modules.deputyagent.core.Begin
+import expo.modules.deputyagent.core.Draft
+import expo.modules.deputyagent.core.ProposalInbox
 import expo.modules.deputyagent.core.SavedTask
 import expo.modules.deputyagent.core.ServiceSetting
+import expo.modules.deputyagent.core.SharedInbox
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.functions.Queues
@@ -32,6 +37,8 @@ import kotlinx.coroutines.withContext
 private const val NOT_CONNECTED =
   "The accessibility service isn't connected. If Setup says it is on, turn it off and on again in Accessibility settings."
 private const val RUN_EVENT = "onRunEvent"
+private const val SHARE_EVENT = "onShare"
+private const val PROPOSAL_EVENT = "onProposal"
 private const val SPEECH_REQUEST = 7301
 
 class DeputyAgentModule : Module() {
@@ -45,14 +52,21 @@ class DeputyAgentModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("DeputyAgent")
 
-    Events(RUN_EVENT)
+    Events(RUN_EVENT, SHARE_EVENT, PROPOSAL_EVENT)
 
     OnCreate {
       appContext.reactContext?.let(AgentRuntime::init)
       AgentRuntime.listener = { e -> sendEvent(RUN_EVENT, AgentRuntime.toMap(e)) }
+      SharedInbox.listener = { sendEvent(SHARE_EVENT, emptyMap<String, Any>()) }
+      ProposalInbox.listener = { sendEvent(PROPOSAL_EVENT, emptyMap<String, Any>()) }
+      appContext.reactContext?.let(OwnerStore::heartbeat)
     }
 
-    OnDestroy { AgentRuntime.listener = null }
+    OnDestroy {
+      AgentRuntime.listener = null
+      SharedInbox.listener = null
+      ProposalInbox.listener = null
+    }
 
     Function("getServiceState") {
       val enabled = Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
@@ -109,6 +123,40 @@ class DeputyAgentModule : Module() {
     Function("listSavedTasks") { OwnerStore.tasks(context).map(OwnerStore::toMap) }
     Function("saveTask") { input: Map<String, Any?> -> OwnerStore.saveTask(context, input) }
     Function("deleteTask") { id: String -> OwnerStore.deleteTask(context, id) }
+
+    Function("takeSharedText") {
+      SharedInbox.take()?.let { mapOf("text" to it.text, "subject" to it.subject, "cut" to it.cut) }
+    }
+    Function("takeProposal") {
+      ProposalInbox.take()?.let {
+        mapOf("id" to it.id, "instruction" to it.task, "text" to it.context, "source" to it.source, "apps" to OwnerStore.appRefs(context, it.apps))
+      }
+    }
+    Function("settleProposal") { id: String, kept: Boolean -> ProposalInbox.settle(id, kept) }
+    Function("listDrafts") { OwnerStore.drafts(context).map { OwnerStore.draftMap(context, it) } }
+    Function("saveDraft") { input: Map<String, Any?> -> OwnerStore.saveDraft(context, input) }
+    Function("deleteDraft") { id: String -> OwnerStore.deleteDraft(context, id) }
+    Function("startDraft") { input: Map<String, Any?> ->
+      val r = try {
+        val draft = OwnerStore.draftFrom(input)
+        val trigger = if (draft.source != null) "proposed_task" else "shared_text"
+        Draft.begin(draft) { task, apps, untrusted -> AgentRuntime.start(context, task, apps, untrusted, trigger = trigger) }
+      } catch (e: IllegalArgumentException) {
+        Begin.Failed(e.message ?: Draft.NO_TEXT)
+      }
+      when (r) {
+        is Begin.Started -> mapOf("runId" to r.runId, "error" to null)
+        is Begin.Failed -> mapOf("runId" to null, "error" to r.message)
+      }
+    }
+
+    Function("getLinkShares") { OwnerStore.linkShares(context) }
+    Function("setLinkShare") { name: String, on: Boolean -> OwnerStore.setLinkShare(context, name, on) }
+
+    Function("listSchedules") { Schedules.list(context).map(Schedules::toMap) }
+    Function("saveSchedule") { input: Map<String, Any?> -> Schedules.save(context, input) }
+    Function("deleteSchedule") { id: String -> Schedules.delete(context, id) }
+    Function("listScheduleRuns") { id: String -> Schedules.history(context, id) }
 
     Function("listApiKeys") { KeyVault.list(context, OwnerStore.settings(context)) }
     Function("addApiKey") { key: String -> KeyVault.add(context, key, OwnerStore.settings(context)) }

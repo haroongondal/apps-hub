@@ -21,6 +21,7 @@ object TunnelEventBus {
   interface Listener {
     fun onStatus(state: String, message: String?, code: String?)
     fun onTraffic(bytesIn: Long, bytesOut: Long, connectedDurationSec: Long)
+    fun onKillSwitch(blocking: Boolean) = Unit
   }
 
   private val listeners = CopyOnWriteArrayList<Listener>()
@@ -35,6 +36,10 @@ object TunnelEventBus {
 
   fun postStatus(state: String, message: String?, code: String? = null) {
     for (listener in listeners) listener.onStatus(state, message, code)
+  }
+
+  fun postKillSwitch(blocking: Boolean) {
+    for (listener in listeners) listener.onKillSwitch(blocking)
   }
 
   fun postTraffic(bytesIn: Long, bytesOut: Long, connectedDurationSec: Long) {

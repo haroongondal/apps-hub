@@ -69,8 +69,8 @@ and "How every session runs" in `docs/build-sessions.md`. Run phases with
 - 2026-11-18 (owner yes): Store Worker deployed to the personal account (cf --profile personal,
   account id matches cloudflare.config.ts) from origin/main + the route commits de7770f, 6e65214
   (version 85911ebd-3c08-4e1b-9d59-c737ba543dc4). Model uploaded with PUT /admin/models/<sha>.
-  **The live Worker now has a route that origin/main lacks: until image-tools merges, a deploy
-  from main would drop /models/. Merge those two commits first or deploy from a branch that has them.**
+  **The live Worker had a route that origin/main lacked: until image-tools merged, a deploy
+  from main would drop /models/.** #50 brought the route to main (2026-11-23).
 
 - 2026-11-18: origin/main (Find a photo #38, squash-merged) merged into image-tools as ba3d97f.
   Files image-tools never touched took main's side; DesignMediaModule.kt and design-media
@@ -184,10 +184,12 @@ build 19, which has NONE of feature 2 (Clean up), feature 3 (quick edits), the t
 ORT telemetry provider is back in the shipped app (it is in main via #38). Fix: image-tools merged with origin/main
 at 2026-11-19 (merge commit on branch; layout fix 5e474c99 included). Gates on the merge: pnpm test 0, typecheck 0,
 node build.mjs ok, Kotlin 298/0 + assembleDebug 0. Not run: clean export of the merge, desktop e2e (owner rule).
+Update (2026-11-23): image-tools reached main as #50 (354af6d9, `[skip ci]`), "Design Editor: quick photo edits,
+Clean up the gallery, ONNX Runtime telemetry removal". Still to confirm: that a `pnpm release design-editor` ran
+from that merge (build 20+; re-fetch the manifest).
 Next:
-1. Owner's go to ship: pr-shipper reviews and opens one PR into main; squash-merge with [skip ci], then
-   `pnpm release design-editor` locally from merged main (build 20+), then re-fetch the manifest.
-   Until main has image-tools, any CI or local Design Editor release from main drops features 2-3 again.
+1. If no Design Editor build after 19 is in the Store manifest, run `pnpm release design-editor` locally from main on
+   the owner's go, then re-fetch the manifest.
 2. Then phone checks on the new build over adb (USB adb is now connected; use `adb -s 49kjmnuwonkffqzh`):
    Object cut-out arm, 2x upscale of a cut-out (rim), Clean up (biggest copy Best, 30 days, Best badge),
    layout fix (Uploads heading), picture picker, Design with AI still works. Join the coord queue first.

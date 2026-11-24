@@ -7,10 +7,12 @@ interface Props {
   label: string;
   onPress: () => void;
   onDelete: () => void;
+  /** More screen reader actions, such as pin and the clip's smart actions. */
+  actions?: Array<{ name: string; label: string; run: () => void }>;
   children: ReactNode;
 }
 
-export function SwipeToDelete({ label, onPress, onDelete, children }: Props) {
+export function SwipeToDelete({ label, onPress, onDelete, actions = [], children }: Props) {
   const { c } = useTheme();
   const x = useRef(new Animated.Value(0)).current;
   const width = useRef(1);
@@ -40,8 +42,13 @@ export function SwipeToDelete({ label, onPress, onDelete, children }: Props) {
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityHint="Copies this clip back. Swipe sideways to delete it."
-      accessibilityActions={[{ name: 'activate' }, { name: 'delete', label: 'Delete' }]}
-      onAccessibilityAction={(e) => (e.nativeEvent.actionName === 'delete' ? onDelete() : onPress())}
+      accessibilityActions={[{ name: 'activate' }, { name: 'delete', label: 'Delete' }, ...actions.map(({ name, label }) => ({ name, label }))]}
+      onAccessibilityAction={(e) => {
+        const name = e.nativeEvent.actionName;
+        if (name === 'delete') return onDelete();
+        const extra = actions.find((a) => a.name === name);
+        return extra ? extra.run() : onPress();
+      }}
     >
       <View style={[StyleSheet.absoluteFill, styles.under, { backgroundColor: c.dangerSoft }]}>
         <Text variant="bodyStrong" tone="danger">Delete</Text>

@@ -1,0 +1,6 @@
+{
+  "authority": "com.haroon.netlens.applink",
+  "path": "who_is_home",
+  "columns": ["person", "present", "last_seen_at"],
+  "maxRows": 16
+}

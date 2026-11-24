@@ -1,0 +1,10 @@
+{
+  "authority": "com.haroon.pdfeditor.applink",
+  "path": "today",
+  "columns": [
+    "id",
+    "title",
+    "due_at"
+  ],
+  "maxRows": 100
+}

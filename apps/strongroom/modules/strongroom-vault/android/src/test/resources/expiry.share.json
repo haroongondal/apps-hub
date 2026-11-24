@@ -1,0 +1,6 @@
+{
+  "authority": "com.haroon.strongroom.applink",
+  "path": "expiry",
+  "columns": ["kind", "label", "expires_on", "days_left"],
+  "maxRows": 200
+}

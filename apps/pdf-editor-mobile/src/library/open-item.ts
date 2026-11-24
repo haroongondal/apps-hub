@@ -21,12 +21,12 @@ export function confirmLarge(sizeBytes: number): Promise<boolean> {
   });
 }
 
-export const itemOpeners: Partial<Record<ItemKind, (item: Item) => Promise<void>>> = {
-  pdf: async (item) => {
+export const itemOpeners: Partial<Record<ItemKind, (item: Item, page?: number) => Promise<void>>> = {
+  pdf: async (item, page) => {
     if (!(await confirmLarge(item.sizeBytes))) return;
     router.push({
       pathname: '/editor',
-      params: { uri: itemFile(item.id, 'document.pdf').uri, name: `${item.title}.pdf`, itemId: item.id },
+      params: { uri: itemFile(item.id, 'document.pdf').uri, name: `${item.title}.pdf`, itemId: item.id, ...(page ? { page: String(page) } : {}) },
     });
   },
   scan: async (item) => {
@@ -37,4 +37,4 @@ export const itemOpeners: Partial<Record<ItemKind, (item: Item) => Promise<void>
   image: async (item) => router.push({ pathname: '/item', params: { id: item.id } }),
 };
 
-export const openItem = async (item: Item) => itemOpeners[item.kind]?.(item);
+export const openItem = async (item: Item, page?: number) => itemOpeners[item.kind]?.(item, page);

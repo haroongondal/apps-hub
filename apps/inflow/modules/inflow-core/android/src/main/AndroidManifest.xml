@@ -2,15 +2,35 @@
   <uses-permission android:name="android.permission.READ_SMS" />
   <uses-permission android:name="android.permission.RECEIVE_SMS" />
   <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-  <!-- Gmail over IMAP (imap.gmail.com:993), and https to the AI address the owner sets in Settings; nothing else. -->
+  <!-- Gmail over IMAP (imap.gmail.com:993); nothing else. AI goes through AI hub on this phone, not over the network from here. -->
   <uses-permission android:name="android.permission.INTERNET" />
-  <!-- The "your report is ready" notification. A runtime permission (Android 13+); without it reports are still made and listed. -->
+  <!-- The "your report is ready" notification, suggestion cards and medicine reminders. A runtime permission (Android 13+); without it reports are still made and listed, and medicines are saved and logged. -->
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <!-- Arms the 08:00 and 20:00 summary alarm again after a restart (a normal permission; it re-arms that alarm only). -->
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
   <!-- Signature level: only apps signed with the same key (Deputy, later Halo) can hold it. Inflow declares it so it can reach Deputy's RunSuggestionActivity. -->
   <permission android:name="com.haroon.permission.AUTOPILOT" android:protectionLevel="signature" />
   <uses-permission android:name="com.haroon.permission.AUTOPILOT" />
+  <!-- Health Connect, read only: steps, sleep and heart rate. No write, no background read; read only while Inflow is open. -->
+  <uses-permission android:name="android.permission.health.READ_STEPS" />
+  <uses-permission android:name="android.permission.health.READ_SLEEP" />
+  <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
   <queries>
     <package android:name="com.haroon.deputy" />
+    <!-- Package visibility for the sibling checks (resolveContentProvider, checkSignatures, queryIntentActivities) before every read and start; Halo is for the changed ping. -->
+    <package android:name="app.netlens" />
+    <package android:name="com.haroon.strongroom" />
+    <package android:name="com.haroon.pdfeditor" />
+    <package android:name="com.haroon.halo" />
+    <!-- The Store, opened by "Install AI hub" when AI hub is missing. -->
+    <package android:name="com.haroon.store" />
+    <!-- The morning briefing reads these shares of the owner's other apps (HomeNet, Strongroom, Deputy, Nexus): query only, signature-guarded on their side. -->
+    <provider android:authorities="com.haroon.netlens.applink" />
+    <provider android:authorities="com.haroon.strongroom.applink" />
+    <provider android:authorities="com.haroon.deputy.applink" />
+    <provider android:authorities="com.haroon.pdfeditor.applink" />
+    <!-- The Health Connect app, on Android 13 and lower. -->
+    <package android:name="com.google.android.apps.healthdata" />
     <intent>
       <action android:name="android.intent.action.MAIN" />
       <category android:name="android.intent.category.LAUNCHER" />
@@ -41,7 +61,7 @@
         android:name="android.support.FILE_PROVIDER_PATHS"
         android:resource="@xml/inflow_media_paths" />
     </provider>
-    <!-- Suggestions, and for a run one source item, for Deputy. Exported, but read and write both need the signature permission; no URI grants. -->
+    <!-- Suggestions, and for a run one source item, for Deputy; also the health row the Store reads. Exported, but read and write both need the signature permission; no URI grants. -->
     <provider
       android:name=".android.AutopilotProvider"
       android:authorities="com.haroon.inflow.autopilot"
@@ -56,8 +76,48 @@
       android:taskAffinity=""
       android:excludeFromRecents="true"
       android:noHistory="true" />
+    <!-- Health Connect's privacy link opens this text-only screen (no data, no store); the alias is the Android 14+ entry. -->
+    <activity
+      android:name=".android.HealthRationaleActivity"
+      android:exported="true"
+      android:theme="@android:style/Theme.DeviceDefault.DayNight">
+      <intent-filter>
+        <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+      </intent-filter>
+    </activity>
+    <activity-alias
+      android:name="ViewPermissionUsageActivity"
+      android:exported="true"
+      android:targetActivity=".android.HealthRationaleActivity"
+      android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+        <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+      </intent-filter>
+    </activity-alias>
+    <!-- ADD_TODO: another app of the owner's asks Inflow to add a to-do. Same-key apps only (signature permission, then the calling package is checked in code); it shows the fingerprint prompt, then a screen, and saves only when the owner taps Add. -->
+    <activity
+      android:name=".android.AddTodoActivity"
+      android:exported="true"
+      android:permission="com.haroon.permission.AUTOPILOT"
+      android:theme="@android:style/Theme.DeviceDefault.DayNight">
+      <intent-filter>
+        <action android:name="com.haroon.inflow.action.ADD_TODO" />
+        <category android:name="android.intent.category.DEFAULT" />
+      </intent-filter>
+    </activity>
     <receiver android:name=".android.SuggestionSkipReceiver" android:exported="false" />
     <receiver android:name=".android.SuggestionReminderReceiver" android:exported="false" />
+    <!-- Medicine reminders: the one alarm, and Taken, Skip and Snooze on a reminder. Not exported: only Inflow's own PendingIntents reach them. -->
+    <receiver android:name=".android.MedicineAlarmReceiver" android:exported="false" />
+    <receiver android:name=".android.MedicineActionReceiver" android:exported="false" />
+    <!-- The 08:00 and 20:00 summary: the alarm, and the restart that arms it again. Not exported: only Inflow's own PendingIntent and the system's boot broadcast reach them. -->
+    <receiver android:name=".android.DigestAlarmReceiver" android:exported="false" />
+    <receiver android:name=".android.DigestBootReceiver" android:exported="false">
+      <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED" />
+      </intent-filter>
+    </receiver>
     <receiver
       android:name="expo.modules.inflowcore.android.SmsReceiver"
       android:exported="true"

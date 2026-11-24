@@ -36,6 +36,7 @@ internal const val SAVE_REFUSED = "Strongroom can't save a password from this sc
 class StrongroomAutofillService : AutofillService() {
   // A cold start's first request needs the suffix list: load it beside that request's Keystore read. A failed load stays quiet here and fails closed at the real lookup.
   override fun onConnected() {
+    AppHealth.beat(this)
     thread(name = "strongroom-psl") { runCatching { Matching.registrableDomain("example.com") } }
   }
 

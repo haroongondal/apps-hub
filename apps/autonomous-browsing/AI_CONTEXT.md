@@ -36,18 +36,18 @@ are worth consulting before you re-derive why something is shaped the way it is.
 
 | Command                                                                       | Notes                                                                                      |
 | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `npm run dev`                                                                 | electron-vite with hot reload                                                              |
-| `npm run typecheck`                                                           | `tsc --noEmit`; `strict` + `noUncheckedIndexedAccess` are on                               |
-| `npm test`                                                                    | vitest over `tests/**/*.test.ts` — pure logic only, no Electron, no browser                |
-| `npx vitest run tests/routines.test.ts`                                       | one file                                                                                   |
-| `npx vitest run -t "substring of the test name"`                              | one test                                                                                   |
-| `npm run test:db`                                                             | **must** go through this script — see §9                                                   |
-| `npm run test:extension`                                                      | `node tests/content-script.verify.mjs`; content-script checks that cannot run under vitest |
-| `npm run test:playwright`                                                     | real-Chrome verify of the playwright backend: launch/adopt lifecycle, trusted input, guards |
-| `npm run eval [-- --suite … --case … --trials N]`                             | model-behaviour evals; **spends live gateway calls** — see [evals/README.md](evals/README.md) |
-| `npm run install:host <extension-id> [chrome\|canary\|chromium\|edge\|brave]` | writes the native-host manifest and `relay-shim.sh`                                        |
-| `npm run build` / `npm run dist`                                              | bundle into `out/` / package with electron-builder — `dist` **fails** without signing certs |
-| `npm run dist:local`                                                          | ad-hoc-signed local package; runs here, fails Gatekeeper elsewhere — see [docs/SIGNING.md](docs/SIGNING.md) |
+| `pnpm --filter autonomous-browsing dev`                                                                 | electron-vite with hot reload                                                              |
+| `pnpm --filter autonomous-browsing typecheck`                                                           | `tsc --noEmit`; `strict` + `noUncheckedIndexedAccess` are on                               |
+| `pnpm --filter autonomous-browsing test`                                                                    | vitest over `tests/**/*.test.ts` — pure logic only, no Electron, no browser                |
+| `pnpm --filter autonomous-browsing exec vitest run tests/routines.test.ts`                                       | one file                                                                                   |
+| `pnpm --filter autonomous-browsing exec vitest run -t "substring of the test name"`                              | one test                                                                                   |
+| `pnpm --filter autonomous-browsing test:db`                                                             | **must** go through this script — see §9                                                   |
+| `pnpm --filter autonomous-browsing test:extension`                                                      | `node tests/content-script.verify.mjs`; content-script checks that cannot run under vitest |
+| `pnpm --filter autonomous-browsing test:playwright`                                                     | real-Chrome verify of the playwright backend: launch/adopt lifecycle, trusted input, guards |
+| `pnpm --filter autonomous-browsing eval [--suite … --case … --trials N]`                             | model-behaviour evals; **spends live gateway calls** — see [evals/README.md](evals/README.md) |
+| `pnpm --filter autonomous-browsing install:host <extension-id> [chrome\|canary\|chromium\|edge\|brave]` | writes the native-host manifest and `relay-shim.sh`                                        |
+| `pnpm --filter autonomous-browsing build` / `pnpm --filter autonomous-browsing dist`                                              | bundle into `out/` / package with electron-builder — `dist` **fails** without signing certs |
+| `pnpm --filter autonomous-browsing dist:local`                                                          | ad-hoc-signed local package; runs here, fails Gatekeeper elsewhere — see [docs/SIGNING.md](docs/SIGNING.md) |
 
 **Environment.** `AI_GATEWAY_API_KEY`; the dev-only `AUTOMATION_DEBUG`
 (`1` for a per-step trace, `dom` to also dump each step's filtered DOM — see
@@ -125,6 +125,9 @@ renderer ──contextBridge──► preload ──ipcRenderer──► main
 | [src/main/db/runs.ts](src/main/db/runs.ts)                                           | Run rows, events, artifacts, repairs, retention, boot cleanup    |
 | [src/main/db/site-landmarks.ts](src/main/db/site-landmarks.ts)                       | `SiteMemoryStore`: the per-origin landmark table, its validation boundary, eviction and pruning |
 | [src/main/automation/orchestrator.ts](src/main/automation/orchestrator.ts)           | Both run loops, the `busy` flag, repair bookkeeping              |
+| [src/shared/dry-run.ts](src/shared/dry-run.ts)                                       | `classifyStep` (default-deny), `wouldDo`, the report types and `renderReportMarkdown` — pure |
+| [src/main/automation/dry-run.ts](src/main/automation/dry-run.ts)                     | `guardSession`, `runDryRun`: walk a routine without acting       |
+| [src/main/dry-run-report.ts](src/main/dry-run-report.ts)                             | `writeDryRunReport`: `userData/dry-runs/<stamp>-<name>/report.md` plus `step-N.jpg` |
 | [src/main/automation/run-queue.ts](src/main/automation/run-queue.ts)                 | The queue in front of the orchestrator: order, priority, dispositions |
 | [src/main/automation/session.ts](src/main/automation/session.ts)                     | `AutomationSession` interface, `isHealable`                      |
 | [src/main/automation/extension-session.ts](src/main/automation/extension-session.ts) | Param substitution, per-step budgets, the hold-retry loop        |
@@ -268,6 +271,9 @@ Line numbers drift; symbol names do not. Search by name.
 | The autonomy spine                     | `SpineMini`, `SpineSlice`                    | renderer/components/Spine.tsx  |
 | Which surface the detail pane shows    | `View`, `DEFAULT_VIEW`, `showQueueTab`       | renderer/lib/view.ts           |
 | Switching surface                      | `useView`                                    | renderer/state/useView.ts      |
+| Is a step read-only? (default-deny)    | `classifyStep`                               | shared/dry-run.ts              |
+| Dry run: the guard and the walk        | `guardSession`, `DryRunBlockedError`, `runDryRun`, `AutomationOrchestrator.dryRunRoutine` | automation/dry-run.ts, orchestrator |
+| Dry run: report and IPC                | `writeDryRunReport`, `automation:dryRun`, `automation:dryRunReveal` | main/dry-run-report.ts, main/ipc.ts |
 | The queue pane and its interruptions   | `QueueView`, `QueueNotices`                  | renderer/components/           |
 | The repair review pane                 | `RepairsView`, `useRepairs`                  | renderer/components/, state/   |
 | Reading a queue snapshot               | `controlState`, `queueDepth`, `runningEntry` | renderer/lib/queue-view.ts     |
@@ -428,6 +434,18 @@ terminal events — `'cancelled'`, `'indeterminate'` or `'assertion'`, absent
 otherwise — because only messages cross IPC and the renderer must not parse
 `run.error` to find out which one it was.
 
+**A dry run walks a routine without acting.** `automation:dryRun` queues like a
+run (`QueueWork` routine variant with `dryRun: true`, labelled "— dry run", never
+recorded as a dropped run) and calls `dryRunRoutine`, which hands the session to
+`runDryRun` wrapped in `guardSession`. For every step it looks its target up with a
+read-only `assert` present, takes a `snapshot()` screenshot, and records what the step
+would do (`wouldDo`: typed text, chosen values and URL queries are left out). A step
+`classifyStep` calls `mutating` — `navigate`, `click`, `type`, `select`, and any kind not
+listed — is skipped, never run. The guard throws `DryRunBlockedError` for any such
+step reaching `runStep` and for `holdForHuman`, so a bug in the walker cannot act. A
+dry run opens no run row, makes no model call and does no repairs. It resolves
+targets on the page already open: `navigate` is skipped, so open the start page first.
+
 ## 7. Budgets
 
 | Constant                     | Value                             | Where             |
@@ -479,6 +497,10 @@ when nothing is coming back at all.
 - **Only error _messages_ cross IPC.** Electron drops custom fields and prepends
   invoke plumbing, which the preload strips back off. Match on message text in
   the renderer, never on `code`.
+- **A dry run never acts.** Every `AutomationSession` the walker touches goes
+  through `guardSession`; a new step kind must be added to `READ_ONLY_KINDS` on
+  purpose, and until then it is skipped. Reports stay under `userData/dry-runs`
+  and nothing is sent anywhere.
 - **One run at a time**, and `RunQueue` is what enforces it: `pump` dispatches
   only when nothing is `current`, and one target tab and one socket still stand
   behind it. `busy` in the orchestrator is now the *assertion* that the queue is
@@ -891,7 +913,7 @@ when nothing is coming back at all.
   unavailable. `pruneThread` is client-side for that reason — and pruning an
   image invalidates the messages cache, so pruning and caching cannot both be
   had.
-- **`npm run test:db` cannot be replaced by `vitest` or `node`.** `postinstall`
+- **`pnpm --filter autonomous-browsing test:db` cannot be replaced by `vitest` or `node`.** `postinstall`
   rebuilds better-sqlite3 against Electron's ABI, so plain Node cannot load it.
   The script esbuild-bundles `tests/db.verify.ts` into `.cache/` (outside
   electron-builder's `out/**` glob) and runs it under `ELECTRON_RUN_AS_NODE=1`.
@@ -1083,7 +1105,7 @@ otherwise waste tokens rediscovering.
   has not moved with it.** `package.json`'s `name`, `productName`, the `appId`
   (`com.cd.browser.autonomousbrowsing`), the window title and the top bar all
   say the new name. Electron derives `app.getPath('userData')` from
-  `package.json`'s `name`, so `npm run dev` now opens
+  `package.json`'s `name`, so `pnpm --filter autonomous-browsing dev` now opens
   `~/Library/Application Support/autonomous-browsing` — a fresh directory. The
   real database, the `automation-profile` Chrome profile that carries every
   login, and all stored run screenshots are still under the old

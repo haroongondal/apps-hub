@@ -31,6 +31,8 @@ import {
   MODEL,
   type AgentAction,
 } from './claude-client';
+import { runDryRun } from './dry-run';
+import type { DryRunReport } from '../../shared/dry-run';
 import { RunMeter } from './run-meter';
 import {
   AssertionFailedError,
@@ -95,6 +97,18 @@ export class AutomationOrchestrator {
     private readonly claude: ClaudeAutomationClient,
     private readonly landmarks: SiteMemoryReader = { forOrigin: () => [] }
   ) {}
+
+  async dryRunRoutine(routine: RoutineRun, params: Record<string, string>): Promise<DryRunReport> {
+    if (this.busy) throw new OrchestratorBusyError();
+    this.busy = true;
+    try {
+      await this.browser.connect();
+      return await runDryRun(this.browser, routine, params);
+    } finally {
+      await this.browser.disconnect();
+      this.busy = false;
+    }
+  }
 
   async runRoutine(
     routine: RoutineRun,

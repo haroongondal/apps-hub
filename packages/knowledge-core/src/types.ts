@@ -25,10 +25,15 @@ export interface AiPort {
 }
 
 export interface ContentPort {
-  segments(item: Item): Promise<Segment[]>;
+  /** `check` throws once the item is taken out of Nexus or re-queued; long work (a recording sent in pieces) calls it before each outbound call. */
+  segments(item: Item, check?: () => Promise<void>): Promise<Segment[]>;
+  /** Called after the item's segments are saved, so work kept only to finish them (saved transcript pieces) can go. A failure here is ignored. */
+  saved?(item: Item): Promise<void>;
+  /** Called when the item is kept out of Nexus, so that work (saved transcript pieces) goes too. A failure here is ignored. */
+  withdrawn?(itemId: string): Promise<void>;
 }
 
-export type AiErrorKind = 'auth' | 'offline' | 'rate' | 'server' | 'bad_request' | 'bad_reply';
+export type AiErrorKind = 'auth' | 'offline' | 'rate' | 'unanswered' | 'server' | 'bad_request' | 'bad_reply';
 
 export class AiError extends Error {
   readonly kind: AiErrorKind;
@@ -40,4 +45,8 @@ export class AiError extends Error {
 }
 
 // These wait for the owner or the network, so they pause the queue without using up an attempt.
-export const PAUSING: readonly AiErrorKind[] = ['auth', 'offline', 'rate'];
+export const PAUSING: readonly AiErrorKind[] = ['auth', 'offline', 'rate', 'unanswered'];
+
+// 'unanswered' (AI hub said its service failed: offline, refused, unreadable) may be a failure that never clears, so its pauses are counted.
+export const BOUNDED_PAUSE: readonly AiErrorKind[] = ['unanswered'];
+export const MAX_PAUSES = 5;
