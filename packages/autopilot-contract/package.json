@@ -9,6 +9,9 @@
     "test": "node --test src/__tests__/contract.test.ts",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "@apps-hub/app-link-contract": "workspace:*"
+  },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "typescript": "~5.9.2"

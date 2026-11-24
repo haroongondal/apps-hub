@@ -55,7 +55,9 @@ Continue from "Current state" below.
   - Never push, merge, or deploy anything without the owner's go-ahead *in
     that conversation* — a prior approval from this or another task doesn't
     carry forward.
-  - The vault-server Worker (`tools/vault-api`) is **not yet deployed**
+  - Update (2026-11-23): the Worker is deployed (`PUBLIC_URL` set in #31, 2026-11-15;
+    `.github/workflows/deploy-vault.yml` deploys it, #41). What follows is the
+    state when this task started. The vault-server Worker (`tools/vault-api`) was **not yet deployed**
     (`PUBLIC_URL` unset in `cloudflare.config.ts`, `MAIL_FROM` hardcoded and
     unconfirmed by the owner). Deploying it was already offered to the owner
     in a separate conversation and not yet answered — this task does not

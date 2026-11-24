@@ -103,7 +103,7 @@ Claude's calls are marked *(My call.)* in DESIGN.md.
   the old Store-installer `<queries>` hunk dropped — main's #32 replaced it
   with `QUERY_ALL_PACKAGES`), re-verified (`pnpm test` 19 packages all
   `fail 0`, typecheck exit 0, ui tokens/contrast suite green) and opened
-  **PR #34 → main: https://github.com/haroongondal/apps-hub/pull/34**.
+  **PR #34 → main: https://github.com/haroongondal/apps-hub/pull/34** (merged as 6c541896).
 
 - 2026-10-31: phone diagnosis, system auto-clear override, brainstorm, design
   written, worktree created.
@@ -182,8 +182,8 @@ Claude's calls are marked *(My call.)* in DESIGN.md.
 
 ## Current state + exact next step
 
-**PR #34 open (https://github.com/haroongondal/apps-hub/pull/34)**: Clipboard
-0.2.2 (7) — draggable bubble — against main, rebased onto #32. Clipboard
+**PR #34 merged to main as 6c541896** (https://github.com/haroongondal/apps-hub/pull/34):
+Clipboard 0.2.2 (7), the draggable bubble, rebased onto #32. Clipboard
 0.2.2 (7) is in the Store; the phone may still have 0.2.0 (5) or 0.2.1 (6) —
 both update to 7 through the Store's Install button. Next: drag the bubble
 on the phone, then WhatsApp copy button (S3), S5 after a full day, then

@@ -20,7 +20,7 @@ The Worker (`tools/vault-api`) is client-agnostic and already serves every route
 - Any Worker, `strongroom-core` or extension change.
 - Changing the email-code strength, the 24-hour wait, the cooldowns or the 7-day release grace (server-owned).
 - A system notification for a pending request (owner decision, below).
-- Deploying the Worker. It is not yet deployed to a real `PUBLIC_URL` with confirmed `MAIL_FROM`. Unit tests and the Gradle gate need no deploy; a real mail test does. Ask the owner before deploying.
+- Deploying the Worker. When this was written it was not yet deployed to a real `PUBLIC_URL` with confirmed `MAIL_FROM` (it is deployed now: #31, 2026-11-15, set `PUBLIC_URL`; #41 deploys it from GitHub Actions). Unit tests and the Gradle gate need no deploy; a real mail test does. Ask the owner before deploying.
 - iOS (Strongroom is Android-only).
 
 ## Anti-goals (a failure even if it "works")

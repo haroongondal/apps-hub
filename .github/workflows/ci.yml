@@ -38,6 +38,11 @@ jobs:
           BASE: ${{ github.event.before }}
           REQUESTED: ${{ inputs.apps }}
         run: |
+          # Only app ids: a word like --rollback or --from-branch would otherwise reach `pnpm release`.
+          if [ -n "$REQUESTED" ] && ! [[ "$REQUESTED" =~ ^[a-z0-9][a-z0-9-]*( [a-z0-9][a-z0-9-]*)*$ ]]; then
+            echo "::error::apps must be space-separated app ids (lowercase letters, digits, dashes), got: $REQUESTED"
+            exit 1
+          fi
           apps="${REQUESTED:-$(node tools/release/src/changed.ts "$BASE")}"
           echo "Apps to release: ${apps:-none}"
           echo "apps=$apps" >> "$GITHUB_OUTPUT"

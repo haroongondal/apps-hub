@@ -57,3 +57,29 @@ test('androidPackageFor returns the compiled-in package for a release id, never 
   assert.equal(androidPackageFor('store'), 'com.haroon.store');
   for (const id of ['evil', 'constructor', '__proto__', 'hasownproperty']) assert.equal(androidPackageFor(id), undefined);
 });
+
+const sha = 'ab12'.repeat(10);
+
+test('commit is optional: old manifests without it still parse', () => {
+  const m = upsertAndroidRelease(emptyManifest(), app, release(2));
+  assert.equal(m.apps[0].android?.commit, undefined);
+  assert.equal(StoreManifestSchema.safeParse(JSON.parse(JSON.stringify(m))).success, true);
+});
+
+test('commit accepts a 40-hex sha and rejects short, uppercase and garbage values', () => {
+  const parse = (commit: unknown) => StoreManifestSchema.safeParse({
+    ...emptyManifest(),
+    apps: [{ id: 'netlens', name: 'NetLens', changelog: '', android: { ...release(2), commit } }],
+  }).success;
+  assert.equal(parse(sha), true);
+  for (const bad of ['abc1234', sha.toUpperCase(), 'g'.repeat(40), `${sha}0`, '', 123]) assert.equal(parse(bad), false, String(bad));
+});
+
+test('upsertAndroidRelease keeps the commit and it survives a JSON round trip', () => {
+  const m = upsertAndroidRelease(emptyManifest(), app, { ...release(2), commit: sha });
+  assert.equal(m.apps[0].android?.commit, sha);
+  const again = StoreManifestSchema.parse(JSON.parse(JSON.stringify(m)));
+  assert.equal(again.apps[0].android?.commit, sha);
+  const next = upsertAndroidRelease(again, app, { ...release(3), commit: 'cd34'.repeat(10) });
+  assert.equal(next.apps[0].android?.commit, 'cd34'.repeat(10));
+});

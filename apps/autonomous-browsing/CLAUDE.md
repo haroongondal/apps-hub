@@ -36,21 +36,21 @@ The full table, environment variables and the remaining scripts are in
 AI_CONTEXT.md §2. The ones you will use while editing:
 
 ```sh
-npm run dev                                # electron-vite, hot reload
-npm run typecheck                          # tsc --noEmit over src, tests, evals
-npm test                                   # vitest over tests/**/*.test.ts
-npx vitest run tests/routines.test.ts      # one file
-npx vitest run -t "part of the test name"  # one test
-npm run test:db                            # database layer, see below
+pnpm --filter autonomous-browsing dev                                               # electron-vite, hot reload
+pnpm --filter autonomous-browsing typecheck                                         # tsc --noEmit over src, tests, evals
+pnpm --filter autonomous-browsing test                                              # vitest over tests/**/*.test.ts
+pnpm --filter autonomous-browsing exec vitest run tests/routines.test.ts            # one file
+pnpm --filter autonomous-browsing exec vitest run -t "part of the test name"        # one test
+pnpm --filter autonomous-browsing test:db                                           # database layer, see below
 ```
 
-- **Database tests run only through `npm run test:db`.** `postinstall` rebuilds
+- **Database tests run only through `pnpm --filter autonomous-browsing test:db`.** `postinstall` rebuilds
   better-sqlite3 against Electron's ABI, so plain `node` and vitest cannot load
   it. The script bundles `tests/db.verify.ts` and runs it under
-  `ELECTRON_RUN_AS_NODE=1`. `npm test` never covers the DB layer, because
+  `ELECTRON_RUN_AS_NODE=1`. `pnpm --filter autonomous-browsing test` never covers the DB layer, because
   `db.verify.ts` does not match `*.test.ts`.
-- `npm run eval` makes live, billed model calls, and `npm run dist` fails
-  without signing certs (`npm run dist:local` builds an ad-hoc-signed one).
+- `pnpm --filter autonomous-browsing eval` makes live, billed model calls, and `pnpm --filter autonomous-browsing dist` fails
+  without signing certs (`pnpm --filter autonomous-browsing dist:local` builds an ad-hoc-signed one).
 
 ## Architecture notes
 
