@@ -81,6 +81,20 @@ class ShareIntakeTest {
   }
 
   @Test
+  fun theSameShareRebuiltAfterTheAppWasKilledIsNotTakenTwice() {
+    val now = 10_000_000_000_000L
+    val uris = listOf("content://media/external/images/media/1", "content://media/external/images/media/2")
+    val record = shareRecord(uris, now)
+    assertTrue(alreadyTaken(record, uris, now + 60_000))
+    assertFalse(alreadyTaken(record, uris.reversed(), now + 60_000))
+    assertFalse(alreadyTaken(record, uris.take(1), now + 60_000))
+    assertFalse(alreadyTaken(record, uris, now + SHARE_REPEAT_MS + 1))
+    assertFalse(alreadyTaken(record, uris, now - 1))
+    assertFalse(alreadyTaken(null, uris, now))
+    assertFalse(alreadyTaken("garbage", uris, now))
+  }
+
+  @Test
   fun aLocalPictureIsRecognisedByItsEnding() {
     assertTrue(isPictureName("Holiday.JPG"))
     assertTrue(isPictureName("a.b.png"))

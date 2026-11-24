@@ -8,6 +8,7 @@ import android.provider.OpenableColumns
 import android.system.Os
 import expo.modules.designmedia.core.SHARE_MAX_BYTES
 import expo.modules.designmedia.core.acceptShareUris
+import expo.modules.designmedia.core.alreadyTaken
 import expo.modules.designmedia.core.copyCapped
 import expo.modules.designmedia.core.expiredBatches
 import expo.modules.designmedia.core.fitsOnDisk
@@ -15,6 +16,7 @@ import expo.modules.designmedia.core.headOf
 import expo.modules.designmedia.core.insidePrivateDirs
 import expo.modules.designmedia.core.isOwnAuthority
 import expo.modules.designmedia.core.problemOf
+import expo.modules.designmedia.core.shareRecord
 import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
@@ -24,6 +26,7 @@ import java.io.IOException
 object Shares {
   const val EVENT = "onShare"
   private const val TAKEN = "designeditor.share.taken"
+  private const val LAST_SHARE = "share-last.txt"
 
   private val items = mutableListOf<Map<String, Any?>>()
   private var overCap = 0
@@ -37,6 +40,10 @@ object Shares {
     val uris = streams(intent)
     if (uris.isEmpty()) return
     intent.putExtra(TAKEN, true)
+    val last = File(context.filesDir, LAST_SHARE)
+    val listed = uris.map { it.toString() }
+    val now = System.currentTimeMillis()
+    if (alreadyTaken(runCatching { last.readText() }.getOrNull(), listed, now)) return
     val own = ownAuthorities(context)
     val accepted = acceptShareUris(uris.map { it.toString() }) { isOwnAuthority(it, own, { a -> ownerOf(context, a) }, context.packageName) }
     overCap += accepted.overCap
@@ -45,6 +52,7 @@ object Shares {
     expiredBatches(root.list()?.toList().orEmpty(), System.currentTimeMillis()).forEach { File(root, it).deleteRecursively() }
     val batch = File(root, System.currentTimeMillis().toString()).apply { mkdirs() }
     accepted.keep.forEachIndexed { n, uri -> items += copyOne(context, Uri.parse(uri), File(batch, "$n.part"), intent.type) }
+    runCatching { last.writeText(shareRecord(listed, now)) }
   }
 
   @Synchronized

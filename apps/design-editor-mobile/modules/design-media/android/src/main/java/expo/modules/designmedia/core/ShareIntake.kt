@@ -9,6 +9,7 @@ const val SHARE_MAX_ITEMS = 20
 const val SHARE_MAX_BYTES = 2L * 1024 * 1024 * 1024
 const val SHARE_HEAD_BYTES = 16
 const val SHARE_KEEP_MS = 7L * 24 * 60 * 60 * 1000
+const val SHARE_REPEAT_MS = 24L * 60 * 60 * 1000
 const val SHARE_SPACE_MARGIN = 64L * 1024 * 1024
 
 class ShareTooBig : IOException("Over the size limit")
@@ -78,6 +79,16 @@ fun fitsOnDisk(size: Long, usable: Long): Boolean = size < 0 || usable >= size +
 // Batch folders are named by the time they arrived; older ones go, so shared copies never pile up.
 fun expiredBatches(names: List<String>, now: Long, keepMs: Long = SHARE_KEEP_MS): List<String> =
   names.filter { name -> name.toLongOrNull()?.let { now - it > keepMs } ?: false }
+
+// After the app is killed Android rebuilds the screen from the same share. The last taken list is kept in a small file
+// (time, then one address per line); the same list within a day is that rebuild, not a new share.
+fun shareRecord(uris: List<String>, now: Long): String = (listOf(now.toString()) + uris).joinToString("\n")
+
+fun alreadyTaken(record: String?, uris: List<String>, now: Long, keepMs: Long = SHARE_REPEAT_MS): Boolean {
+  val lines = record?.lines().orEmpty()
+  val at = lines.firstOrNull()?.toLongOrNull() ?: return false
+  return now - at in 0..keepMs && lines.drop(1) == uris
+}
 
 private val IMAGE_ENDINGS = setOf("jpg", "jpeg", "png")
 
