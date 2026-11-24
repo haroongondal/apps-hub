@@ -188,7 +188,8 @@ class Provider(
 
   private fun send(choices: List<ModelChoice>, path: String, contentType: String, request: (ModelChoice) -> ByteArray): Pair<ModelChoice, String> {
     val usable = choices.filter { ring.keys(it.service).isNotEmpty() }
-    if (usable.isEmpty()) throw AiError(AiError.Kind.AUTH, "No ${choices.first().service.label} key is set. Add one in AI hub.")
+    val first = choices.first()
+    if (usable.isEmpty()) throw AiError(AiError.Kind.AUTH, "No ${first.service.label} key is set. Add one in AI hub.", service = first.service)
     val names = usable.joinToString(" and ") { it.service.label }
     var waits = 0
     var refusedCode = 0
@@ -214,16 +215,16 @@ class Provider(
             }
             Verdict.STOP -> {
               ring.use(choice.service, i)
-              throw stopped(choice.service, reply)
+              throw stopped(choice.service, reply, choice != first)
             }
           }
         }
       }
       if (exhausted(wait != null) == Exhausted.REFUSED) {
-        throw AiError(AiError.Kind.AUTH, "$names refused every key (HTTP $refusedCode). Check your $names keys in AI hub.")
+        throw AiError(AiError.Kind.AUTH, "$names refused every key (HTTP $refusedCode). Check your $names keys in AI hub.", service = usable.last().service, httpCode = refusedCode, fellBack = usable.size > 1)
       }
       if (waits++ == MAX_RATE_WAITS) {
-        throw AiError(AiError.Kind.RATE, "Every $names key is at its rate limit. Wait a minute and try again, or add another key in AI hub.", wait)
+        throw AiError(AiError.Kind.RATE, "Every $names key is at its rate limit. Wait a minute and try again, or add another key in AI hub.", wait, usable.last().service, 429, usable.size > 1)
       }
       sleep(wait!!)
     }
@@ -238,9 +239,9 @@ class Provider(
         transport.post(service.baseUrl + path, headers, body, contentType)
       } catch (e: SocketTimeoutException) {
         // A read timeout means the model has the request and bills it, so it is never sent again.
-        throw AiError(AiError.Kind.TIMEOUT, "${service.label} took too long to answer. Try again later.")
+        throw AiError(AiError.Kind.TIMEOUT, "${service.label} took too long to answer. Try again later.", service = service)
       } catch (e: IOException) {
-        if (attempt == RETRY_DELAYS.size) throw AiError(AiError.Kind.OFFLINE, "AI hub couldn't reach ${service.label}. Check the phone's connection and try again.")
+        if (attempt == RETRY_DELAYS.size) throw AiError(AiError.Kind.OFFLINE, "AI hub couldn't reach ${service.label}. Check the phone's connection and try again.", service = service)
         sleep(RETRY_DELAYS[attempt++])
         continue
       }
@@ -252,12 +253,15 @@ class Provider(
     }
   }
 
-  private fun stopped(service: Service, r: HttpReply): AiError = when {
-    r.code in GATEWAY_TIMEOUTS -> AiError(AiError.Kind.TIMEOUT, "${service.label} took too long to answer. Try again later.")
-    r.code >= 500 -> AiError(AiError.Kind.SERVER, "${service.label} is busy or failing (HTTP ${r.code}). Try again later.")
+  private fun stopped(service: Service, r: HttpReply, fellBack: Boolean): AiError = when {
+    r.code in GATEWAY_TIMEOUTS -> AiError(AiError.Kind.TIMEOUT, "${service.label} took too long to answer. Try again later.", service = service, httpCode = r.code, fellBack = fellBack)
+    r.code >= 500 -> AiError(AiError.Kind.SERVER, "${service.label} is busy or failing (HTTP ${r.code}). Try again later.", service = service, httpCode = r.code, fellBack = fellBack)
     else -> AiError(
       AiError.Kind.BAD_REQUEST,
       "${service.label} rejected the request (HTTP ${r.code}): " + ring.all.fold(r.body) { b, k -> b.replace(k, "[key]") }.take(2_000),
+      service = service,
+      httpCode = r.code,
+      fellBack = fellBack,
     )
   }
 

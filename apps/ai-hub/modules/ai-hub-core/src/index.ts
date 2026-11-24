@@ -26,13 +26,16 @@ export interface AppInfo {
   lastUsed: number;
 }
 
-/** One finished request. The log never holds what was asked or answered. */
+/** One finished request. The log never holds what was asked or answered. A failed one carries the error kind, the provider's HTTP status and whether the other service was tried, never the provider's text. */
 export interface CallInfo {
   packageName: string;
   label: string;
   job: JobKey;
   service: ServiceKey;
   time: number;
+  error?: string;
+  code?: number;
+  fellBack?: boolean;
 }
 
 interface AiHubCoreApi {

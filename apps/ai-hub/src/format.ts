@@ -42,10 +42,24 @@ export function usageText(app: Pick<AppInfo, 'calls' | 'inputTokens' | 'outputTo
   return `${calls}, ${formatCount(app.inputTokens)} tokens in, ${formatCount(app.outputTokens)} out`;
 }
 
-export function requestText(call: Pick<CallInfo, 'job' | 'service' | 'time'>, now: number): string {
+const FAILURE_TEXT: Record<string, string> = {
+  auth: 'key refused',
+  rate: 'rate limit',
+  bad_request: 'request rejected',
+  server: 'service error',
+  offline: 'no connection',
+  timeout: 'timed out',
+  internal: 'AI hub error',
+};
+
+export function requestText(call: Pick<CallInfo, 'job' | 'service' | 'time' | 'error' | 'code' | 'fellBack'>, now: number): string {
   const job = JOBS.find((j) => j.key === call.job)?.label ?? 'Request';
   const service = SERVICE_LABEL[call.service] ?? call.service;
-  return `${job} with ${service}. ${lastUsedText(call.time, now)}`;
+  const when = lastUsedText(call.time, now);
+  if (!call.error) return `${job} with ${service}. ${when}`;
+  const why = FAILURE_TEXT[call.error] ?? 'unexpected error';
+  const status = call.code ? ` (HTTP ${call.code})` : '';
+  return `${job} with ${service} failed: ${why}${status}${call.fellBack ? ', other service tried too' : ''}. ${when}`;
 }
 
 // Expo wraps a native failure as "Call to function ... rejected.\n→ Caused by: <message>".

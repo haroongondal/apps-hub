@@ -123,13 +123,16 @@ class AiHubCoreModule : Module() {
   private fun calls(): List<Map<String, Any>> {
     val labels = HashMap<String, String>()
     return CallLog.parse(store.get("call_log")).map { c ->
-      mapOf(
-        "packageName" to c.pkg,
-        "label" to labels.getOrPut(c.pkg) { labelFor(c.pkg) },
-        "job" to c.job,
-        "service" to c.service,
-        "time" to c.timeMs,
-      )
+      buildMap {
+        put("packageName", c.pkg)
+        put("label", labels.getOrPut(c.pkg) { labelFor(c.pkg) })
+        put("job", c.job)
+        put("service", c.service)
+        put("time", c.timeMs)
+        c.error?.let { put("error", it) }
+        c.httpCode?.let { put("code", it) }
+        if (c.fellBack) put("fellBack", true)
+      }
     }
   }
 

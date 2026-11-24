@@ -54,3 +54,18 @@ test('requestText names the job, the service and when, never what was asked', ()
   assert.equal(requestText({ job: 'chat', service: 'groq', time: now - 5 * 60_000 }, now), 'Chat with Groq. Used 5 min ago');
   assert.equal(requestText({ job: 'vision', service: 'gemini', time: now - 10_000 }, now), 'Images with Gemini. Used just now');
 });
+
+test('requestText says why a request failed: kind, HTTP status and whether the other service was tried', () => {
+  const now = 10 * 86_400_000;
+  const time = now - 10_000;
+  assert.equal(
+    requestText({ job: 'chat', service: 'groq', time, error: 'bad_request', code: 413 }, now),
+    'Chat with Groq failed: request rejected (HTTP 413). Used just now',
+  );
+  assert.equal(
+    requestText({ job: 'chat', service: 'gemini', time, error: 'server', code: 503, fellBack: true }, now),
+    'Chat with Gemini failed: service error (HTTP 503), other service tried too. Used just now',
+  );
+  assert.equal(requestText({ job: 'embed', service: 'gemini', time, error: 'offline' }, now), 'Embeddings with Gemini failed: no connection. Used just now');
+  assert.equal(requestText({ job: 'chat', service: 'groq', time, error: 'something_new' }, now), 'Chat with Groq failed: unexpected error. Used just now');
+});

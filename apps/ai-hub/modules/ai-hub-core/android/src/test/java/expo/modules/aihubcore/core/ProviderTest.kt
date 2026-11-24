@@ -110,6 +110,9 @@ class ProviderTest {
     val http = Fake(HttpReply(400, """{"error":"$g1 and $g2 are invalid for model"}"""), ok)
     val e = failure { provider(http, g1, g2).chat(groqChat, history, maxTokens = 100) }
     assertEquals(AiError.Kind.BAD_REQUEST, e.kind)
+    assertEquals(400, e.httpCode)
+    assertEquals(Service.GROQ, e.service)
+    assertFalse(e.fellBack)
     assertTrue(e.message, e.message!!.contains("are invalid for model"))
     assertFalse(e.message, e.message!!.contains(g1) || e.message!!.contains(g2))
     assertEquals(1, http.calls.size)
@@ -208,6 +211,19 @@ class ProviderTest {
     val twice = Fake(bad, bad, ok)
     assertEquals(AiError.Kind.BAD_REQUEST, failure { provider(twice, g1).chat(groqChat, history, maxTokens = 100) }.kind)
     assertEquals(2, twice.calls.size)
+  }
+
+  @Test fun aFailureRecordsTheServiceTheStatusAndWhetherTheOtherServiceWasTried() {
+    val http = Fake(HttpReply(401, ""), HttpReply(413, "too large"))
+    val e = failure { provider(http, g1, m1).chat(groqChat, history, maxTokens = 100) }
+    assertEquals(AiError.Kind.BAD_REQUEST, e.kind)
+    assertEquals(Service.GEMINI, e.service)
+    assertEquals(413, e.httpCode)
+    assertTrue("Gemini was tried after Groq refused the key", e.fellBack)
+    val server = failure { provider(Fake(HttpReply(503, "")), g1).chat(groqChat, history, maxTokens = 100) }
+    assertEquals(AiError.Kind.SERVER, server.kind)
+    assertEquals(503, server.httpCode)
+    assertFalse(server.fellBack)
   }
 
   @Test fun chatFallsBackToGeminiWhenEveryGroqKeyIsRefusedOrLimited() {

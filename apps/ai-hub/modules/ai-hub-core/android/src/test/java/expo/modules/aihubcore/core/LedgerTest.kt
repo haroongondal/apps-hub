@@ -44,6 +44,15 @@ class LedgerTest {
     assertEquals(10L, log.last().timeMs)
   }
 
+  @Test fun aFailedCallKeepsTheKindTheStatusAndTheFallbackButNoText() {
+    val log = listOf(LoggedCall("com.haroon.inflow", "chat", "groq", 9, "bad_request", 413, true), LoggedCall("a", "chat", "groq", 8))
+    val text = CallLog.toJson(log)
+    val rows = Json.parseToJsonElement(text).jsonObject["calls"]!!.jsonArray.map { it.jsonObject }
+    assertEquals(setOf("pkg", "job", "service", "timeMs", "error", "code", "fellBack"), rows[0].keys)
+    assertEquals(setOf("pkg", "job", "service", "timeMs"), rows[1].keys)
+    assertEquals(log, CallLog.parse(text))
+  }
+
   @Test fun callLogStoresOnlyAppJobServiceAndTime() {
     val log = listOf(LoggedCall("com.haroon.nexus", "embed", "gemini", 5))
     val text = CallLog.toJson(log)
