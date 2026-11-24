@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
+import { summaryLine } from '../../../shared/dry-run'
 import { requiredParams } from '../../../shared/routines'
-import type { RoutineDefinition, SystemRoutine, UserRoutine } from '../../../shared/types'
+import type { DryRunResult, RoutineDefinition, SystemRoutine, UserRoutine } from '../../../shared/types'
 import type { AutomationsState } from '../state/useAutomations'
 import type { StartRoutineInput } from '../state/useRuns'
 import { Button, EmptyState, Eyebrow, Field } from './ui'
@@ -156,6 +157,9 @@ function AutomationRow({
   const [params, setParams] = useState(() => defaultParams(routine.definition))
   const [missing, setMissing] = useState<string[]>([])
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [dryRunning, setDryRunning] = useState(false)
+  const [dryRun, setDryRun] = useState<DryRunResult | null>(null)
+  const [dryRunError, setDryRunError] = useState<string | null>(null)
   const specs = Object.entries(routine.definition.params ?? {})
 
   const run = (): void => {
@@ -163,6 +167,22 @@ function AutomationRow({
     setMissing(blank)
     if (blank.length > 0) return
     onRun({ kind, id: routine.id, params, name: routine.name })
+  }
+
+  const tryWithoutActing = async (): Promise<void> => {
+    const blank = requiredParams(routine.definition, params)
+    setMissing(blank)
+    if (blank.length > 0) return
+    setDryRunning(true)
+    setDryRun(null)
+    setDryRunError(null)
+    try {
+      setDryRun(await window.api.automation.dryRun({ kind, id: routine.id, params }))
+    } catch (error) {
+      setDryRunError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setDryRunning(false)
+    }
   }
 
   const problem =
@@ -203,6 +223,9 @@ function AutomationRow({
         <Button variant="primary" size="sm" onClick={run} disabled={!canRun}>
           Run
         </Button>
+        <Button variant="secondary" size="sm" onClick={() => void tryWithoutActing()} disabled={!canRun || dryRunning}>
+          {dryRunning ? 'Checking…' : 'Dry run'}
+        </Button>
         <span className={styles.grow} />
         {confirmingDelete ? null : (
           <Button variant="quiet" size="sm" onClick={() => onExport(kind, routine.id)}>
@@ -228,6 +251,15 @@ function AutomationRow({
       </div>
 
       {problem ? <p className={styles.rowError}>{problem}</p> : null}
+      {dryRunError ? <p className={styles.rowError}>{dryRunError}</p> : null}
+      {dryRun ? (
+        <p className={styles.hint}>
+          {summaryLine(dryRun.summary)}{' '}
+          <Button variant="quiet" size="sm" onClick={() => void window.api.automation.revealDryRun(dryRun.reportPath)}>
+            Show report
+          </Button>
+        </p>
+      ) : null}
     </article>
   )
 }

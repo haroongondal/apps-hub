@@ -8,6 +8,8 @@ export const IpcChannels = {
   userDelete: 'routines:user:delete',
   changed: 'routines:changed',
   automationRun: 'automation:run',
+  automationDryRun: 'automation:dryRun',
+  automationDryRunReveal: 'automation:dryRunReveal',
   automationChatSend: 'automation:chat:send',
   automationChatSave: 'automation:chat:save',
   automationProgress: 'automation:progress',
