@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Button, Field, Group, Notice, Row, Segmented, Text } from '@apps-hub/ui';
 import InflowCore, { addCapturedListener, type AiStatus } from 'inflow-core';
 import { AiErrorNotice, HubIssueNotice, useHubIssue } from './AiHubNotice.tsx';
-import { AI_OFF_NOTE, FIRST_ON_NOTE } from './aiHub.ts';
+import { AI_GOES_TO, AI_OFF_NOTE, FIRST_ON_NOTE, FREE_TIER_NOTE } from './aiHub.ts';
 import { capLabel, CAP_ERROR, CAP_REACHED, parseCap, sendResultLabel } from './ai.ts';
 import { whenLabel } from './format.ts';
 import { LOAD_ERROR, SAVE_ERROR } from './messages.ts';
@@ -85,10 +85,13 @@ function RunPanel({ status, onChanged }: { status: AiStatus; onChanged: () => vo
   return (
     <>
       <Group title="AI" footer={status.on ? undefined : FIRST_ON_NOTE}>
-        <Row title="Use AI" subtitle="Summaries, categories, reports and Ask AI, through AI hub on this phone.">
+        <Row title="Use AI" subtitle={`Summaries, categories, reports and Ask AI. ${AI_GOES_TO}`}>
           <Segmented accessibilityLabel="Use AI" options={ON_OFF} value={status.on ? 'on' : 'off'} onChange={(k) => turn(k === 'on')} />
         </Row>
       </Group>
+      <Notice tone="warn" title="Free-tier keys share what Inflow sees">
+        {FREE_TIER_NOTE}
+      </Notice>
       {switchError !== null && <Notice tone="danger">{switchError}</Notice>}
       {hubIssue !== null && <HubIssueNotice issue={hubIssue} />}
       <Field

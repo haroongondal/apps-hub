@@ -8,9 +8,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AiSwitchTest {
-  private class Keys(var saved: Int) : OwnKeys {
+  private class Keys(var saved: Int, val address: String = AiSwitch.LEGACY_DEFAULT_ADDRESS) : OwnKeys {
     var deletes = 0
-    override fun any() = saved > 0
+    override fun addresses() = List(saved) { address }
     override fun deleteAll() {
       deletes++
       saved = 0
@@ -77,7 +77,7 @@ class AiSwitchTest {
     var fail = true
     val keys = object : OwnKeys {
       var saved = true
-      override fun any() = saved
+      override fun addresses() = if (saved) listOf(AiSwitch.LEGACY_DEFAULT_ADDRESS) else emptyList()
       override fun deleteAll() {
         if (fail) throw IllegalStateException("disk")
         saved = false
@@ -96,6 +96,25 @@ class AiSwitchTest {
     val other = MemoryItemStore()
     assertFalse(AiSwitch(other, Keys(0), { clock }).on())
     assertEquals("0", other.meta(AiMeta.ON))
+  }
+
+  @Test fun aKeyForAnotherAddressThanTheSavedOneLeavesAiOffAfterTheUpgrade() {
+    val groq = "https://api.groq.com/openai/v1/"
+    store.setMeta(AiSwitch.LEGACY_ADDRESS, groq)   // the old picker was moved to Groq, and only a Gemini key was ever saved
+    val keys = Keys(1)
+    assertFalse(switch(keys).on())
+    assertEquals("0", store.meta(AiMeta.ON))
+    assertNull(store.meta(AiMeta.SINCE))
+    hubCall(switch(keys)) { FakeHub.reply("ok") }.getOrThrow()
+    assertEquals(1, keys.deletes)   // the cleanup still covers every row
+    assertFalse(switch(keys).on())
+  }
+
+  @Test fun aKeyForTheSavedAddressKeepsAiOn() {
+    val groq = "https://api.groq.com/openai/v1/"
+    store.setMeta(AiSwitch.LEGACY_ADDRESS, groq)
+    assertTrue(switch(Keys(1, groq)).on())
+    assertTrue(AiSwitch(MemoryItemStore(), Keys(1), { clock }).on())   // no address saved: Google's, the old default
   }
 
   @Test fun turningItOnSetsSinceOnceAndOffKeepsIt() {

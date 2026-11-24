@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { HUB_ACTION, HUB_COPY, hubIssueOf, issueOfAvailability, type HubIssue } from '../aiHub.ts';
+import { FREE_TIER_NOTE, HUB_ACTION, HUB_COPY, hubIssueOf, issueOfAvailability, type HubIssue } from '../aiHub.ts';
 import { HEALTH_IN_ASK_NOTE, HEALTH_PRIVACY, SENDS_NOTICE } from '../doctor.ts';
 
 const fixture = JSON.parse(readFileSync(join(import.meta.dirname, '..', '..', 'modules', 'inflow-core', 'fixtures', 'ai-hub-copy.json'), 'utf8'));
@@ -36,10 +36,17 @@ test('only a missing, refused or too old hub is a screen state; a ready hub or a
   assert.equal(issueOfAvailability({ ok: false, kind: 'timeout', message: 'x' }), null);
 });
 
-test('both health consents say where the text goes and what AI hub keeps', () => {
-  assert.equal(HEALTH_PRIVACY, 'Your health text goes to Groq through AI hub; AI hub keeps only counts, never the text.');
-  assert.ok(HEALTH_IN_ASK_NOTE.includes(HEALTH_PRIVACY));
+test('both health consents name Groq and Gemini, say what AI hub keeps and carry the free-tier note', () => {
+  assert.equal(HEALTH_PRIVACY, 'Your health text goes to Groq, or to Gemini when Groq has no working key, through AI hub. AI hub keeps only counts, never the text.');
+  for (const text of [HEALTH_IN_ASK_NOTE, SENDS_NOTICE]) {
+    assert.ok(text.includes(HEALTH_PRIVACY));
+    assert.ok(text.includes(FREE_TIER_NOTE));
+    assert.match(text, /Groq/);
+    assert.match(text, /Gemini/);
+    assert.match(text, /free-tier/);
+    assert.match(text, /keeps only counts, never the text/);
+  }
   assert.ok(HEALTH_IN_ASK_NOTE.endsWith('Off by default.'));
-  assert.ok(SENDS_NOTICE.includes(HEALTH_PRIVACY));
   assert.ok(SENDS_NOTICE.includes('Nothing is sent until you tap Send.'));
+  assert.match(FREE_TIER_NOTE, /billing turned on/);
 });

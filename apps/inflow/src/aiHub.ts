@@ -34,3 +34,7 @@ export function issueOfAvailability(a: Availability): HubIssue | null {
 export const AI_OFF_ASK = 'Turn on AI in Settings to ask questions.';
 export const AI_OFF_NOTE = 'AI is off. Turn it on to send what Inflow saves from now on.';
 export const FIRST_ON_NOTE = 'Inflow sends only what it saves from now on. Older items stay as they are.';
+
+// Restored from the deleted KeyPanel in AiSettings.tsx (git show 4a464594:apps/inflow/src/AiSettings.tsx, "Free-tier keys share what Inflow sees"), now worded for AI hub and the health text.
+export const FREE_TIER_NOTE = 'With a free-tier Gemini key, Google may use what Inflow sends, including your messages, bank SMS and health text, to improve its products. A key from a project with billing turned on avoids that. Check the key in AI hub.';
+export const AI_GOES_TO = 'AI hub sends it to Groq, or to Gemini when Groq has no working key.';

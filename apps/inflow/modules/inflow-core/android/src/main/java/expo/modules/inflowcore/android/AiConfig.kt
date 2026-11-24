@@ -17,7 +17,7 @@ import kotlinx.coroutines.runBlocking
 
 /** The keys saved before AI hub became Inflow's only AI. The table stays (old schema); nothing inserts into it. */
 class SqlOwnKeys(private val store: SqlItemStore) : OwnKeys {
-  override fun any(): Boolean = store.query("SELECT 1 FROM ai_keys LIMIT 1").use { it.moveToNext() }
+  override fun addresses(): List<String> = store.query("SELECT base_url FROM ai_keys").use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) } }
 
   override fun deleteAll() {
     store.run("DELETE FROM ai_keys")
