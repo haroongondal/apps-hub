@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { request as httpsRequest } from 'node:https';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -51,12 +52,23 @@ async function fetchManifest(): Promise<StoreManifest> {
 }
 
 async function upload(key: string, body: Buffer | string, contentType: string): Promise<void> {
-  const res = await fetch(`${API}/admin/${key}`, {
-    method: 'PUT',
-    headers: { ...auth, 'content-type': contentType },
-    body: typeof body === 'string' ? body : new Uint8Array(body),
+  // node:https has no headers timeout (fetch's undici gives up after 5 minutes, too short on a slow uplink).
+  const data = typeof body === 'string' ? Buffer.from(body) : body;
+  const { status, text } = await new Promise<{ status: number; text: string }>((resolveReq, reject) => {
+    const req = httpsRequest(
+      `${API}/admin/${key}`,
+      { method: 'PUT', headers: { ...auth, 'content-type': contentType, 'content-length': data.length } },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => resolveReq({ status: res.statusCode ?? 0, text: Buffer.concat(chunks).toString() }));
+      },
+    );
+    req.setTimeout(0);
+    req.on('error', reject);
+    req.end(data);
   });
-  if (!res.ok) throw new Error(`PUT ${key}: ${res.status} ${await res.text()}`);
+  if (status < 200 || status > 299) throw new Error(`PUT ${key}: ${status} ${text}`);
 }
 
 async function releaseAndroid(id: string, manifest: StoreManifest): Promise<StoreManifest> {
@@ -99,10 +111,18 @@ async function releaseAndroid(id: string, manifest: StoreManifest): Promise<Stor
     signingCertSha256: SIGNING_CERT_SHA256,
     sizeBytes: bytes.length,
   };
-  const next = upsertAndroidRelease(manifest, { id, name: app.name, changelog: values.changelog }, android);
   console.log(`▶ ${id}: uploading ${apkPath} (${(bytes.length / 1e6).toFixed(1)} MB)`);
-  await upload(apkPath, bytes, 'application/vnd.android.package-archive');
-  return next;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await upload(apkPath, bytes, 'application/vnd.android.package-archive');
+      break;
+    } catch (e) {
+      if (attempt === 5) throw e;
+      console.log(`  upload attempt ${attempt} failed (${(e as Error).message}), retrying`);
+    }
+  }
+  // A slow upload leaves time for another release to publish; merge onto the live manifest, not the one read at the start.
+  return upsertAndroidRelease(await fetchManifest(), { id, name: app.name, changelog: values.changelog }, android);
 }
 
 let manifest = await fetchManifest();
