@@ -75,7 +75,7 @@ function Home() {
   const togglePin = (clip: Clip) => {
     ClipboardCore.setPinned(clip.id, !clip.pinned);
     reload();
-    setNotice({ text: clip.pinned ? 'Unpinned. It goes after the time you keep clips for.' : 'Pinned. It stays until you delete it.', tone: 'ok' });
+    setNotice({ text: clip.pinned ? 'Unpinned. It goes after the time you keep clips for.' : clip.kind === 'code' ? 'Pinned. A one-time code still goes after 10 minutes.' : 'Pinned. It stays until you delete it.', tone: 'ok' });
   };
   const changeKeep = (key: string) => {
     const days = Number(key);
@@ -177,7 +177,7 @@ function Home() {
           accessibilityLabel="Keep clips for"
         />
         <Text variant="meta" tone="muted">
-          Pinned clips stay until you delete them. One-time codes go after 10 minutes.
+          Pinned clips stay until you delete them, except a one-time code, which goes after 10 minutes.
         </Text>
       </View>
       <Group title="Other apps">

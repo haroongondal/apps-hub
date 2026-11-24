@@ -23,11 +23,35 @@ class ExpiryTest {
     assertTrue(Expiry.expired("code", now - Expiry.CODE_MS, true, now, 7))
   }
 
-  @Test fun `unpinning restarts the saved time, pinning keeps it`() {
-    assertEquals(now, Expiry.savedAtOnPinChange(false, now))
-    assertEquals(null, Expiry.savedAtOnPinChange(true, now))
-    val unpinnedAt = Expiry.savedAtOnPinChange(false, now)!!
-    assertFalse(Expiry.expired("text", unpinnedAt, false, now, 7))
+  @Test fun `a pin change writes the pin flag and its time, never the newest-clip time`() {
+    for (pinned in listOf(true, false)) {
+      val cols = Expiry.pinColumns(pinned, now)
+      assertEquals(setOf("pinned", "pinned_at"), cols.keys)
+      assertEquals(now, cols["pinned_at"])
+    }
+  }
+
+  // Y is the newest clip (still on the clipboard); X is older. Unpinning X must leave Y the newest, or a restart saves Y again.
+  @Test fun `unpinning an older clip leaves the newest clip the newest`() {
+    class Row(val id: Long, var at: Long, var pinnedAt: Long?)
+    val x = Row(1, now - 40 * day, now - 41 * day)
+    val y = Row(2, now - 5 * 60_000L, null)
+    Expiry.pinColumns(false, now).forEach { (k, v) -> if (k == "at") x.at = v else if (k == "pinned_at") x.pinnedAt = v }
+    assertEquals(y.id, listOf(x, y).maxWith(compareBy<Row> { it.at }.thenBy { it.id }).id)
+  }
+
+  @Test fun `an old clip just unpinned is not deleted, and ages from the unpin`() {
+    val at = now - 40 * day
+    assertTrue(Expiry.expired("text", Expiry.savedAt("text", at, null), false, now, 30))
+    val saved = Expiry.savedAt("text", at, now)
+    assertEquals(now, saved)
+    assertFalse(Expiry.expired("text", saved, false, now, 30))
+    assertTrue(Expiry.expired("text", saved, false, now + 30 * day, 30))
+  }
+
+  @Test fun `a code ages from when it was copied, not from a pin change`() {
+    assertEquals(now - 1, Expiry.savedAt("code", now - 1, now))
+    assertTrue(Expiry.expired("code", Expiry.savedAt("code", now - Expiry.CODE_MS, now), false, now, 365))
   }
 
   @Test fun `codes go after 10 minutes whatever the setting`() {

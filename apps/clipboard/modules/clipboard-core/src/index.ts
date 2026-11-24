@@ -13,7 +13,7 @@ export interface Clip {
   /** An accessibility event type, or "app" when the app read the clipboard on open. */
   via: string;
   grabMs: number | null;
-  /** Pinned clips never expire and are listed first. */
+  /** Pinned clips are listed first and stay until deleted, except a one-time code, which goes after 10 minutes. */
   pinned: boolean;
 }
 

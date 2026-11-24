@@ -68,3 +68,11 @@ test('the setting and the share description do not promise that every password a
   assert.doesNotMatch(PINNED_SHARE.description, /never passwords/);
   assert.match(PINNED_SHARE.description, /copied as plain text is shared if pinned/);
 });
+
+test('no screen or contract text says a pinned one-time code stays', () => {
+  const read = (...p: string[]) => fs.readFileSync(path.join(import.meta.dirname, '..', '..', ...p), 'utf8');
+  const app = read('App.tsx');
+  assert.match(app, /A one-time code still goes after 10 minutes/);
+  assert.doesNotMatch(app, /Pinned clips stay until you delete them\. One-time codes/);
+  assert.doesNotMatch(read('modules', 'clipboard-core', 'src', 'index.ts'), /Pinned clips never expire/);
+});

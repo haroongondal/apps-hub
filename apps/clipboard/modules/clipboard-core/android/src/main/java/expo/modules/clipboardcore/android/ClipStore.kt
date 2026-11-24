@@ -143,16 +143,11 @@ class ClipStore private constructor(context: Context) : SQLiteOpenHelper(context
 
   @Synchronized
   fun setPinned(id: Long, pinned: Boolean) {
-    val values = ContentValues().apply {
-      put("pinned", if (pinned) 1 else 0)
-      val now = System.currentTimeMillis()
-      if (pinned) put("pinned_at", now) else putNull("pinned_at")
-      Expiry.savedAtOnPinChange(pinned, now)?.let { put("at", it) }
-    }
+    val values = ContentValues().apply { Expiry.pinColumns(pinned, System.currentTimeMillis()).forEach { (k, v) -> put(k, v) } }
     writableDatabase.update("clips", values, "id = ?", arrayOf(id.toString()))
   }
 
-  // Read-only: no prune here (pinned clips never expire), so a share query never writes.
+  // Read-only: no prune here, so a share query never writes (the app deletes expired rows, a read does not).
   @Synchronized
   fun pinnedRows(sinceId: Long): List<Array<Any?>> =
     readableDatabase.rawQuery(
@@ -190,8 +185,8 @@ class ClipStore private constructor(context: Context) : SQLiteOpenHelper(context
   private fun prune(db: SQLiteDatabase) {
     val now = System.currentTimeMillis()
     val days = retentionDays()
-    val expired = db.rawQuery("SELECT id, kind, at, pinned FROM clips", null).use { c ->
-      buildList { while (c.moveToNext()) if (Expiry.expired(c.getString(1), c.getLong(2), c.getInt(3) != 0, now, days)) add(c.getLong(0)) }
+    val expired = db.rawQuery("SELECT id, kind, at, pinned, pinned_at FROM clips", null).use { c ->
+      buildList { while (c.moveToNext()) if (Expiry.expired(c.getString(1), Expiry.savedAt(c.getString(1), c.getLong(2), if (c.isNull(4)) null else c.getLong(4)), c.getInt(3) != 0, now, days)) add(c.getLong(0)) }
     }
     if (expired.isEmpty()) return
     db.beginTransaction()
