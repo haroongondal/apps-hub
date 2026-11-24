@@ -1,6 +1,7 @@
 // Design with AI goes to AI hub and nowhere else: this app holds no provider key. Pure: node --test runs it with a fake hub.
 // The page's body is OpenAI-shaped (ai-layout.js); the hub takes {messages, tools, maxTokens} and answers {text, toolCalls}.
 import type { ChatReply, ChatRequest, ErrorKind } from 'ai-hub-client/src/contract.ts';
+import { isRealReply } from './old-keys.ts';
 
 // error: what the page words itself. hubmissing, notallowed and nokey are the three AI hub states with a button; the rest are plain failures.
 export type AiReply = { ok: boolean; status: number; json?: object; error?: 'hubmissing' | 'notallowed' | 'nokey' | 'timeout' | 'bad' };
@@ -66,13 +67,15 @@ export function replyFromHubError(kind: ErrorKind): AiReply {
 
 const HUB_STATES = new Set(['hubmissing', 'notallowed', 'nokey']);
 
-export function createAiRouter(deps: { hub: HubPort; record: (source: AiSource) => void }) {
+export function createAiRouter(deps: { hub: HubPort; record: (source: AiSource) => void; served: () => void }) {
   return async function route(body: Record<string, unknown>): Promise<AiReply> {
     const req = hubRequestFor(body);
     if (!req) return { ok: false, status: 0, error: 'bad' };
     try {
-      const reply = replyFromHub(await deps.hub.chat(req));
+      const chat = await deps.hub.chat(req);
+      const reply = replyFromHub(chat);
       deps.record('hub');
+      if (isRealReply(chat)) deps.served();
       return reply;
     } catch (e) {
       const kind = (e as { kind?: ErrorKind } | null)?.kind;

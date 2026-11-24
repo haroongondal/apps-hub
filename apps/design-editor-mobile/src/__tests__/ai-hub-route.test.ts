@@ -12,10 +12,11 @@ const reply = (r: Partial<ChatReply>): ChatReply => ({ text: null, toolCalls: []
 const sanitised = () => { const { model: _m, ...rest } = AiLayout.buildRequest('A poster', 800, 600); return rest as Record<string, unknown>; };
 
 function setup(hub: (req: ChatRequest) => Promise<ChatReply>) {
-  const seen = { hub: [] as ChatRequest[], source: [] as AiSource[] };
+  const seen = { hub: [] as ChatRequest[], source: [] as AiSource[], served: 0 };
   const route = createAiRouter({
     hub: { chat: async (r) => (seen.hub.push(r), hub(r)) },
     record: (s) => seen.source.push(s),
+    served: () => void seen.served++,
   });
   return { route, seen };
 }
@@ -108,3 +109,21 @@ test('a body the hub cannot carry is refused without asking the hub', async () =
   assert.deepEqual(await route({ ...sanitised(), response_format: { type: 'json_object' } }), { ok: false, status: 0, error: 'bad' });
   assert.equal(seen.hub.length, 0);
 });
+
+test('only a real reply counts as served (it is what lets the old keys go)', async () => {
+  const real = setup(async () => reply({ text: 'ok' }));
+  await real.route(sanitised());
+  const tool = setup(async () => reply({ toolCalls: [{ id: 'a', name: 'make_layout', args: {} }] }));
+  await tool.route(sanitised());
+  const empty = setup(async () => reply({ text: '   ' }));
+  await empty.route(sanitised());
+  assert.deepEqual([real.seen.served, tool.seen.served, empty.seen.served], [1, 1, 0]);
+});
+
+for (const kind of ['hub-missing', 'not-allowed', 'no-key', 'busy', 'timeout', 'provider-error'] as const) {
+  test(`${kind} is never served`, async () => {
+    const { route, seen } = setup(fail(kind));
+    await route(sanitised());
+    assert.equal(seen.served, 0);
+  });
+}

@@ -196,8 +196,10 @@ Current apps:
   service as before; the app never sees a key. When the hub is not installed, the app says "AI needs
   AI hub" with a button that opens the Store; when the owner has not allowed Design Editor there,
   "Allow Design Editor in AI hub" opens the hub; when the hub has no key, "Add a key in AI hub".
-  Busy, timeout and other failures are plain messages. Keys an older build saved are deleted once
-  the hub has answered on that phone. The Mac app `apps/design-editor` keeps its own keys. Nothing else in the app uses AI. App links: it serves only the `health` row at
+  Busy, timeout and other failures are plain messages. Keys an older build saved are deleted only
+  after the hub has returned a real reply to a Design with AI request on that phone (a marker file
+  remembers it, so the deletion finishes on a later start); never on the hub merely answering, and
+  never on a hub error. The Mac app `apps/design-editor` keeps its own keys. Nothing else in the app uses AI. App links: it serves only the `health` row at
   `com.haroon.designeditor.applink` (exported, AUTOPILOT permission for read and write,
   `AppLinkCaller.allowed` first, read-only, declared in
   `apps/design-editor-mobile/modules/design-media/android/src/main/AndroidManifest.xml`;
