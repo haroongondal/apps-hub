@@ -30,6 +30,7 @@ import expo.modules.inflowcore.android.DoctorPdf
 import expo.modules.inflowcore.android.DoctorRunner
 import expo.modules.inflowcore.android.HealthConnectReader
 import expo.modules.inflowcore.android.InflowListener
+import expo.modules.inflowcore.android.HubLaunch
 import expo.modules.inflowcore.android.MediaStore
 import expo.modules.inflowcore.android.MedicineReminders
 import expo.modules.inflowcore.android.ProposeBill
@@ -48,7 +49,6 @@ import expo.modules.inflowcore.android.SuggestionNotifier
 import expo.modules.inflowcore.android.StoreHolder
 import expo.modules.inflowcore.core.AiBatch
 import expo.modules.inflowcore.core.AiChannels
-import expo.modules.inflowcore.core.AiModels
 import expo.modules.inflowcore.core.AppSetting
 import expo.modules.inflowcore.core.AUTOPILOT_META
 import expo.modules.inflowcore.core.AutopilotSettings
@@ -65,7 +65,6 @@ import expo.modules.inflowcore.core.GmailPolicy
 import expo.modules.inflowcore.core.HealthAggregate
 import expo.modules.inflowcore.core.Journal
 import expo.modules.inflowcore.core.Medicines
-import expo.modules.inflowcore.core.Prices
 import expo.modules.inflowcore.core.ProposeReply
 import expo.modules.inflowcore.core.ProposeToDeputy
 import expo.modules.inflowcore.core.RawMedia
@@ -143,6 +142,7 @@ class InflowCoreModule : Module() {
       }
       StoreHolder.backfill(context)
       StoreHolder.heartbeat(context)
+      InflowListener.executor.execute { runCatching { StoreHolder.get(context).getOrNull()?.let { AiConfig(it).cleanup() } } }
       MedicineReminders.rearm(context)
       // Decrypted copies handed to a viewer live only until the next start; files no row names are swept (rolled-back saves).
       InflowListener.executor.execute {
@@ -512,38 +512,18 @@ class InflowCoreModule : Module() {
       AiConfig(store()).status()
     }
 
-    Function("knownModels") { ->
-      AiModels.KNOWN.map { mapOf("name" to it.name, "baseUrl" to it.baseUrl, "model" to it.model) }
+    // The buttons under "AI needs AI hub", "Allow Inflow in AI hub" and "Add a key in AI hub". False: that app is not installed or is not ours, and the screen says to open it by hand.
+    Function("openStore") { ->
+      HubLaunch.openStore(context)
     }
 
-    // `prices` is null for a model Inflow knows. Returns the validation copy, or null once saved (a thrown message would reach JS wrapped by Expo).
-    Function("setAiModel") { baseUrl: String, model: String, prices: Map<String, Any?>? ->
-      val custom = prices?.let { Prices(price(it, "inputPerM"), price(it, "cachedPerM"), price(it, "outputPerM")) }
-      AiModels.validate(baseUrl, model, custom) ?: run {
-        AiConfig(store()).setModel(baseUrl, model, custom)
-        null
-      }
+    Function("openAiHub") { ->
+      HubLaunch.openAiHub(context)
     }
 
-    // Returns the error copy, or null once the key is saved. It is never returned to JS again except its last four characters.
-    Function("addAiKey") { apiKey: String ->
-      val key = apiKey.trim()
-      when {
-        key.isEmpty() -> "Paste your API key first."
-        key.length > 300 || key.any(Char::isWhitespace) -> "That doesn't look like an API key. Copy it again, without spaces."
-        else -> {
-          AiConfig(store()).addKey(key)
-          null
-        }
-      }
-    }
-
-    Function("removeAiKey") { id: Long ->
-      AiConfig(store()).removeKey(id)
-    }
-
-    AsyncFunction("testAiKey") Coroutine { id: Long ->
-      withContext(Dispatchers.IO) { AiRunner.test(context, id) }
+    // AI is the owner's switch; the first time it goes on sets aiSince (R44).
+    Function("setAiOn") { on: Boolean ->
+      AiConfig(store()).setOn(on)
     }
 
     // Returns the error copy, or null once saved.
@@ -730,12 +710,12 @@ class InflowCoreModule : Module() {
     }
 
     AsyncFunction("doctorPreview") Coroutine { fromDay: String, toDay: String, include: Map<String, Any?> ->
-      withContext(Dispatchers.IO) { DoctorRunner.of(store()).preview(fromDay, toDay, include) }
+      withContext(Dispatchers.IO) { DoctorRunner.of(context, store()).preview(fromDay, toDay, include) }
     }
 
     // Only on the owner's tap after the preview; refuses when the data no longer hashes to what they saw.
     AsyncFunction("doctorSummarize") Coroutine { fromDay: String, toDay: String, include: Map<String, Any?>, hash: String ->
-      withContext(Dispatchers.IO) { DoctorRunner.of(store()).summarize(fromDay, toDay, include, hash) }
+      withContext(Dispatchers.IO) { DoctorRunner.of(context, store()).summarize(fromDay, toDay, include, hash) }
     }
 
     // True once saved, false when the owner closed the file picker.
@@ -802,5 +782,3 @@ class InflowCoreModule : Module() {
     }
   }
 }
-
-private fun price(m: Map<String, Any?>, key: String): Double = (m[key] as? Number)?.toDouble() ?: Double.NaN

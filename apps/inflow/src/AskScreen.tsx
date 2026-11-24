@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Button, Field, Header, Notice, Screen, Text } from '@apps-hub/ui';
 import InflowCore from 'inflow-core';
-import { ASK_EMPTY, ASK_OFF, askBasis } from './ai.ts';
+import { AiErrorNotice, HubIssueNotice, useHubIssue } from './AiHubNotice.tsx';
+import { AI_OFF_ASK } from './aiHub.ts';
+import { ASK_EMPTY, askBasis } from './ai.ts';
 import { LOAD_ERROR } from './messages.ts';
 
 interface Answer {
@@ -15,6 +17,7 @@ export function AskScreen() {
   const [busy, setBusy] = useState(false);
   const [answer, setAnswer] = useState<Answer | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const hubIssue = useHubIssue();
 
   useEffect(() => {
     try {
@@ -44,7 +47,8 @@ export function AskScreen() {
   return (
     <Screen scroll>
       <Header title="Ask AI" />
-      {on === false && <Notice>{ASK_OFF}</Notice>}
+      {on === false && <Notice>{AI_OFF_ASK}</Notice>}
+      {hubIssue !== null && <HubIssueNotice issue={hubIssue} />}
       <Field
         label="Your question"
         placeholder="How much did I spend this month?"
@@ -58,7 +62,7 @@ export function AskScreen() {
       <Text variant="caption" tone="muted">
         Questions use your saved SMS, emails and transactions.
       </Text>
-      {error !== null && <Notice tone="danger">{error}</Notice>}
+      {error !== null && <AiErrorNotice text={error} />}
       {answer !== null && (
         <>
           <Text selectable>{answer.text}</Text>

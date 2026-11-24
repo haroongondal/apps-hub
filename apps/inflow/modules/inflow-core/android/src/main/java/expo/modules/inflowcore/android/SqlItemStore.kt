@@ -759,7 +759,7 @@ class SqlItemStore private constructor(internal val db: SQLiteDatabase, private 
       "CREATE TABLE gmail_senders(query TEXT PRIMARY KEY, uid_validity INTEGER, last_uid INTEGER NOT NULL DEFAULT 0)",
     )
 
-    // Not idempotent, like v2 and v3. ai_keys holds the owner's API keys in this SQLCipher file (R23): a future export must skip it.
+    // Not idempotent, like v2 and v3. ai_keys held the owner's API keys in this SQLCipher file (R23); nothing writes it since AI hub became Inflow's only AI, and AiSwitch deletes its rows after the first successful hub call.
     internal val SCHEMA_V4 = listOf(
       "CREATE TABLE ai_results(item_id INTEGER PRIMARY KEY, kind TEXT NOT NULL, summary TEXT NOT NULL, importance TEXT NOT NULL, tags TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL)",
       "CREATE TABLE ai_queue(item_id INTEGER PRIMARY KEY, at INTEGER NOT NULL, tries INTEGER NOT NULL DEFAULT 0)",

@@ -6,9 +6,8 @@ import java.time.ZoneId
 
 /** Meta keys of the AI settings (the SQL schema v4 comment lists them). */
 object AiMeta {
-  const val BASE_URL = "aiBaseUrl"
-  const val MODEL = "aiModel"
-  const val CUSTOM_PRICES = "aiCustomPrices"
+  const val ON = "aiOn"
+  const val HUB_WORKED = "aiHubWorked"
   const val CAP_USD = "aiCapUsd"
   const val SINCE = "aiSince"
   const val LAST_RUN_AT = "aiLastRunAt"
@@ -20,7 +19,7 @@ object AiMeta {
 }
 
 interface AiStore {
-  /** Time the first key was added; null = AI off. */
+  /** Time AI was first turned on; null = never on. */
   fun enabledSince(): Long?
   /**
    * The send-time filter: item exists, not OTP, SMS or email (or in a conversation the owner picked for Autopilot, the one R44 exception),
@@ -39,7 +38,7 @@ interface AiStore {
 data class AiRunResult(val sent: Int, val saved: Int, val stoppedByCap: Boolean, val error: String?)
 
 class AiRun(
-  private val store: AiStore, private val ledger: Ledger, private val provider: () -> TextAi?, private val prices: () -> Prices,
+  private val store: AiStore, private val ledger: Ledger, private val provider: () -> TextAi?,
   private val capUsd: () -> Double?, private val accounts: () -> List<String>, private val channelOf: (Long) -> Channel,
   private val now: () -> Long, private val zone: ZoneId,
   private val atomic: ((() -> Unit) -> Unit) = { it() },
@@ -67,7 +66,7 @@ class AiRun(
       } catch (e: AiError) {
         if (e.kind != AiError.Kind.BAD_REQUEST) return AiRunResult(sent, saved, false, e.message)   // the queue is kept as it was
         refusal = e.message
-        // Two refused batches in a row mean the setup is wrong (model name, address): keep the whole queue.
+        // Two refused batches in a row mean the request is wrong, not the items: keep the whole queue.
         if (refused != null) return AiRunResult(sent, saved, false, refusal)
         // One refused batch gets one retry on a later run, then is dropped; the other batches still go.
         refused = batch.map { it.itemId }
@@ -76,7 +75,7 @@ class AiRun(
       }
       refused?.let(store::failed)
       refused = null
-      store.addSpend(day, prices().cost(reply))
+      store.addSpend(day, AiPricing.cost(reply))
       val results = AiBatch.parse(reply.text, batch, zone)
       // Ledger first: a crash between the two leaves the items queued, and onAi on an item it already handled only sets details.
       atomic {

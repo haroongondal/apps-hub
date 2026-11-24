@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, View } from 'react-native';
 import { Button, Empty, Group, Header, Notice, Pill, RecordMenu, Row, Screen, Segmented, Text, space, useTheme } from '@apps-hub/ui';
+import { AiErrorNotice, HubIssueNotice } from './AiHubNotice.tsx';
+import { hubIssueOf } from './aiHub.ts';
 import InflowCore, { addCapturedListener, type MoneySummary, type PartyTotal, type ReportRow, type Status, type Txn } from 'inflow-core';
 import { Bar } from './Bar.tsx';
 import { whenLabel } from './format.ts';
@@ -58,6 +60,7 @@ function ReportsGroup({ onOpen }: { onOpen: (r: ReportRow) => void }) {
   const [allowed, setAllowed] = useState(true);
   const [working, setWorking] = useState<number | 'now' | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const hubIssue = reports.map((r) => hubIssueOf(r.message)).find((i) => i !== null) ?? null;
 
   const load = useCallback(() => {
     try {
@@ -110,7 +113,8 @@ function ReportsGroup({ onOpen }: { onOpen: (r: ReportRow) => void }) {
         ))}
         {!allowed && <Row title="Get a notification when a report is ready" onPress={ask} />}
       </Group>
-      {notice !== null && <Notice tone="danger">{notice}</Notice>}
+      {notice !== null && <AiErrorNotice text={notice} />}
+      {hubIssue !== null && <HubIssueNotice issue={hubIssue} />}
       <Button label="Make a report now" variant="secondary" busy={working === 'now'} disabled={working !== null} onPress={() => run('now', () => InflowCore.makeReportNow())} />
     </View>
   );

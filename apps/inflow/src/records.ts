@@ -56,9 +56,3 @@ export const disconnectGmailConfirm = (address: string | null): Confirm => ({
   message: 'Inflow forgets the password and stops downloading emails. Saved emails and your sender list stay.',
   confirmLabel: 'Disconnect',
 });
-
-export const removeAiKeyConfirm = (ending: string): Confirm => ({
-  title: `Remove the key ending in ${ending}?`,
-  message: 'Inflow stops using it. Without another key, nothing is sent to the AI until you add one.',
-  confirmLabel: 'Remove key',
-});

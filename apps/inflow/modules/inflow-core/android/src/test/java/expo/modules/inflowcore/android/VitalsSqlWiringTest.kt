@@ -74,16 +74,18 @@ class VitalsSqlWiringTest {
 
   @Test fun askReachesHealthOnlyThroughTheGate() {
     val runner = code(file("AiRunner.kt")).filter { healthCode.containsMatchIn(it) && !it.startsWith("import ") }
-    // E2: the flag is read once, so the same value picks the own key (never AI hub) and gates the health context (HubRoutingTest).
+    // Hub-only: the flag is read once and is the only thing that lets HealthForAsk.context make health text for the request AskRun builds (HubRoutingTest, AskRunTest).
     assertEquals(runner.toString(), 2, runner.size)
     assertEquals("val healthOn = HealthForAsk.on(store.meta(HealthForAsk.META))", runner[0].trim())
-    assertTrue(runner[1], runner[1].trim().startsWith("val health = HealthForAsk.context(healthOn, "))
+    assertTrue(runner[1], runner[1].trim().startsWith("{ from, to -> HealthForAsk.context(healthOn, "))
     val ask = code(file("Ask.kt")).flatMap { healthCode.findAll(it).map { m -> m.value }.toList() }.toSet()
     assertEquals(setOf("HealthForAsk"), ask)
+    val run = code(file("AskRun.kt")).filter { healthCode.containsMatchIn(it) }.map { it.trim() }
+    assertEquals(listOf("private val health: (from: Long, to: Long) -> HealthForAsk?,"), run)
   }
 
   @Test fun batchPromptsReportsAndAutopilotNeverTouchHealth() {
-    val paths = sources().filter { dataPaths.matches(it.name) && it.name != "Ask.kt" && it.name != "AiRunner.kt" }
+    val paths = sources().filter { dataPaths.matches(it.name) && it.name != "Ask.kt" && it.name != "AskRun.kt" && it.name != "AiRunner.kt" }
     assertTrue(paths.map { it.name }.containsAll(listOf("Ai.kt", "AiQueue.kt", "AutopilotApi.kt", "AutopilotProvider.kt", "AutopilotAccess.kt", "Reports.kt", "SuggestionRules.kt", "NexusShares.kt")))
     for (f in paths) assertTrue("${f.name} touches health", code(f).none { healthCode.containsMatchIn(it) })
   }
