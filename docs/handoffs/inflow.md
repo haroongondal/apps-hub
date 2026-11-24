@@ -297,7 +297,7 @@ What the shares hold:
 | Nexus | Let Nexus read my messages | `nexusAsk` | `nexusAsk()`, `setNexusAsk` |
 | Nexus | Let Nexus match my receipts | `nexusDebits` | `nexusDebits()`, `setNexusDebits` |
 
-Subtitles (SettingsScreen.tsx): the Halo switch says Halo can read these lines and nothing leaves the phone; the health switch says it adds the next medicine time and today's steps to the morning summary and to the briefing Halo shows; the summary switch names who is home and the other apps' lines; the messages switch says Nexus keeps a copy and sends the text to Gemini and Groq, through AI hub or with the owner's own keys, and that one-time codes are never shared. The summary default is off (R12).
+Subtitles (SettingsScreen.tsx): the Halo switch says Halo can read these lines and nothing leaves the phone; the health switch says it adds the next medicine time and today's steps to the morning summary and to the briefing Halo shows; the summary switch names who is home and the other apps' lines; the messages switch says Nexus keeps a copy and sends the text to Gemini and Groq, through AI hub or with the owner's own keys, that one-time codes are left out, and that only messages from after the first AI key in Inflow are read. The summary default is off (R12).
 
 ### Summary lock-screen rule
 
@@ -331,11 +331,13 @@ security-engineer: 0 High, 3 Medium, 1 Low. invariant-reviewer: 4 Important, 5 M
 - FIX-4 (Important): the Deputy draft could show a wrong amount. Amount removed (R15).
 - FIX-5 (Minor): source pins added so tests fail when `BriefingSource.healthOn`, the provider's `BriefingShare.serve` line or the order in `AddTodoActivity` changes.
 - FIX-6 (Minor): the public count uses the lines shown; two subtitles name what the switch covers.
-- A scoped re-review of 4ae7c172..e5e3cb48 (provider caller check, notification visibility, Nexus SQL) was started when this section was written; its result is not recorded here.
+- Scoped re-review of 4ae7c172..e5e3cb48 (provider caller check, notification visibility, Nexus SQL): all six fixes ADDRESSED; two Minor findings, both fixed in fix round 2 (see the session log line below): the no-key source pin in `NexusShareSqlTest` sat inside a test skipped when sqlite3 is missing (moved into its own test with no skip), and the Nexus messages subtitle now ends 'One-time codes are left out. Only messages from after you first added an AI key in Inflow.'
+- Unproven suspicions from the re-review (not changed): a paired Wear OS watch receives notifications whatever their lock-screen visibility, so a personal summary could show on the watch (`setLocalOnly(true)` on the summary would close it); whether HyperOS honours `VISIBILITY_SECRET` is a phone check (17 below).
 
 ### Open findings (not fixed)
 - Nexus shows 'ready', not 'off', when a switch here is off (an empty cursor, not a SecurityException). Nexus-side change.
-- `OtpDetector` misses an OTP SMS that also carries an amount and a verb (older than P2; Nexus filters again).
+- `OtpDetector` misses an OTP SMS that also carries an amount and a verb (older than P2), so such a code can slip into `ask_items`; Nexus filters it again.
+- A paired Wear OS watch may show the summary's lines whatever the lock-screen visibility (suspicion, unproven; `setLocalOnly(true)` would close it).
 - The medicine reminder notification has the same lock-screen gap the summary had (`VISIBILITY_PRIVATE` is a request; `MedicineReminders.kt` sets PRIVATE with a public version). Pre-existing Vitals, reported, not changed.
 - A reader pool thread can leak when a sibling hangs (low).
 - `NEXUS_READS` literals in `inflow-shares.test.ts` are copied from eco/nexus and can drift; recheck after the merge.
@@ -378,3 +380,4 @@ Next step: merge `eco/inflow` to main (owner's go; release by local command only
 14. Pay with Deputy: with a waiting bill suggestion open Inflow (fingerprint), Home or Suggestions: the bill row shows 'Pay with Deputy'. Tap: Deputy opens its draft screen with 'Help me pay this bill.' and, in the quoted text, the payee and due date and no Amount line. Nothing runs until Start there. Save or start it: back in Inflow 'Sent to Deputy. Finish there.' shows; close it in Deputy instead: no line. Uninstall Deputy or use a debug-signed Deputy: 'Deputy isn't installed on this phone.' and nothing opens. If Deputy says 'not allowed', Inflow shows nothing. Inflow locks while the owner is in Deputy: check the line still shows after unlocking.
 15. Ask Deputy on a reply suggestion (Run): Deputy starts; with a debug-signed Deputy it says Deputy isn't installed.
 16. After install check `dumpsys notification` for a live InflowListener and logcat for 'Reject service' (HyperOS Autostart), as for any Inflow build.
+17. HyperOS and `VISIBILITY_SECRET`: with 'Morning and evening summary' on, a secure lock and the system setting 'show sensitive notification content' on, post a summary with a personal line (spent, steps or who is home): nothing of it may appear on the lock screen (not even the app name or a count). If HyperOS shows it, record it and switch the summary to `setLocalOnly(true)` plus no post while locked. With a Wear OS watch paired, note whether the lines reach the watch.

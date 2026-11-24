@@ -72,11 +72,13 @@ class NexusShareSqlTest {
     assertEquals(emptyList<List<String>>(), rows(mixed, SqlItemStore.NEXUS_ASK_ITEMS_SQL, 0, 11, NexusShares.PAGE))
   }
 
-  @Test fun withNoAiKeyNothingIsServed() {
-    // No key bound: the clause alone already serves nothing ...
+  @Test fun withNoAiKeyTheClauseAloneServesNothing() {
     assertEquals(emptyList<List<String>>(), rows(mixed, SqlItemStore.NEXUS_ASK_IDS_SQL, 0, "NULL", NexusShares.PAGE))
     assertEquals(emptyList<List<String>>(), rows(mixed, SqlItemStore.NEXUS_ASK_ITEMS_SQL, 0, "NULL", NexusShares.PAGE))
-    // ... and the store does not even query: both reads return empty when enabledSince() is null.
+  }
+
+  // No sqlite3 needed: with no AI key the store returns empty before any query.
+  @Test fun withNoAiKeyTheStoreDoesNotEvenQuery() {
     val src = File("src/main/java/expo/modules/inflowcore/android/SqlItemStore.kt").readText()
     for (fn in listOf("fun nexusAskItems(sinceId: Long, limit: Int)", "fun nexusAskIds(sinceId: Long, limit: Int)")) {
       val body = src.substringAfter(fn).substringBefore("\n  }\n").lines().map { it.trim() }.filter { it.isNotEmpty() }
