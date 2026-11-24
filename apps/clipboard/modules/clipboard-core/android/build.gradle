@@ -19,4 +19,6 @@ android {
 
 dependencies {
   testImplementation("junit:junit:4.13.2")
+  // Test-only reader for the shared link fixtures; Apache-2.0, not in the APK.
+  testImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
 }

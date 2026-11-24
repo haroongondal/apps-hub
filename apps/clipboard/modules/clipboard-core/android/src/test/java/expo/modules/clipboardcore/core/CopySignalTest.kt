@@ -35,9 +35,12 @@ class CopySignalTest {
     assertFalse(CopySignal.isCopy(VIEW_CLICKED, "com.example", "[Copyright, Scope, Cops]", own))
   }
 
-  @Test fun `only copy and clipboard wording is loggable`() {
-    assertTrue(CopySignal.loggable("[Copied to clipboard]"))
-    assertFalse(CopySignal.loggable("[my bank pin 1234]"))
+  @Test fun `source is the event's own app unless the system raised it`() {
+    assertEquals("com.miui.screenshot", CopySignal.source(NOTIFICATION_STATE_CHANGED, "com.miui.screenshot", "com.miui.touchassistant"))
+    assertEquals("com.whatsapp", CopySignal.source(NOTIFICATION_STATE_CHANGED, "android", "com.whatsapp"))
+    assertEquals("com.whatsapp", CopySignal.source(ANNOUNCEMENT, "com.android.systemui", "com.whatsapp"))
+    assertEquals("com.android.chrome", CopySignal.source(VIEW_CLICKED, "com.android.chrome", "com.whatsapp"))
+    assertEquals(null, CopySignal.source(ANNOUNCEMENT, null, null))
   }
 
   @Test fun `kinds`() {

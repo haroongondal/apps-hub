@@ -275,6 +275,9 @@ importers:
 
   apps/clipboard:
     dependencies:
+      '@apps-hub/app-link-contract':
+        specifier: workspace:*
+        version: link:../../packages/app-link-contract
       '@apps-hub/ui':
         specifier: workspace:*
         version: link:../../packages/ui

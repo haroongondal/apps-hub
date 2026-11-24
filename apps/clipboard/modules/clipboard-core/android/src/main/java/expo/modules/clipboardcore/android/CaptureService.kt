@@ -2,13 +2,15 @@ package expo.modules.clipboardcore.android
 
 import android.accessibilityservice.AccessibilityService
 import android.content.ClipboardManager
+import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
-import android.util.Log
+import android.provider.Settings
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
@@ -16,12 +18,9 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityWindowInfo
 import expo.modules.clipboardcore.core.CopySignal
 
-private const val TAG = "ClipCapture"
 private const val TRIGGER_DELAY_MS = 150L
 private val RETRY_MS = listOf(300L, 600L, 1000L)
 private const val GIVE_UP_MS = 1500L
-private val NOT_FOREGROUND = setOf("android", "com.android.systemui", "com.google.android.inputmethod.latin")
-private val DIGIT = Regex("""\d""")
 
 class CaptureService : AccessibilityService() {
   private val main = Handler(Looper.getMainLooper())
@@ -30,6 +29,7 @@ class CaptureService : AccessibilityService() {
 
   override fun onServiceConnected() {
     connected = true
+    runCatching { ClipStore.get(this).heartbeat() }
   }
 
   override fun onUnbind(intent: Intent?): Boolean {
@@ -49,14 +49,12 @@ class CaptureService : AccessibilityService() {
     val pkg = e.packageName?.toString()
     val text = "${e.text} ${e.contentDescription ?: ""}"
     val type = AccessibilityEvent.eventTypeToString(e.eventType)
-    if (e.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && pkg != null && pkg != packageName && pkg !in NOT_FOREGROUND) {
+    if (e.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && pkg != null && pkg != packageName && pkg !in CopySignal.SYSTEM) {
       foreground = pkg
     }
     val copy = CopySignal.isCopy(e.eventType, pkg, text, packageName)
-    // shortcut: spike S3 logging (masked copy/clipboard wording only), delete once HyperOS's signals are known.
-    Log.i(TAG, "$type pkg=$pkg cls=${e.className} copy=$copy" + if (CopySignal.loggable(text)) " text=${text.take(60).replace(DIGIT, "#")}" else "")
     if (copy && !grabbing) {
-      val source = if (e.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED) pkg else foreground
+      val source = CopySignal.source(e.eventType, pkg, foreground)
       main.postDelayed({ grab(type, source) }, TRIGGER_DELAY_MS)
     }
   }
@@ -79,7 +77,6 @@ class CaptureService : AccessibilityService() {
       grabbing = false
       val ms = SystemClock.uptimeMillis() - t0
       val saved = clip != null && ClipStore.get(this).capture(contentResolver, clip, source, via, ms)
-      Log.i(TAG, "grab via=$via ms=$ms read=${clip != null} saved=$saved")
       if (saved) ClipStore.onAdded?.invoke()
     }
 
@@ -99,5 +96,11 @@ class CaptureService : AccessibilityService() {
   companion object {
     @Volatile var connected = false
       private set
+
+    fun isEnabled(context: Context): Boolean {
+      val ours = ComponentName(context, CaptureService::class.java)
+      return Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+        ?.split(':')?.any { ComponentName.unflattenFromString(it) == ours } == true
+    }
   }
 }
