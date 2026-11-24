@@ -53,7 +53,7 @@ only renders (the same split as Deputy and Strongroom). The provider starts from
 (a read timeout is never re-sent, because the model already billed it).
 
 **Keys.** Sealed with a non-exportable Android Keystore key, as Deputy's `KeyVault.kt` does.
-The service is detected from the key prefix (`gsk_` is Groq, `AIza` is Gemini). Keys never
+The service is detected from the key prefix (`gsk_` is Groq, `AIza` or `AQ.` is Gemini). Keys never
 leave the hub, and callers see only "Groq key ending 1a2b".
 
 **Jobs (contract v1):**

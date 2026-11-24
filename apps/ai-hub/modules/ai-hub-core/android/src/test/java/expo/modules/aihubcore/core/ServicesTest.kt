@@ -8,13 +8,14 @@ class ServicesTest {
   @Test fun theKeyPrefixNamesTheService() {
     assertEquals(Service.GROQ, serviceOf("gsk_aaaa1111"))
     assertEquals(Service.GEMINI, serviceOf("AIzabbbb2222"))
+    assertEquals(Service.GEMINI, serviceOf("AQ.Ab8RN6bbbb2222"))
     assertNull(serviceOf("sk-ant-nope"))
   }
 
   @Test fun aLabelShowsTheServiceAndOnlyTheLastFourCharacters() {
     assertEquals("Groq key ending 1a2b", labelOf("gsk_secretsecret1a2b"))
     assertEquals("Gemini key ending 9z8y", labelOf("AIzaSyD-secret9z8y"))
-    for (key in listOf("gsk_0123456789abcdef", "AIza0123456789", "other-key-1234")) {
+    for (key in listOf("gsk_0123456789abcdef", "AIza0123456789", "AQ.Ab8RN6-0123_9z", "other-key-1234")) {
       assertEquals(4, labelOf(key).substringAfter("key ending ").length)
     }
   }

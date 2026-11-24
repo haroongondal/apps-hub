@@ -46,7 +46,7 @@ with `cd-engineering-tools:parallel-agents-coord` (section 0 loop with the ledge
   `apps/design-editor/ai-keys.js`.
 - Shared fallback rule in every copy: next key on 401, 403, Gemini 400 matching
   `API key not valid|API_KEY_INVALID`, or 429; stop on anything else; a limit is reported before
-  a refusal. Keys: `gsk_` prefix is Groq, `AIza` is Gemini.
+  a refusal. Keys: `gsk_` prefix is Groq, `AIza` or `AQ.` is Gemini (AQ. keys pass Bearer on the OpenAI route, checked 2026-11-24).
 - Default models: Groq `openai/gpt-oss-120b` (chat), Gemini `gemini-3.5-flash-lite` (vision),
   `gemini-embedding-001` (embed), Groq `whisper-large-v3-turbo` (transcribe). Endpoints:
   `https://api.groq.com/openai/v1/`, `https://generativelanguage.googleapis.com/v1beta/openai/`.
