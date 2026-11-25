@@ -262,11 +262,11 @@ Current apps:
   in AI hub's Apps list, Deputy's calls are refused and it uses its own key (not-allowed pauses the hub
   for 10 minutes). The own key is still needed to run (setup unchanged). The own key takes over only
   before the hub has answered once in a run (hub missing, not allowed, too old, no key, too large);
-  after that a hub error ends the run, since Gemini's signatures must never reach Groq. Busy and failing
-  hub replies wait like the own provider (RATE_DELAYS, 1/2/4 s). The gate and the untrusted block are
+  after that a hub error ends the run, since Gemini's signatures must never reach Groq. Busy hub replies wait like the own
+  provider (RATE_DELAYS); failing ones are retried at 1/2/4 s (the hub reports a refused request the same way, so those retry too). A run whose history outgrows the hub's 512 KB request cap after the hub has answered ends with "too long for AI hub" (the own key cannot take over). The gate and the untrusted block are
   untouched (`HubRoutingTest`, `AgentLoopTest.aHubReplyMeetsTheSameGateAndADeniedSendNeverRuns`). A hub
-  step is priced by the reply's model (Gemini 3.5 Flash-Lite, GPT-OSS known; any other at the dearest
-  known prices) so the cost limits still trip. `ai_source` reports what carried the last step (hub or own),
+  step is priced by the reply's model (Gemini 3.5 Flash-Lite, GPT-OSS known; any other at a high ceiling,
+  Gemini 3 Pro's published prices, since the hub's model id is free text) so the cost limits still trip. `ai_source` reports what carried the last step (hub or own),
   `own` before any, `none` without a key. The key test stays on the own key. No prompt or screenshot
   is logged; the screenshot file is deleted after its call.
 - **strongroom** (`apps/strongroom`) — personal password manager, all own code

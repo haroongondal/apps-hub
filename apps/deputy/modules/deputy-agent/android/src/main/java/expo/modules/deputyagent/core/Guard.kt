@@ -4,7 +4,9 @@ data class Prices(val inputPerM: Double, val cachedPerM: Double, val outputPerM:
   companion object {
     val geminiFlashLite = Prices(0.30, 0.03, 2.50) // Google's pricing page, 2026-10-29
 
-    /** The dearest of each price among `models`, so a model Deputy doesn't know can't slip under the cost limits. */
+    // Ceiling for a hub model Deputy can't price (the hub's model id is free text): Gemini 3 Pro's long-context tier per Google's pricing page, 2026-11. Revisit when Google reprices.
+    val HUB_CEILING = Prices(4.00, 0.40, 18.00)
+
     fun dearest(models: List<Prices>) = Prices(models.maxOf { it.inputPerM }, models.maxOf { it.cachedPerM }, models.maxOf { it.outputPerM })
   }
 }
@@ -30,9 +32,9 @@ class Guard(private val caps: Caps, private val prices: Prices, private val now:
     steps++
   }
 
-  /** A step AI hub served is priced by the model the hub names (the owner's own prices belong to their own model); an unknown one counts at the dearest known prices. */
+  /** A step AI hub served is priced by the model the hub names (the owner's own prices belong to their own model); an unknown one counts at a high ceiling. */
   fun addUsage(u: Usage, hubModel: String? = null): Double {
-    val p = if (hubModel == null) prices else Settings.pricesOfHubModel(hubModel)
+    val p = if (hubModel == null) prices else Settings.pricesOfHubModel(hubModel, prices)
     val cost = ((u.inputTokens - u.cachedTokens).coerceAtLeast(0) * p.inputPerM + u.cachedTokens * p.cachedPerM + u.outputTokens * p.outputPerM) / 1_000_000
     costUsd += cost
     return cost

@@ -213,12 +213,15 @@ class HubFirstTest {
   }
 
   @Test fun onceTheHubHasAnsweredALaterNoKeyEndsTheRunInsteadOfMixingServices() = runTest {
+    // A long run past the hub's 512 KB cap ends with the plain too-large sentence, never on the own key.
     val hub = FakeHub(reply(), AiHubException(Kinds.NO_KEY, "no key"), AiHubException(Kinds.TOO_LARGE, "big"), AiHubException(Kinds.NOT_ALLOWED, "off"))
     val own = FakeOwn()
     val provider = first(hub, own)
     provider.step(history, tools)
     val kinds = listOf(ProviderError.Kind.AUTH, ProviderError.Kind.BAD_REQUEST, ProviderError.Kind.AUTH)
-    for (k in kinds) assertEquals(k, failure { provider.step(history, tools) }.kind)
+    val errors = kinds.map { failure { provider.step(history, tools) } }
+    assertEquals(kinds, errors.map { it.kind })
+    assertEquals("This task grew too long for AI hub, so Deputy stopped. Start it again, or split it into smaller tasks.", errors[1].message)
     assertEquals(0, own.calls)
   }
 
@@ -239,6 +242,5 @@ class HubFirstTest {
     val text = hub.requests.single().toString().lowercase()
     for (w in listOf("authorization", "bearer", "api_key", "googleapis", "groq.com", "baseurl")) assertFalse(w, w in text)
     assertEquals(setOf("apiVersion", "requestId", "job", "priority", "messages", "tools", "toolChoice", "maxTokens", "service"), hub.requests.single().keys)
-    assertTrue(JsonArray(emptyList()).isEmpty())
   }
 }

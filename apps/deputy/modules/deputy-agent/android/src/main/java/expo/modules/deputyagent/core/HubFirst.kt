@@ -142,6 +142,7 @@ object HubChat {
   }
 
   fun asProviderError(e: AiHubException): ProviderError {
+    if (e.kind == Kinds.TOO_LARGE) return ProviderError(ProviderError.Kind.BAD_REQUEST, "This task grew too long for AI hub, so Deputy stopped. Start it again, or split it into smaller tasks.")
     val kind = when (e.kind) {
       Kinds.NOT_ALLOWED, Kinds.NO_KEY -> ProviderError.Kind.AUTH
       Kinds.INVALID, Kinds.TOO_LARGE, Kinds.VERSION -> ProviderError.Kind.BAD_REQUEST
