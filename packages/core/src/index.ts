@@ -31,4 +31,5 @@ export * from './wol.ts';
 export * from './presence.ts';
 export * from './new-devices.ts';
 export * from './home-watch.ts';
+export * from './home-watch-controller.ts';
 export * from './deputy-proposal.ts';

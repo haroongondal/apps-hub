@@ -8,6 +8,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "prebuild": "expo prebuild",
+    "test": "node --test src/components/__tests__/background-checks.test.ts",
     "typecheck": "tsc --noEmit",
     "doctor": "expo-doctor"
   },
