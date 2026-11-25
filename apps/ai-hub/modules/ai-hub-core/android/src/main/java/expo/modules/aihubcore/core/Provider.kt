@@ -13,6 +13,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.float
 import kotlinx.serialization.json.int
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -137,7 +138,11 @@ object ProviderJson {
   fun shapeOf(body: String, wanted: Int? = null): String = try {
     val root = Json.parseToJsonElement(body).jsonObject
     val data = root["data"] as? JsonArray
-    "fields " + root.keys.take(6).joinToString(",").take(60) + (data?.let { ", data ${it.size}" } ?: "") + (wanted?.let { " of $it texts" } ?: "")
+    val first = data?.firstOrNull() as? JsonObject
+    val vector = first?.get("embedding")
+    "fields " + root.keys.take(6).joinToString(",").take(60) + (data?.let { ", data ${it.size}" } ?: "") + (wanted?.let { " of $it texts" } ?: "") +
+      (first?.let { ", item " + it.keys.take(4).joinToString(",").take(40) } ?: "") +
+      (vector?.let { ", embedding " + ((it as? JsonArray)?.let { a -> "array ${a.size}" + if ((a.firstOrNull() as? JsonPrimitive)?.isString == true) " of strings" else "" } ?: "not an array") } ?: "")
   } catch (e: Exception) {
     "not JSON, ${body.length} bytes"
   }
@@ -174,8 +179,11 @@ class Provider(
     }.toString().toByteArray()
     val (_, body) = send(listOf(choice), "embeddings", JSON) { request }
     return ProviderJson.readable(choice.service, body, texts.size) {
-      val data = Json.parseToJsonElement(body).jsonObject["data"]!!.jsonArray.map { it.jsonObject }.sortedBy { it["index"]!!.jsonPrimitive.int }
-      require(data.size == texts.size)
+      val items = Json.parseToJsonElement(body).jsonObject["data"]!!.jsonArray.map { it.jsonObject }
+      require(items.size == texts.size)
+      // Gemini's OpenAI endpoint may leave `index` out; then the items are in input order already.
+      val indexes = items.map { (it["index"] as? JsonPrimitive)?.intOrNull }
+      val data = if (indexes.all { it != null }) items.sortedBy { (it["index"] as JsonPrimitive).int } else items
       data.map { d -> d["embedding"]!!.jsonArray.map { it.jsonPrimitive.float }.toFloatArray() }
     }
   }

@@ -280,8 +280,20 @@ class ProviderTest {
     assertEquals(AiError.Kind.SERVER, e.kind)
     assertEquals(200, e.httpCode)
     assertEquals(Service.GEMINI, e.service)
-    assertEquals("fields object,data,model, data 1 of 3 texts", e.detail)
+    assertEquals("fields object,data,model, data 1 of 3 texts, item index,embedding, embedding array 1", e.detail)
     assertFalse(e.detail!!.contains("secret-looking-value") || e.detail!!.contains("0.123"))
+  }
+
+  @Test fun anEmbeddingItemThatIsNotANumberArrayIsLoggedByItsType() {
+    val http = Fake(HttpReply(200, """{"data":[{"embedding":"AAAA"}],"model":"m"}"""))
+    assertEquals("fields data,model, data 1 of 1 texts, item embedding, embedding not an array", failure { provider(http, m1).embed(Job.EMBED.default, listOf("a")) }.detail)
+  }
+
+  @Test fun embedKeepsInputOrderWhenTheReplyLeavesIndexOut() {
+    val http = Fake(HttpReply(200, """{"data":[{"embedding":[1,0]},{"embedding":[0,1]}]}"""))
+    val out = provider(http, m1).embed(Job.EMBED.default, listOf("a", "b"))
+    assertArrayEquals(floatArrayOf(1f, 0f), out[0], 0f)
+    assertArrayEquals(floatArrayOf(0f, 1f), out[1], 0f)
   }
 
   @Test fun aReplyThatIsNotJsonIsLoggedWithItsSizeOnly() {
