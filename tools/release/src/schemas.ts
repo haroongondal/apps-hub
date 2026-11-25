@@ -72,25 +72,49 @@ export interface SchemaCheck {
   target: number | null;
   current: number | null;
   verdict: SchemaVerdict;
+  /** Plain reason, only on an `unknown` verdict. */
+  why?: string;
 }
 
-type Read = { present: false } | { present: true; version: number | null };
+type Read = { present: false } | { present: true; version: number | null; problem?: 'moved' | 'unreadable' };
 
-// A file missing at a commit counts as absent only when the app folder is absent too; otherwise it may have moved.
+const run = (repoDir: string, args: string[]) => execFileSync('git', args, { cwd: repoDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 });
+const succeeds = (repoDir: string, args: string[]) => {
+  try {
+    run(repoDir, args);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+// True when `sha` is older than the first commit that added `file` (following renames): the database did not exist yet.
+function predatesFile(repoDir: string, sha: string, file: string): boolean {
+  try {
+    const firstAdd = run(repoDir, ['log', '--follow', '--diff-filter=A', '--format=%H', '--', file]).trim().split('\n').filter(Boolean).pop();
+    return !!firstAdd && firstAdd !== sha && succeeds(repoDir, ['merge-base', '--is-ancestor', sha, firstAdd]);
+  } catch {
+    return false;
+  }
+}
+
+// A file missing at a commit is absent only when the app folder is, or the file had not been created yet; else it may have moved.
 function readAt(repoDir: string, sha: string, source: SchemaSource, appDir: string): Read {
   if (source.kind === 'unversioned') return { present: false };
   try {
-    const text = execFileSync('git', ['show', `${sha}:${source.file}`], { cwd: repoDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 });
-    return { present: true, version: readVersion(text, source) };
+    return { present: true, version: readVersion(run(repoDir, ['show', `${sha}:${source.file}`]), source) };
   } catch {
-    try {
-      execFileSync('git', ['cat-file', '-e', `${sha}:${appDir}`], { cwd: repoDir, stdio: 'ignore' });
-      return { present: true, version: null };
-    } catch {
-      return { present: false };
-    }
+    if (!succeeds(repoDir, ['cat-file', '-e', `${sha}:${appDir}`]) || predatesFile(repoDir, sha, source.file)) return { present: false };
+    return { present: true, version: null, problem: 'moved' };
   }
 }
+
+const WHY = {
+  commit: 'a commit the Store recorded for the published build is not in this checkout (run git fetch origin main)',
+  guess: 'the Store records no commit for the published build, so what the phones hold is only a guess from HEAD and origin/main',
+  moved: 'a registered file is missing at one of the commits although the app is there, so it may have moved or been renamed',
+  unreadable: 'the database version number could not be read at one of the commits',
+};
 
 // `refs` are the commits whose data may be on the phone (the highest schema counts); null when they cannot be named.
 // `certain` is false when they are only a guess (no commit recorded), so an ahead schema is "unknown", not proof.
@@ -104,13 +128,16 @@ export function checkSchemas(repoDir: string, id: string, toCommit: string, refs
     const curs = (refs ?? []).map((r) => readAt(repoDir, r, source, appDir)).filter((r) => r.present);
     const versions = curs.map((r) => (r.present ? r.version : null));
     const current = versions.length && !versions.includes(null) ? Math.max(...(versions as number[])) : null;
-    let verdict: SchemaVerdict = 'ok';
-    if (refs === null || versions.includes(null)) verdict = 'unknown';
+    const problem = [tgt, ...curs].find((r) => r.present && r.problem) as { problem: 'moved' | 'unreadable' } | undefined;
+    let why: string | undefined;
+    if (refs === null) why = WHY.commit;
+    else if (versions.includes(null)) why = WHY[problem?.problem ?? 'unreadable'];
     else if (curs.length && tgt.present) {
-      if (target === null) verdict = 'unknown';
-      else if (target < (current as number)) verdict = certain ? 'newer' : 'unknown';
+      if (target === null) why = WHY[problem?.problem ?? 'unreadable'];
+      else if (target < (current as number) && !certain) why = WHY.guess;
     }
-    out.push({ app: id, db: source.db, target, current, verdict });
+    const verdict: SchemaVerdict = why ? 'unknown' : curs.length && tgt.present && (target as number) < (current as number) ? 'newer' : 'ok';
+    out.push({ app: id, db: source.db, target, current, verdict, ...(why ? { why } : {}) });
   }
   return out;
 }

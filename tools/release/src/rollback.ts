@@ -136,28 +136,33 @@ const MAX_LISTED = 15;
 
 function schemaLine(c: SchemaCheck): string {
   return c.verdict === 'unknown'
-    ? `  ${c.db}: what the phones hold cannot be established (a commit is unknown here, a file moved, or no commit is recorded), so a newer schema cannot be ruled out`
+    ? `  ${c.db}: ${c.why ?? 'could not be established'}`
     : `  ${c.db}: the phone's data is at version ${c.current}, the older build understands ${c.target}`;
 }
 
 /** Why a rollback is refused, or what the owner accepted with --accept-newer-data. Empty when every schema is fine. */
 export function schemaNotice(p: RollbackPlan, accepted: boolean): string[] {
-  const blocked = blockingSchemas(p);
-  if (blocked.length === 0) return [];
-  const lines = blocked.map(schemaLine);
-  if (!accepted) {
+  const newer = p.schemas.filter((c) => c.verdict === 'newer');
+  const unknown = p.schemas.filter((c) => c.verdict === 'unknown');
+  if (newer.length + unknown.length === 0) return [];
+  if (accepted) {
     return [
-      `Not rolled back: ${p.id} stores data in a newer format than the older build can open.`,
-      ...lines,
-      'Installing the older build over it would leave the app unable to start with that data until a newer release is installed.',
-      'Nothing was built or published. To go back anyway, pass --accept-newer-data.',
+      '--accept-newer-data: rolling back over data that may be newer.',
+      ...[...newer, ...unknown].map(schemaLine),
+      'The app will not open newer data until a newer release is installed. The rollback itself deletes nothing,',
+      'but the newer format is unreadable to the old build, and clearing the app\'s storage to recover would lose it.',
     ];
   }
   return [
-    '--accept-newer-data: rolling back over newer data.',
-    ...lines,
-    'The app will not open this data until a newer release is installed. The rollback itself deletes nothing,',
-    'but the newer format is unreadable to the old build, and clearing the app\'s storage to recover would lose it.',
+    ...(newer.length
+      ? [`Not rolled back: ${p.id} stores data in a newer format than the older build can open.`, ...newer.map(schemaLine),
+         'Installing the older build over it would leave the app unable to start with that data until a newer release is installed.']
+      : []),
+    ...(unknown.length
+      ? [`Not rolled back: the tool could not tell whether ${p.id}'s data on the phone is newer than the older build can open.`, ...unknown.map(schemaLine),
+         'Fetch origin and run it again, or, if you are sure the data is not newer, pass --accept-newer-data.']
+      : []),
+    newer.length ? 'Nothing was built or published. To go back anyway, pass --accept-newer-data.' : 'Nothing was built or published.',
   ];
 }
 

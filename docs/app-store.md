@@ -157,13 +157,17 @@ changelog with `[branch build <short sha>]`. CI is not affected: it builds a pus
   `git show <sha>:<file>` at the target and at every commit whose data may be on the phones: the published commit and,
   when the published build was itself a rollback, the release it replaced (`android.rolledBackFrom.commit`; the higher
   schema counts, because an accepted rollback leaves the newer data on the phone). If the phones' version is higher, the
-  rollback is refused with a plain message, with or without `--yes`, and nothing is built. It is also refused ("cannot be
-  established") when a recorded commit is missing locally (never guessed from `HEAD`), when a file exists but its
-  constant cannot be read, and when the target lacks a registered file while the app folder exists there (the file may
-  have moved). When the manifest records no commit at all, `HEAD` and `origin/main`
-  are only a guess at what is published, so a target below the higher of the two is refused as "cannot be established"
-  too. A database counts as absent at the target only when the app folder is absent there as well; then the old build
-  never opens it and the rollback may go ahead. Nothing is wiped either way.
+  rollback is refused with a plain message, with or without `--yes`, and nothing is built. When the tool cannot tell, it
+  refuses too, but says "could not tell whether the data is newer" and names the database and the reason, instead of
+  calling the data newer; fetch origin and run it again, or pass `--accept-newer-data` if you are sure. It cannot tell
+  when a recorded commit is missing locally (never guessed from `HEAD`), when a file exists but its constant cannot be
+  read, and when a registered file is missing at a commit although the app folder is there and the file was not simply
+  created later: the tool follows the file's history (`git log --follow --diff-filter=A`) to the commit that first added
+  it, and a commit strictly before that add means the database did not exist yet (fine, the old build never opens it),
+  while any other case (a rename, a commit after the add, unreadable history) is "cannot tell". The same rule applies to
+  the target and to the commits holding the phones' data. When the manifest records no commit at all, `HEAD` and
+  `origin/main` are only a guess at what is published, so a target below the higher of the two is "cannot tell". A
+  database is also absent when the app folder itself is absent at that commit. Nothing is wiped either way.
   `--accept-newer-data` overrides the refusal. It prints which databases are ahead and that the older app will not
   open that data until a newer release is installed (the rollback deletes nothing, but clearing the app's storage to
   recover would). It still needs `--yes` to build. Whether to offer this flag at all is the owner's call.

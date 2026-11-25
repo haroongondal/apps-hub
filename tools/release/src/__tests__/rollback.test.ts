@@ -399,10 +399,23 @@ describe('gateRollback', () => {
     }
   });
 
-  it('refuses a schema it cannot read, like a newer one', () => {
-    const plan = { ...base, schemas: [{ ...newer, target: null, verdict: 'unknown' as const }] };
+  it('refuses a schema it cannot read, like a newer one, but says it could not tell instead of calling the data newer', () => {
+    const plan = { ...base, schemas: [{ ...newer, target: null, verdict: 'unknown' as const, why: 'a registered file is missing at one of the commits although the app is there, so it may have moved or been renamed' }] };
     assert.equal(blockingSchemas(plan).length, 1);
-    assert.equal(gateRollback(plan, { yes: true, acceptNewerData: false }).exitCode, 1);
+    const g = gateRollback(plan, { yes: true, acceptNewerData: false });
+    assert.equal(g.exitCode, 1);
+    const text = g.lines.join('\n');
+    assert.doesNotMatch(text, /newer format/);
+    assert.match(text, /could not tell whether netlens's data/);
+    assert.ok(text.includes('devices: a registered file is missing'));
+    assert.match(text, /Fetch origin.*--accept-newer-data/);
+    assert.match(text, nothingYet);
+  });
+
+  it('prints both sections when one database is ahead and another cannot be established', () => {
+    const text = gateRollback({ ...base, schemas: [newer, { ...newer, db: 'other', verdict: 'unknown' as const, why: 'x' }] }, { yes: true, acceptNewerData: false }).lines.join('\n');
+    assert.match(text, /stores data in a newer format/);
+    assert.match(text, /could not tell/);
   });
 
   it('--accept-newer-data prints what is lost and still needs --yes to go ahead', () => {
@@ -412,7 +425,7 @@ describe('gateRollback', () => {
     assert.equal(stop.exitCode, 0);
     const go = gateRollback(plan, { yes: true, acceptNewerData: true });
     assert.equal(go.proceed, true);
-    assert.match(go.lines.join('\n'), /will not open this data until a newer release is installed/);
+    assert.match(go.lines.join('\n'), /will not open newer data until a newer release is installed/);
   });
 
   it('rolledBackFrom carries the replaced release, and omits an unknown commit', () => {
