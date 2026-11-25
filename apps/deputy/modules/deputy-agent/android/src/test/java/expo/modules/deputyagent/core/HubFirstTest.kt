@@ -153,6 +153,25 @@ class HubFirstTest {
     assertEquals(2, hub.requests.size)
   }
 
+  @Test fun aPauseThatEndsMidRunNeverMovesARunThatStartedOnTheOwnKeyToTheHub() = runTest {
+    var now = 0L
+    val pause = HubPause { now }
+    pause.pause()
+    val hub = FakeHub()
+    val own = FakeOwn()
+    val provider = HubFirst(hub, own, pause, {}) { "a" }
+    provider.step(history, tools)
+    now = HubPause.MS
+    provider.step(history, tools)
+    assertTrue(hub.requests.isEmpty())
+    assertEquals(2, own.calls)
+  }
+
+  @Test fun negativeTokenCountsFromTheHubNeverLowerTheCost() = runTest {
+    val odd = """{"text":null,"toolCalls":[],"usage":{"inputTokens":-5,"cachedTokens":-1,"outputTokens":-9},"model":"m","service":"gemini","raw":$signed}"""
+    assertEquals(Usage(0, 0, 0), first(FakeHub(odd)).step(history, tools).usage)
+  }
+
   @Test fun otherFailuresSurfaceWithoutTryingTheOwnKey() = runTest {
     for ((kind, expected) in listOf(
       Kinds.INVALID to ProviderError.Kind.BAD_REQUEST, Kinds.TIMEOUT to ProviderError.Kind.SERVER, Kinds.CANCELLED to ProviderError.Kind.SERVER,

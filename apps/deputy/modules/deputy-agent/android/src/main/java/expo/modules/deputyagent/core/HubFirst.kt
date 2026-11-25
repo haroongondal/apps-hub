@@ -40,11 +40,11 @@ class HubFirst(
   private val record: (String) -> Unit,
   private val ids: () -> String,
 ) : LlmProvider {
-  private var hubOff = false
+  private var hubOff = pause.paused()
   private var served = false
 
   override suspend fun step(history: List<Msg>, tools: List<ToolSpec>): ModelTurn {
-    if (!hubOff && !pause.paused()) {
+    if (!hubOff) {
       try {
         return viaHub(history, tools).also {
           served = true
@@ -129,7 +129,7 @@ object HubChat {
       ToolCall(co["id"]?.jsonPrimitive?.contentOrNull.orEmpty(), co["name"]!!.jsonPrimitive.content.substringAfterLast('.'), co["args"] as? JsonObject ?: JsonObject(emptyMap()))
     }
     val usage = o["usage"] as? JsonObject
-    fun count(k: String) = (usage?.get(k) as? JsonPrimitive)?.longOrNull ?: 0
+    fun count(k: String) = ((usage?.get(k) as? JsonPrimitive)?.longOrNull ?: 0).coerceAtLeast(0)
     ModelTurn(
       raw = Msg("assistant", raw),
       toolCalls = calls,
