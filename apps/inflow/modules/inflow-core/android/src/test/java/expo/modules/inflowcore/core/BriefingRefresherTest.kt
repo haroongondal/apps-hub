@@ -179,10 +179,11 @@ class BriefingRefresherTest {
     assertEquals(1, builds)
   }
 
-  @Test fun aFailingSharingOffCallbackStillClearsAndNeverBlocksTheRebuild() {
+  @Test fun aThrowingSharingOffCallbackIsSwallowedAfterTheClearAndTheRebuildStillRuns() {
     refresher.refreshNow()
     on = false
-    refresher.settingChanged { throw IllegalStateException("x") }
+    refresher.settingChanged { throw IllegalStateException("x") }   // must not throw out to the caller (the module setter)
+    assertEquals(BriefingSnapshot.EMPTY, refresher.snapshot())
     on = true
     queue.runAll()
     assertEquals(lines, refresher.snapshot().lines)

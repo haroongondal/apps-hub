@@ -6,7 +6,7 @@ import { test } from 'node:test';
 // No React Native renderer here, so these pin the source: health stays off until the owner flips a switch or taps Send, and only those screens can do either.
 const src = join(import.meta.dirname, '..');
 const read = (name: string) => readFileSync(join(src, name), 'utf8');
-const screens = readdirSync(src).filter((f) => f.endsWith('.tsx') || (f.endsWith('.ts') && f !== 'doctor.ts' && !f.endsWith('.d.ts')));
+const screens = readdirSync(src).filter((f) => f.endsWith('.tsx') || (f.endsWith('.ts') && !f.endsWith('.d.ts')));
 const callers = (needle: string) => screens.filter((f) => read(f).includes(needle));
 
 test('the two health switches start Off and the screen shows what the phone says', () => {

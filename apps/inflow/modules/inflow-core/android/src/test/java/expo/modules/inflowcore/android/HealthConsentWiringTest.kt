@@ -38,13 +38,18 @@ class HealthConsentWiringTest {
     for ((setter, meta) in listOf("setHealthInAsk" to "HealthForAsk.META", "setHealthInBriefing" to "Briefing.HEALTH_META")) {
       assertTrue(setter, fn(setter).contains("if (on) store().setMeta($meta, \"1\") else store().deleteMeta($meta)"))
     }
-    for (meta in listOf("HealthForAsk.META", "Briefing.HEALTH_META")) {
-      val writers = kotlin().filter { f -> Regex("(setMeta|deleteMeta)\\(\\s*" + Regex.escape(meta)).containsMatchIn(code(f)) }.map { it.name }
-      assertEquals(meta, listOf("InflowCoreModule.kt"), writers)
+    // Exactly one set and one delete of each key in the whole module, both inside its own setter; no other file writes it.
+    for ((setter, meta) in listOf("setHealthInAsk" to "HealthForAsk.META", "setHealthInBriefing" to "Briefing.HEALTH_META")) {
+      val write = Regex("(setMeta|deleteMeta)\\(\\s*" + Regex.escape(meta))
+      assertEquals("$meta in the module", 2, write.findAll(module()).count())
+      assertEquals("$meta in $setter", 2, write.findAll(fn(setter)).count())
+      assertEquals(meta, emptyList<String>(), kotlin().filter { it.name != "InflowCoreModule.kt" && write.containsMatchIn(code(it)) }.map { it.name })
     }
-    // The raw key strings are written down once each, in the constant; nobody saves or restores them by name.
-    assertEquals(listOf("HealthForAsk.kt"), kotlin().filter { "\"healthInAsk\"" in code(it) && it.name != "InflowCoreModule.kt" }.map { it.name })
-    assertEquals(listOf("Briefing.kt"), kotlin().filter { "\"healthInBriefing\"" in code(it) && it.name != "InflowCoreModule.kt" }.map { it.name })
+    // The raw key strings are written down once each, in the constant; the module names them only as the getter's Function name.
+    for ((key, owner, getter) in listOf(Triple("healthInAsk", "HealthForAsk.kt", "healthInAsk"), Triple("healthInBriefing", "Briefing.kt", "healthInBriefing"))) {
+      assertEquals(key, listOf(owner), kotlin().filter { "\"$key\"" in code(it) && it.name != "InflowCoreModule.kt" }.map { it.name })
+      assertEquals("$key in the module", listOf("Function(\"$getter\")"), Regex("[\\w]*\\(?\"$key\"\\)?").findAll(module()).map { it.value }.toList())
+    }
   }
 
   @Test fun theGettersOnlyReadTheirOwnKeyAndEachKeyIsReadInTheOnePlaceThatActsOnIt() {
