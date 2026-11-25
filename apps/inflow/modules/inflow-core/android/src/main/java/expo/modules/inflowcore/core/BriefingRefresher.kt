@@ -34,6 +34,16 @@ class BriefingRefresher(
   /** Forgets the snapshot at once (a setting changed, so what it holds may be too much). */
   fun clear() = cache.write(null)
 
+  /**
+   * Either briefing switch changed: forget the snapshot (it may hold too much), say [onSharingOff] when nobody may be served now (what the reader could see just went
+   * away; sharing on tells the reader from the rebuild, if the lines differ), then rebuild.
+   */
+  fun settingChanged(onSharingOff: () -> Unit) {
+    clear()
+    if (!enabled()) runCatching(onSharingOff)
+    refreshAsync()
+  }
+
   /** Rebuilds now on this thread; false when nothing was built or the lines are the same. A failed build keeps the old snapshot. */
   @Synchronized
   fun refreshNow(): Boolean {

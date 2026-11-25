@@ -154,4 +154,37 @@ class BriefingRefresherTest {
     assertTrue(r.refreshNow())
     assertEquals(lines, r.snapshot().lines)
   }
+
+  // BriefingRefresh.settingChanged (glue) is this call with Halo's ping as the callback, so the order and the sharing-off ping are proven here.
+  @Test fun aSettingChangeForgetsTheSnapshotAtOnceThenRebuildsAndStaysQuietWhileSharing() {
+    refresher.refreshNow()
+    var offCalls = 0
+    refresher.settingChanged { offCalls++ }
+    assertEquals(BriefingSnapshot.EMPTY, refresher.snapshot())   // cleared before the rebuild gets its turn
+    assertEquals(1, builds)
+    queue.runAll()
+    assertEquals(2, builds)
+    assertEquals(lines, refresher.snapshot().lines)
+    assertEquals(0, offCalls)
+  }
+
+  @Test fun aSettingChangeWithSharingOffClearsTellsTheReaderOnceAndBuildsNothing() {
+    refresher.refreshNow()
+    on = false
+    var offCalls = 0
+    refresher.settingChanged { offCalls++ }
+    queue.runAll()
+    assertEquals(BriefingSnapshot.EMPTY, refresher.snapshot())
+    assertEquals(1, offCalls)
+    assertEquals(1, builds)
+  }
+
+  @Test fun aFailingSharingOffCallbackStillClearsAndNeverBlocksTheRebuild() {
+    refresher.refreshNow()
+    on = false
+    refresher.settingChanged { throw IllegalStateException("x") }
+    on = true
+    queue.runAll()
+    assertEquals(lines, refresher.snapshot().lines)
+  }
 }

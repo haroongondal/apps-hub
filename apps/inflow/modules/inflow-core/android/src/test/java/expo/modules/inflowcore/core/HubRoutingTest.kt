@@ -29,9 +29,28 @@ class HubRoutingTest {
     assertEquals(listOf("AiSwitch.kt"), kotlin.filter { "keys.deleteAll()" in it.readText() }.map { it.name })
   }
 
+  // The test below lets AiRunner.kt in as a whole file; the next one is what keeps that exemption exact.
   @Test fun onlyAskAndTheDoctorSummaryTouchBothHealthDataAndAnAiProvider() {
     val both = kotlin.filter { f -> f.readText().let { t -> healthWords.any { it in t } && (".provider(" in t || "TextAi" in t || ".hub(" in t) } }.map { it.name }.toSortedSet()
     assertEquals(sortedSetOf("AiRunner.kt", "AskRun.kt", "DoctorRunner.kt"), both)
+  }
+
+  @Test fun theRunnerNamesHealthOnlyInsideAskAndOnlyOnTheSwitchLineAndTheGatedContextLine() {
+    val text = src("android/AiRunner.kt")
+    val code = { l: String -> !l.trimStart().startsWith("//") && !l.trimStart().startsWith("*") && !l.trimStart().startsWith("/*") }
+    // Everything before ask() (the batch, the fast run, categories, reports, retries) may not name health at all, imports aside.
+    for (l in text.substringBefore("fun ask(").lines().filter(code).filterNot { it.startsWith("import ") }) {
+      assertFalse("outside ask(): $l", healthWords.any { it in l } || Regex("Health").containsMatchIn(l))
+    }
+    // Inside ask() (the last function of the file, so a function added after it is held to the same two lines): the switch read, then the one gated context call.
+    val named = text.substringAfter("fun ask(").lines().filter(code).filter { l -> healthWords.any { it in l } }.map { it.trim() }
+    assertEquals(
+      listOf(
+        "val healthOn = HealthForAsk.on(store.meta(HealthForAsk.META))",
+        "{ from, to -> HealthForAsk.context(healthOn, SqlHealthStore(store.db), SqlMedicineStore(store), from, to, System.currentTimeMillis(), zone) },",
+      ),
+      named,
+    )
   }
 
   @Test fun theBackgroundBatchCategoriserAndReportsNeverNameHealthData() {
