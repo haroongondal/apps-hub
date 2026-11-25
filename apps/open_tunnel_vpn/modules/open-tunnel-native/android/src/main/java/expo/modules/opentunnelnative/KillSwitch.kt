@@ -25,7 +25,7 @@ object KillSwitch {
   // Known edge, pinned by KillSwitchTest: a failed establish() still closes the old block. holdBlock only gets here when no live block can be
   // reused, i.e. an engine started since (Android then replaced the block, so the old fd is dead) or there was none. If that engine failed before
   // its own establish, the old interface was still alive and this closes it. Keeping it would instead claim a block that an established engine
-  // already replaced, so the honest report (not blocking, caller tears the service down) was kept.
+  // already replaced, so the honest report was kept: not blocking. failStart, RELEASE and the implicit start then tear the service down; startTunnel ignores the result and goes on to start the engine.
   fun afterEstablish(hadBlock: Boolean, established: Boolean): BlockOutcome =
     BlockOutcome(held = established, closeOld = true, publish = if (established) true else if (hadBlock) false else null)
 }
