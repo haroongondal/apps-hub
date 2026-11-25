@@ -7,7 +7,7 @@
     "start": "expo start",
     "android": "expo run:android",
     "prebuild": "expo prebuild --platform android",
-    "test": "TZ=Asia/Karachi node --test tools/__tests__/backup-rules.test.mjs tools/__tests__/gmail-network.test.mjs tools/__tests__/ai-network.test.mjs src/__tests__/aiHub.test.ts src/__tests__/setup.test.ts src/__tests__/health.test.ts src/__tests__/doctor.test.ts src/__tests__/vitals.test.ts src/__tests__/lockGrace.test.ts src/__tests__/medicines.test.ts src/__tests__/journal.test.ts src/__tests__/format.test.ts src/__tests__/money.test.ts src/__tests__/apps.test.ts src/__tests__/gmail.test.ts src/__tests__/ai.test.ts src/__tests__/media.test.ts src/__tests__/report.test.ts src/__tests__/todos.test.ts src/__tests__/records.test.ts src/__tests__/autopilot-api.test.ts src/__tests__/autopilot.test.ts src/__tests__/receipts.test.ts",
+    "test": "TZ=Asia/Karachi node --test tools/__tests__/backup-rules.test.mjs tools/__tests__/gmail-network.test.mjs tools/__tests__/ai-network.test.mjs src/__tests__/aiHub.test.ts src/__tests__/setup.test.ts src/__tests__/health.test.ts src/__tests__/doctor.test.ts src/__tests__/vitals.test.ts src/__tests__/lockGrace.test.ts src/__tests__/medicines.test.ts src/__tests__/journal.test.ts src/__tests__/format.test.ts src/__tests__/money.test.ts src/__tests__/apps.test.ts src/__tests__/gmail.test.ts src/__tests__/ai.test.ts src/__tests__/media.test.ts src/__tests__/report.test.ts src/__tests__/todos.test.ts src/__tests__/records.test.ts src/__tests__/autopilot-api.test.ts src/__tests__/autopilot.test.ts src/__tests__/receipts.test.ts src/__tests__/autoReceipts.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
