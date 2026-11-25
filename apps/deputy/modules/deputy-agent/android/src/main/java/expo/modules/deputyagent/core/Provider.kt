@@ -23,7 +23,8 @@ data class ToolSpec(val name: String, val description: String, val parameters: J
 
 data class ToolCall(val id: String, val name: String, val args: JsonObject)
 
-data class ModelTurn(val raw: Msg, val toolCalls: List<ToolCall>, val usage: Usage, val text: String?)
+/** `hubModel` is the model AI hub says served the step; null when the owner's own key did. */
+data class ModelTurn(val raw: Msg, val toolCalls: List<ToolCall>, val usage: Usage, val text: String?, val hubModel: String? = null)
 
 interface LlmProvider {
   suspend fun step(history: List<Msg>, tools: List<ToolSpec>): ModelTurn

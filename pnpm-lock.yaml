@@ -324,6 +324,9 @@ importers:
       '@apps-hub/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      ai-hub-client:
+        specifier: workspace:*
+        version: link:../../packages/ai-hub-client
       deputy-agent:
         specifier: workspace:*
         version: link:modules/deputy-agent

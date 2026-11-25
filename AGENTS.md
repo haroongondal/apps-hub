@@ -253,10 +253,22 @@ Current apps:
   Schedules live in `deputy-settings`, and their history (last 30, up to 30 days) in
   `filesDir/deputy/schedules/`. `ScheduledRun.PAYMENTS_ALLOWED` is an open owner decision: it is
   `true` on the branch, so a repeating task that reads like a payment still runs up to the gate.
-  Deputy does not use AI hub yet: hub apiVersion 2 can't carry its steps (the chat reply leaves
-  out the assistant message with Gemini's thought signatures, the default chat model can't read
-  screenshots, and tool_choice can't be set), so every run uses the owner's own key; `ai_source`
-  reports `own` when a key is saved, else `none`.
+  AI hub first, own key second (hub apiVersion 3, through `ai-hub-client`): each step goes to AI hub
+  pinned to Gemini with `toolChoice` required; the screenshot rides as the `vision` picture file (not
+  inline), and the reply's `raw` assistant message is kept unchanged in the history (never rebuilt).
+  What leaves the phone through the hub is what already left for the model: the owner's task, the
+  screen text and one screenshot per step, plus text from other people in the untrusted block; AI hub
+  sends it to Gemini and keeps counts only. The opt-in is the hub's own: until the owner allows Deputy
+  in AI hub's Apps list, Deputy's calls are refused and it uses its own key (not-allowed pauses the hub
+  for 10 minutes). The own key is still needed to run (setup unchanged). The own key takes over only
+  before the hub has answered once in a run (hub missing, not allowed, too old, no key, too large);
+  after that a hub error ends the run, since Gemini's signatures must never reach Groq. Busy and failing
+  hub replies wait like the own provider (RATE_DELAYS, 1/2/4 s). The gate and the untrusted block are
+  untouched (`HubRoutingTest`, `AgentLoopTest.aHubReplyMeetsTheSameGateAndADeniedSendNeverRuns`). A hub
+  step is priced by the reply's model (Gemini 3.5 Flash-Lite, GPT-OSS known; any other at the dearest
+  known prices) so the cost limits still trip. `ai_source` reports what carried the last step (hub or own),
+  `own` before any, `none` without a key. The key test stays on the own key. No prompt or screenshot
+  is logged; the screenshot file is deleted after its call.
 - **strongroom** (`apps/strongroom`) — personal password manager, all own code
   (Kotlin owns the vault; RN only renders). Android only, private Store only
   (`com.haroon.strongroom`). Design: `docs/strongroom/DESIGN.md`; phases:

@@ -15,6 +15,23 @@ class GuardTest {
     assertEquals(0.855, g.costUsd, 1e-9)
   }
 
+  @Test fun aStepTheHubServedIsPricedByTheModelTheHubNamesNotByTheOwnersModel() {
+    val g = guard()
+    val u = Usage(inputTokens = 1_000_000, cachedTokens = 400_000, outputTokens = 100_000)
+    assertEquals(0.18 + 0.012 + 0.25, g.addUsage(u, "gemini-3.5-flash-lite"), 1e-9)
+    assertEquals(0.09 + 0.03 + 0.06, g.addUsage(u, "openai/gpt-oss-120b"), 1e-9)
+  }
+
+  @Test fun aHubModelDeputyDoesNotKnowCountsAtTheDearestKnownPricesSoTheCostLimitsStillTrip() {
+    val dearest = Prices.dearest(Settings.KNOWN.map { it.prices })
+    assertEquals(Settings.pricesOfHubModel("gemini-9"), dearest)
+    val g = guard(Caps(maxCostUsd = 0.5))
+    g.addUsage(Usage(inputTokens = 1_000_000, cachedTokens = 0, outputTokens = 0), "gemini-9")
+    assertEquals(0.30, g.costUsd, 1e-9)
+    g.addUsage(Usage(inputTokens = 1_000_000, cachedTokens = 0, outputTokens = 0), "gemini-9")
+    assertEquals(Cap.COST, g.tripped())
+  }
+
   @Test fun cachedTokensAboveTheInputCountNeverLowerTheCost() {
     val g = guard()
     assertEquals(0.000375, g.addUsage(Usage(inputTokens = 1_000, cachedTokens = 5_000, outputTokens = 0)), 1e-12)

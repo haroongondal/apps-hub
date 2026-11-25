@@ -3,6 +3,9 @@ package expo.modules.deputyagent.core
 data class Prices(val inputPerM: Double, val cachedPerM: Double, val outputPerM: Double) {
   companion object {
     val geminiFlashLite = Prices(0.30, 0.03, 2.50) // Google's pricing page, 2026-10-29
+
+    /** The dearest of each price among `models`, so a model Deputy doesn't know can't slip under the cost limits. */
+    fun dearest(models: List<Prices>) = Prices(models.maxOf { it.inputPerM }, models.maxOf { it.cachedPerM }, models.maxOf { it.outputPerM })
   }
 }
 
@@ -27,8 +30,10 @@ class Guard(private val caps: Caps, private val prices: Prices, private val now:
     steps++
   }
 
-  fun addUsage(u: Usage): Double {
-    val cost = ((u.inputTokens - u.cachedTokens).coerceAtLeast(0) * prices.inputPerM + u.cachedTokens * prices.cachedPerM + u.outputTokens * prices.outputPerM) / 1_000_000
+  /** A step AI hub served is priced by the model the hub names (the owner's own prices belong to their own model); an unknown one counts at the dearest known prices. */
+  fun addUsage(u: Usage, hubModel: String? = null): Double {
+    val p = if (hubModel == null) prices else Settings.pricesOfHubModel(hubModel)
+    val cost = ((u.inputTokens - u.cachedTokens).coerceAtLeast(0) * p.inputPerM + u.cachedTokens * p.cachedPerM + u.outputTokens * p.outputPerM) / 1_000_000
     costUsd += cost
     return cost
   }

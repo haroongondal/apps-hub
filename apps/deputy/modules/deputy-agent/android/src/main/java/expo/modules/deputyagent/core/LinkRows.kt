@@ -29,8 +29,9 @@ object LinkRows {
 
   private val OWNER_TYPED = setOf("on_demand", "scheduled", "shared_text")
 
-  fun health(accessibilityOn: Boolean, keySet: Boolean, lastSeenAt: Long?): Array<Any?> =
-    arrayOf("deputy", if (accessibilityOn) 1 else 0, null, if (keySet) "own" else "none", lastSeenAt)
+  /** "none" without a key (Deputy can't run); else what carried the last successful step, "own" before any. */
+  fun health(accessibilityOn: Boolean, keySet: Boolean, recordedSource: String?, lastSeenAt: Long?): Array<Any?> =
+    arrayOf("deputy", if (accessibilityOn) 1 else 0, null, if (!keySet) "none" else recordedSource?.takeIf { it == HubFirst.HUB || it == HubFirst.OWN } ?: HubFirst.OWN, lastSeenAt)
 
   fun waiting(gate: LiveGate?, schedules: List<Schedule>, tasks: List<SavedTask>, drafts: List<Draft>, now: Instant, zone: ZoneId): List<WaitingRow> {
     val gateRow = gate?.let { g ->
