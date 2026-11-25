@@ -59,7 +59,7 @@ const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM:
 const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, env, encoding: 'utf8', stdio: 'pipe' }).trim();
 
 const CLIP = (SCHEMAS.clipboard[0] as Extract<SchemaSource, { kind: 'const' }>).file;
-const clipSource = (v: number) => `class ClipStore : SQLiteOpenHelper(context, "clips.db", null, ${v}) {}\n${'// filler line to keep renames recognisable\n'.repeat(6)}`;
+const clipSource = (v: number) => `class ClipStore : SQLiteOpenHelper(context, "clips.db", null, ${v}) {}\n`;
 function commit(repo: string, files: Record<string, string>): string {
   for (const [f, text] of Object.entries(files)) {
     mkdirSync(join(repo, f, '..'), { recursive: true });
@@ -105,7 +105,7 @@ describe('checkSchemas', () => {
     return dir;
   };
 
-  it('a registered file missing at the target while the app exists there is unknown when it moved (renamed with history)', () => {
+  it('a registered file missing at the target while the app exists there is unknown when it moved (git sees a rename)', () => {
     const moved = newRepo('moved');
     const before = commit(moved, { [OLD]: clipSource(1), 'apps/clipboard/App.tsx': 'x' });
     mkdirSync(join(moved, CLIP, '..'), { recursive: true });
@@ -114,6 +114,22 @@ describe('checkSchemas', () => {
     assert.equal(checkSchemas(moved, 'clipboard', before, [after])[0].verdict, 'unknown');
     assert.match(checkSchemas(moved, 'clipboard', before, [after])[0].why ?? '', /moved or been renamed/);
     assert.equal(checkSchemas(moved, 'clipboard', after, [before])[0].verdict, 'unknown');
+  });
+
+  it('a database moved with edits, or extracted from another file, is unknown at commits before the move', () => {
+    const bumped = newRepo('bumped');
+    const kt = commit(bumped, { [OLD]: clipSource(1), 'apps/clipboard/App.tsx': 'x' });
+    mkdirSync(join(bumped, CLIP, '..'), { recursive: true });
+    git(bumped, 'mv', OLD, CLIP);
+    const java = commit(bumped, { [CLIP]: clipSource(2) });
+    assert.equal(git(bumped, 'log', '--follow', '--diff-filter=A', '--format=%H', '--', CLIP), java, 'git sees the move as an add, not a rename');
+    for (const [target, refs] of [[kt, [java]], [java, [kt]]] as const) assert.equal(checkSchemas(bumped, 'clipboard', target, [...refs])[0].verdict, 'unknown');
+
+    const extracted = newRepo('extracted');
+    const repoKt = 'apps/clipboard/modules/clipboard-core/android/src/main/java/expo/modules/clipboardcore/android/Repo.kt';
+    const before = commit(extracted, { [repoKt]: 'class Repo {\n  val h = SQLiteOpenHelper(context, "clips.db", null, 1)\n  fun a() {}\n}\n', 'apps/clipboard/App.tsx': 'x' });
+    const after = commit(extracted, { [repoKt]: 'class Repo {\n  fun a() {}\n}\n', [CLIP]: clipSource(2) });
+    for (const [target, refs] of [[before, [after]], [after, [before]]] as const) assert.equal(checkSchemas(extracted, 'clipboard', target, [...refs])[0].verdict, 'unknown');
   });
 
   it('a target from before the database was first added is fine, though the app folder exists', () => {

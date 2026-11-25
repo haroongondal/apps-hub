@@ -159,15 +159,20 @@ changelog with `[branch build <short sha>]`. CI is not affected: it builds a pus
   schema counts, because an accepted rollback leaves the newer data on the phone). If the phones' version is higher, the
   rollback is refused with a plain message, with or without `--yes`, and nothing is built. When the tool cannot tell, it
   refuses too, but says "could not tell whether the data is newer" and names the database and the reason, instead of
-  calling the data newer; fetch origin and run it again, or pass `--accept-newer-data` if you are sure. It cannot tell
-  when a recorded commit is missing locally (never guessed from `HEAD`), when a file exists but its constant cannot be
-  read, and when a registered file is missing at a commit although the app folder is there and the file was not simply
-  created later: the tool follows the file's history (`git log --follow --diff-filter=A`) to the commit that first added
-  it, and a commit strictly before that add means the database did not exist yet (fine, the old build never opens it),
-  while any other case (a rename, a commit after the add, unreadable history) is "cannot tell". The same rule applies to
-  the target and to the commits holding the phones' data. When the manifest records no commit at all, `HEAD` and
-  `origin/main` are only a guess at what is published, so a target below the higher of the two is "cannot tell". A
-  database is also absent when the app folder itself is absent at that commit. Nothing is wiped either way.
+  calling the data newer. For a commit that is not in the checkout it says to fetch origin and run again; for the other
+  reasons it says to check the file's history by hand; either way `--accept-newer-data` is the way through if you are
+  sure. It cannot tell when a recorded commit is missing locally (never guessed from `HEAD`), when a file exists but its
+  constant cannot be read, and when a registered file is missing at a commit although the app folder is there. In that
+  last case the database counts as absent (it did not exist yet) only when both hold: the commit is strictly before the
+  first commit that added the file (`git log --follow --diff-filter=A`, oldest result), and `git grep` finds nothing
+  at that commit under `apps/` and `packages/` that matches the database's marker (the registry's own detection
+  pattern, or an explicit `marker` for a pattern that is too generic). Git's rename detection is not trusted: a move
+  with edits, or a database extracted from a bigger file, shows up as an add, and the marker search is what catches it
+  (the old file still holds the marker, so the answer is "cannot tell"). A failed search or unreadable history also
+  means "cannot tell". The same rule applies to the target and to the commits holding the phones' data. When the
+  manifest records no commit at all, `HEAD` and `origin/main` are only a guess at what is published, so a target below
+  the higher of the two is "cannot tell". A database is also absent when the app folder itself is absent at that
+  commit. Nothing is wiped either way.
   `--accept-newer-data` overrides the refusal. It prints which databases are ahead and that the older app will not
   open that data until a newer release is installed (the rollback deletes nothing, but clearing the app's storage to
   recover would). It still needs `--yes` to build. Whether to offer this flag at all is the owner's call.

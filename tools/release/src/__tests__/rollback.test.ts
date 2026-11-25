@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
 import { SIGNING_CERT_SHA256, emptyManifest, upsertAndroidRelease, type AndroidRelease, type StoreManifest } from '@apps-hub/store-manifest';
 import { androidEntry, assertVersionStillFree, releaseAndroid } from '../release-android.ts';
+import { WHY } from '../schemas.ts';
 import { blockingSchemas, formatPlan, gateRollback, planRollback, rollbackFlagError, rolledBackFrom, storeTarget, withWorktree, type RollbackPlan } from '../rollback.ts';
 
 const tmp = mkdtempSync(join(tmpdir(), 'release-rollback-'));
@@ -408,7 +409,11 @@ describe('gateRollback', () => {
     assert.doesNotMatch(text, /newer format/);
     assert.match(text, /could not tell whether netlens's data/);
     assert.ok(text.includes('devices: a registered file is missing'));
-    assert.match(text, /Fetch origin.*--accept-newer-data/);
+    assert.match(text, /Check the file's history by hand, then pass --accept-newer-data/);
+    assert.doesNotMatch(text, /Fetch origin/);
+    const fetch = gateRollback({ ...plan, schemas: [{ ...plan.schemas[0], why: WHY.commit }] }, { yes: true, acceptNewerData: false }).lines.join('\n');
+    assert.match(fetch, /Fetch origin and run it again/);
+    assert.doesNotMatch(fetch, /history by hand/);
     assert.match(text, nothingYet);
   });
 

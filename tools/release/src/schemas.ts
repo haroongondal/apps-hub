@@ -3,8 +3,8 @@ import { APPS } from './apps.ts';
 
 // Per app: where its on-device database version lives; schemas.test.ts keeps `version` and the file list honest.
 export type SchemaSource =
-  | { kind: 'const'; db: string; file: string; pattern: RegExp; version: number }
-  | { kind: 'steps'; db: string; file: string; name: string; version: number }
+  | { kind: 'const'; db: string; file: string; pattern: RegExp; version: number; marker?: string }
+  | { kind: 'steps'; db: string; file: string; name: string; version: number; marker?: string }
   | { kind: 'unversioned'; db: string; file: string; why: string };
 
 export const SCHEMAS: Record<string, SchemaSource[]> = {
@@ -27,7 +27,7 @@ export const SCHEMAS: Record<string, SchemaSource[]> = {
   halo: [],
   'ai-hub': [],
   strongroom: [
-    { kind: 'const', db: 'strongroom.db', file: 'apps/strongroom/modules/strongroom-vault/android/src/main/java/expo/modules/strongroomvault/android/SqliteRecordStore.kt', pattern: /const val VERSION = (\d+)/g, version: 2 },
+    { kind: 'const', db: 'strongroom.db', file: 'apps/strongroom/modules/strongroom-vault/android/src/main/java/expo/modules/strongroomvault/android/SqliteRecordStore.kt', pattern: /const val VERSION = (\d+)/g, version: 2, marker: 'strongroom\\.db' },
   ],
   inflow: [
     { kind: 'const', db: 'Inflow archive (SQLCipher)', file: 'apps/inflow/modules/inflow-core/android/src/main/java/expo/modules/inflowcore/android/SqlItemStore.kt', pattern: /private const val SCHEMA_VERSION = (\d+)/g, version: 10 },
@@ -88,28 +88,42 @@ const succeeds = (repoDir: string, args: string[]) => {
   }
 };
 
-// True when `sha` is older than the first commit that added `file` (following renames): the database did not exist yet.
-function predatesFile(repoDir: string, sha: string, file: string): boolean {
+// Absent only when `sha` predates the file's first add AND no file under apps/ or packages/ still holds the database's
+// marker there: git's rename detection misses moves with edits and extractions, which look like an add.
+function predatesFile(repoDir: string, sha: string, source: SchemaSource & { kind: 'const' | 'steps' }): boolean {
+  let firstAdd: string | undefined;
   try {
-    const firstAdd = run(repoDir, ['log', '--follow', '--diff-filter=A', '--format=%H', '--', file]).trim().split('\n').filter(Boolean).pop();
-    return !!firstAdd && firstAdd !== sha && succeeds(repoDir, ['merge-base', '--is-ancestor', sha, firstAdd]);
+    firstAdd = run(repoDir, ['log', '--follow', '--diff-filter=A', '--format=%H', '--', source.file]).trim().split('\n').filter(Boolean).pop();
   } catch {
     return false;
   }
+  if (!firstAdd || firstAdd === sha || !succeeds(repoDir, ['merge-base', '--is-ancestor', sha, firstAdd])) return false;
+  try {
+    execFileSync('git', ['grep', '-l', '-E', markerOf(source), sha, '--', 'apps', 'packages'], { cwd: repoDir, stdio: 'ignore' });
+    return false;
+  } catch (e) {
+    return (e as { status?: number }).status === 1;
+  }
 }
 
-// A file missing at a commit is absent only when the app folder is, or the file had not been created yet; else it may have moved.
+// git grep -E has no \d, and `\b` is not ERE either; the registry's own detection pattern is reused.
+export function markerOf(source: SchemaSource & { kind: 'const' | 'steps' }): string {
+  if (source.marker) return source.marker;
+  return source.kind === 'steps' ? `const ${source.name}[: =]` : source.pattern.source.replaceAll('\\d', '[0-9]');
+}
+
+// A file missing at a commit is absent only when the app folder is, or the database had not been created yet; else it may have moved.
 function readAt(repoDir: string, sha: string, source: SchemaSource, appDir: string): Read {
   if (source.kind === 'unversioned') return { present: false };
   try {
     return { present: true, version: readVersion(run(repoDir, ['show', `${sha}:${source.file}`]), source) };
   } catch {
-    if (!succeeds(repoDir, ['cat-file', '-e', `${sha}:${appDir}`]) || predatesFile(repoDir, sha, source.file)) return { present: false };
+    if (!succeeds(repoDir, ['cat-file', '-e', `${sha}:${appDir}`]) || predatesFile(repoDir, sha, source)) return { present: false };
     return { present: true, version: null, problem: 'moved' };
   }
 }
 
-const WHY = {
+export const WHY = {
   commit: 'a commit the Store recorded for the published build is not in this checkout (run git fetch origin main)',
   guess: 'the Store records no commit for the published build, so what the phones hold is only a guess from HEAD and origin/main',
   moved: 'a registered file is missing at one of the commits although the app is there, so it may have moved or been renamed',

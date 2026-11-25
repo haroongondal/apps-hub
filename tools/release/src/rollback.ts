@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { nextVersionCode, type StoreManifest } from '@apps-hub/store-manifest';
 import { APPS } from './apps.ts';
-import { checkSchemas, type SchemaCheck } from './schemas.ts';
+import { WHY, checkSchemas, type SchemaCheck } from './schemas.ts';
 
 export interface RollbackPlan {
   id: string;
@@ -160,7 +160,8 @@ export function schemaNotice(p: RollbackPlan, accepted: boolean): string[] {
       : []),
     ...(unknown.length
       ? [`Not rolled back: the tool could not tell whether ${p.id}'s data on the phone is newer than the older build can open.`, ...unknown.map(schemaLine),
-         'Fetch origin and run it again, or, if you are sure the data is not newer, pass --accept-newer-data.']
+         ...(unknown.some((c) => c.why === WHY.commit) ? ['Fetch origin and run it again, or, if you are sure the data is not newer, pass --accept-newer-data.'] : []),
+         ...(unknown.some((c) => c.why !== WHY.commit) ? ["Check the file's history by hand, then pass --accept-newer-data if you are sure the data is not newer."] : [])]
       : []),
     newer.length ? 'Nothing was built or published. To go back anyway, pass --accept-newer-data.' : 'Nothing was built or published.',
   ];
