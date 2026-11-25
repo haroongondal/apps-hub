@@ -1,8 +1,32 @@
-# Phone checks: every check still not run (2026-11-25)
+# Phone checks (list written 2026-11-25, first results 2026-11-26)
 
-One list for the owner's phone, for both waves: the ecosystem wave that merged on 2026-11-24 (PRs #75 to #109) and the fixes wave on the `fix/*` branches (`docs/handoffs/ecosystem-fixes.md`). **Every check below is NOT RUN.** Nobody has driven the phone for any of them; no stream of the fixes wave touched it. Each app section has two parts: "Fixes wave" (new, exact steps from the stream reports) and "Ecosystem wave" (the checks `docs/handoffs/ecosystem.md` and the app's own handoff list as not run, in plain order; where a handoff holds a long list the steps are shortened here and the handoff section is named, which stays the full wording).
+One list for the owner's phone, for both waves: the ecosystem wave that merged on 2026-11-24 (PRs #75 to #109) and the fixes wave on the `fix/*` branches (`docs/handoffs/ecosystem-fixes.md`). **Unless the results section below says otherwise, a check is NOT RUN.** The first results are in "Results so far" below; everything it does not name was not run. Each app section has two parts: "Fixes wave" (new, exact steps from the stream reports) and "Ecosystem wave" (the checks `docs/handoffs/ecosystem.md` and the app's own handoff list as not run, in plain order; where a handoff holds a long list the steps are shortened here and the handoff section is named, which stays the full wording).
 
 Results go back into the app's own handoff under its phone-check heading, with the date, the build (versionName and versionCode from the Store) and pass or fail.
+
+## Results so far (2026-11-26)
+
+Driven by Claude over USB adb on the owner's phone (real phone, installs through the Store only, one coord claim per app). Builds on the phone: Store 28, AI hub 9 (0.1.5), Deputy 20 (0.2.6), Inflow 20 (0.1.0), Halo 13 (0.7.1), HomeNet 18 (0.2.0), TunnelWall 21 (1.2.1), Strongroom 22 (0.3.0), Nexus 29 (1.4.0), Clipboard 11 (0.2.2). HomeNet to Clipboard were released from main `650f2c7c`, Halo from `19625123`. Numbers below are the item numbers in each app's section.
+
+| App | Passed | Partly or odd | Not run |
+|---|---|---|---|
+| Store (3) | Update through the Store; 3, 4, 5, 7, 8 | | 1, 2, 6 |
+| AI hub (2) | 1 (keys); Recent requests showed counts only | | the rest |
+| Deputy (4), Inflow (5) | Installed | | everything (accessibility was off; the owner skipped these) |
+| Halo (10) | 1 (reads logged only while a switch is on, none after it was off); 3 (private-lines wording); health link refused from the shell; layout glance of "Your other apps" | 2: reads resumed after Stop and Start, but no sibling ping was sent. 5: the `CHANGED` broadcast from the shell returned `result=0` and no denial line was found in logcat, so the refusal is not confirmed | 4; the rest of 5; 7; the progress ring |
+| HomeNet (9) | 9 (all three links refused from the shell); 2 at a normal pace (on, then off a second later: stays off) | 2: a double tap a fraction of a second apart left Share on (probably the control locking while it saves; the grey-out was not seen, so 3 is unconfirmed) | 1, 4 to 8, 10, 11 |
+| TunnelWall (8) | 5 and 9 (shield and health refused from the shell); 7 (Connect picked a relay, TTL 59 to 56); 6 in part (Disconnect lifts the block at once; the settings row reads "Always-on VPN is on") | 2: see finding 1 below. 1: a failed relay while armed kept the block (no leak after the first packet) and the app recovered on another relay. 8: with Shields and auto-connect on and an untrusted Wi-Fi, nothing connected within about 10 s of opening the app | 3, 4 (force-stop, Halo); a real drop from the relay side; 10 |
+| Strongroom (7) | 9 and 10 refusals from the shell; installed by the Store | | 1 to 8: the app blocks screenshots (secure window), so it cannot be driven from here; the owner skipped them. The sibling halves of 9 and 10 |
+| Nexus (6) | Today and health refused from the shell; 1 (the language row shows English); 3 (the five options and their wording); 5 (a choice is remembered); 7 (APK 48.9 to 50.7 MB, 132 GB free) | | 2 to 4 and 6 (need printed Arabic or Urdu and a camera shot); 8 to 12 |
+| Clipboard (11) | 1; 6 (no `INTERNET` permission in the installed app); 4 in part (a copied account number gets "Copy IBAN" and "Add to Inflow"; Add to Inflow opened Inflow's Add to-do screen and Back added nothing) | 4: the "Nothing was added to Inflow." message was not caught | 2, 3, 5; the rest of 4 |
+
+Findings to look at:
+
+1. TunnelWall, relay switch with the kill switch armed (item 2): with a ping at 1 per second, one reply came back on the direct path (TTL 59) at the moment of the switch, then no replies for about 38 s, then traffic through the new relay. So one packet got out, and the block held after that. Only one run; the real window is unknown.
+2. HomeNet, quick double tap on a switch ends with the switch on. Probably by design, to confirm.
+3. Halo, `am broadcast -a com.haroon.autopilot.CHANGED -p com.haroon.halo` from the shell: expected "refused", saw `result=0` and no denial line.
+
+Left behind on the phone: a test clip holding the example account number `PK36 SCBL 0000 0011 2345 6702` at the top of Clipboard's history (delete it from its row menu). Settings that were changed were put back: the Halo and HomeNet switches are off, TunnelWall's kill switch is off, Nexus reads English.
 
 ## 0. Rules for whoever drives the phone
 
