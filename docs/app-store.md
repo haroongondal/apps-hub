@@ -154,20 +154,28 @@ changelog with `[branch build <short sha>]`. CI is not affected: it builds a pus
   still cannot be trusted with data in a newer format, so they are treated the same way. The release tool therefore
   checks while it plans: `tools/release/src/schemas.ts` says, per app, where each database version
   lives (a number in Kotlin or TypeScript, or the count of a migration track's steps), and the tool reads it with
-  `git show <sha>:<file>` at the target and at the release being replaced (the published commit, or `HEAD` when the
-  manifest records none). If the replaced release's version is higher, or a file exists but its constant cannot be read,
-  the rollback is refused with a plain message, with or without `--yes`, and nothing is built. A database the target
-  never had is fine: the old build never opens it. Nothing is wiped either way.
+  `git show <sha>:<file>` at the target and at every commit whose data may be on the phones: the published commit and,
+  when the published build was itself a rollback, the release it replaced (`android.rolledBackFrom.commit`; the higher
+  schema counts, because an accepted rollback leaves the newer data on the phone). If the phones' version is higher, the
+  rollback is refused with a plain message, with or without `--yes`, and nothing is built. It is also refused ("cannot be
+  established") when a recorded commit is missing locally (never guessed from `HEAD`), when a file exists but its
+  constant cannot be read, and when the target lacks a registered file while the app folder exists there (the file may
+  have moved). When the manifest records no commit at all, `HEAD` and `origin/main`
+  are only a guess at what is published, so a target below the higher of the two is refused as "cannot be established"
+  too. A database counts as absent at the target only when the app folder is absent there as well; then the old build
+  never opens it and the rollback may go ahead. Nothing is wiped either way.
   `--accept-newer-data` overrides the refusal. It prints which databases are ahead and that the older app will not
   open that data until a newer release is installed (the rollback deletes nothing, but clearing the app's storage to
   recover would). It still needs `--yes` to build. Whether to offer this flag at all is the owner's call.
 - **Keeping the registry honest.** `schemas.test.ts` fails when a registered constant no longer matches its source
   (a schema bump), and when any tracked file in `apps/` or `packages/` declares or opens a database
   (`SQLiteOpenHelper(`, `PRAGMA user_version =`, `SCHEMA_VERSION =`, `DB_VERSION =`, a `*_STEPS` migration list,
-  `openDatabaseAsync(`) without being listed. A new app needs an entry (an empty one when it has no database).
+  `openDatabaseAsync(`, `openOrCreateDatabase(`) without being listed. A new app needs an entry (an empty one when it has no database).
 - **A release that loses a race.** The build takes minutes. Just before the upload the tool re-reads the manifest and
-  refuses to upload under a `versionCode` another release took meanwhile (it would overwrite that release's APK), saying
-  to run it again. Nothing is uploaded in that case.
+  refuses to upload when another release took that `versionCode` while this one was building (it would overwrite that
+  release's APK), saying to run it again. This closes the build-time window only: two releases that reach the upload
+  within seconds of each other can still collide. The proper fix is a write-once APK key in `tools/store-api` (a Worker
+  change that needs a deploy), not done here.
 - A rollback with `--yes` builds and publishes. It replaces what every phone gets from the Store, so run it only
   on the owner's go.
 

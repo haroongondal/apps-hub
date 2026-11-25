@@ -78,31 +78,52 @@ describe('checkSchemas', () => {
   const v2 = commit(repo, { [CLIP]: clipSource(2) });
   const renamed = commit(repo, { [CLIP]: 'class ClipStore { val db = Helper("clips.db") }\n' });
   const none = commit(repo, { [CLIP]: '', [`${CLIP}.gone`]: 'x' });
-  git(repo, 'rm', '-q', CLIP);
+  git(repo, 'rm', '-q', CLIP, `${CLIP}.gone`);
   git(repo, 'commit', '-m', 'drop');
   const dropped = git(repo, 'rev-parse', 'HEAD');
 
   it('flags a target whose schema is older than the one it would replace', () => {
-    assert.deepEqual(checkSchemas(repo, 'clipboard', v1, v2), [{ app: 'clipboard', db: 'clips.db', target: 1, current: 2, verdict: 'newer' }]);
+    assert.deepEqual(checkSchemas(repo, 'clipboard', v1, [v2]), [{ app: 'clipboard', db: 'clips.db', target: 1, current: 2, verdict: 'newer' }]);
   });
 
   it('passes an equal schema, and a target that never had the database', () => {
-    assert.equal(checkSchemas(repo, 'clipboard', v2, v2)[0].verdict, 'ok');
-    assert.deepEqual(checkSchemas(repo, 'clipboard', dropped, v2)[0], { app: 'clipboard', db: 'clips.db', target: null, current: 2, verdict: 'ok' });
+    assert.equal(checkSchemas(repo, 'clipboard', v2, [v2])[0].verdict, 'ok');
+    assert.deepEqual(checkSchemas(repo, 'clipboard', dropped, [v2])[0], { app: 'clipboard', db: 'clips.db', target: null, current: 2, verdict: 'ok' });
   });
 
   it('cannot rule out a file whose constant is no longer readable', () => {
-    assert.equal(checkSchemas(repo, 'clipboard', renamed, v2)[0].verdict, 'unknown');
-    assert.equal(checkSchemas(repo, 'clipboard', v1, renamed)[0].verdict, 'unknown');
-    assert.equal(checkSchemas(repo, 'clipboard', none, v2)[0].verdict, 'unknown');
+    assert.equal(checkSchemas(repo, 'clipboard', renamed, [v2])[0].verdict, 'unknown');
+    assert.equal(checkSchemas(repo, 'clipboard', v1, [renamed])[0].verdict, 'unknown');
+    assert.equal(checkSchemas(repo, 'clipboard', none, [v2])[0].verdict, 'unknown');
+  });
+
+  it('a registered file missing at the target while the app exists there is unknown, not "never had it"', () => {
+    const moved = join(tmp, 'moved');
+    mkdirSync(moved);
+    git(moved, 'init', '-b', 'main');
+    const before = commit(moved, { [CLIP.replace('/android/src/main/java', '/android/src/main/kotlin')]: clipSource(1), 'apps/clipboard/App.tsx': 'x' });
+    const after = commit(moved, { [CLIP]: clipSource(2) });
+    git(moved, 'rm', '-q', CLIP.replace('/android/src/main/java', '/android/src/main/kotlin'));
+    git(moved, 'commit', '-m', 'move');
+    const check = checkSchemas(moved, 'clipboard', before, [git(moved, 'rev-parse', 'HEAD')]);
+    assert.equal(check[0].verdict, 'unknown');
+    assert.equal(after.length, 40);
+  });
+
+  it('takes the highest schema of several commits, and says unknown when the commits cannot be named or are only a guess', () => {
+    assert.equal(checkSchemas(repo, 'clipboard', v2, [v1, v2])[0].verdict, 'ok');
+    assert.deepEqual(checkSchemas(repo, 'clipboard', v1, [v1, v2])[0], { app: 'clipboard', db: 'clips.db', target: 1, current: 2, verdict: 'newer' });
+    assert.equal(checkSchemas(repo, 'clipboard', v2, null)[0].verdict, 'unknown');
+    assert.equal(checkSchemas(repo, 'clipboard', v1, [v2], false)[0].verdict, 'unknown');
+    assert.equal(checkSchemas(repo, 'clipboard', v2, [v2], false)[0].verdict, 'ok');
   });
 
   it('has nothing to check for an app without a database or an unknown id', () => {
-    assert.deepEqual(checkSchemas(repo, 'deputy', v1, v2), []);
-    assert.deepEqual(checkSchemas(repo, 'nope', v1, v2), []);
+    assert.deepEqual(checkSchemas(repo, 'deputy', v1, [v2]), []);
+    assert.deepEqual(checkSchemas(repo, 'nope', v1, [v2]), []);
   });
 
   it('reads the real tree: every registered database is readable at HEAD', () => {
-    for (const id of Object.keys(SCHEMAS)) for (const c of checkSchemas(ROOT, id, 'HEAD', 'HEAD')) assert.equal(c.verdict, 'ok', `${id} ${c.db}`);
+    for (const id of Object.keys(SCHEMAS)) for (const c of checkSchemas(ROOT, id, 'HEAD', ['HEAD'])) assert.equal(c.verdict, 'ok', `${id} ${c.db}`);
   });
 });

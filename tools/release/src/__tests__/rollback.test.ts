@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
 import { SIGNING_CERT_SHA256, emptyManifest, upsertAndroidRelease, type AndroidRelease, type StoreManifest } from '@apps-hub/store-manifest';
-import { androidEntry, assertVersionStillFree } from '../release-android.ts';
+import { androidEntry, assertVersionStillFree, releaseAndroid } from '../release-android.ts';
 import { blockingSchemas, formatPlan, gateRollback, planRollback, rollbackFlagError, rolledBackFrom, storeTarget, withWorktree, type RollbackPlan } from '../rollback.ts';
 
 const tmp = mkdtempSync(join(tmpdir(), 'release-rollback-'));
@@ -275,16 +275,94 @@ describe('rollback over a database', () => {
     assert.equal(planRollback({ repoDir: clone, id: 'netlens', manifest: published(41, c3), to: c1 }).schemas[0].target, 1);
   });
 
-  it('is fine when the schema did not change, and when the older build had a lower one that the phone never saw', () => {
+  it('is fine when the schema did not change', () => {
     const { clone, shas: [, , c3] } = schemaFixture([2, 2, 2]);
     assert.equal(planRollback({ repoDir: clone, id: 'netlens', manifest: published(41, c3) }).schemas[0].verdict, 'ok');
   });
 
-  it('compares with HEAD when the current release has no commit recorded', () => {
+  it('compares with HEAD and origin/main when the current release has no commit recorded, and can only say unknown', () => {
     const { clone, shas: [c1] } = schemaFixture([1, 1, 2]);
     const plan = planRollback({ repoDir: clone, id: 'netlens', manifest: published(5), to: c1 });
     assert.equal(plan.schemas[0].current, 2);
+    assert.equal(plan.schemas[0].verdict, 'unknown');
+  });
+});
+
+describe('which commits decide what the phones hold', () => {
+  const withRolledBack = (versionCode: number, commit: string, from: string): StoreManifest => {
+    const m = published(versionCode, commit);
+    m.apps[0].android!.rolledBackFrom = { versionCode: versionCode - 1, versionName: '0.3.0', commit: from };
+    return m;
+  };
+
+  it('refuses when the replaced release\'s commit is unknown and HEAD is older than the published schema', () => {
+    const { clone, shas: [c1, c2] } = schemaFixture([1, 1, 2]);
+    git(clone, 'checkout', '-q', '--detach', c2); // HEAD behind origin/main, which has the schema 2 commit
+    const plan = planRollback({ repoDir: clone, id: 'netlens', manifest: published(5), to: c1 });
+    assert.equal(plan.schemas[0].verdict, 'unknown');
+    assert.equal(gateRollback(plan, { yes: true, acceptNewerData: false }).exitCode, 1);
+  });
+
+  it('with no commit recorded, an ahead schema on origin/main blocks even when HEAD matches the target', () => {
+    const { clone, shas: [c1] } = schemaFixture([1, 1, 2]);
+    git(clone, 'checkout', '-q', '--detach', c1);
+    assert.equal(planRollback({ repoDir: clone, id: 'netlens', manifest: published(5), to: c1 }).schemas[0].verdict, 'unknown');
+  });
+
+  it('marks every schema unknown when the recorded commit is missing locally, and never falls back to HEAD', () => {
+    const { clone, shas: [c1] } = schemaFixture([2, 2, 2]);
+    const plan = planRollback({ repoDir: clone, id: 'netlens', manifest: published(5, 'f'.repeat(40)), to: c1 });
+    assert.deepEqual(plan.schemas.map((c) => c.verdict), ['unknown']);
+    assert.equal(blockingSchemas(plan).length, 1);
+  });
+
+  it('a second rollback also counts the release the first one replaced (c0, c1, c2)', () => {
+    const { clone, shas: [c0, c1, c2] } = schemaFixture([1, 1, 2]);
+    // c2 (schema 2) was rolled back to c1 (schema 1) with --accept-newer-data; the phones still hold schema 2 data.
+    const plan = planRollback({ repoDir: clone, id: 'netlens', manifest: withRolledBack(42, c1, c2), to: c0 });
+    assert.equal(plan.schemas[0].current, 2);
     assert.equal(plan.schemas[0].verdict, 'newer');
+    assert.equal(planRollback({ repoDir: clone, id: 'netlens', manifest: published(42, c1), to: c0 }).schemas[0].verdict, 'ok');
+  });
+
+  it('cannot tell when the replaced release recorded by a rollback is missing locally', () => {
+    const { clone, shas: [c0, c1] } = schemaFixture([1, 1, 2]);
+    assert.equal(planRollback({ repoDir: clone, id: 'netlens', manifest: withRolledBack(42, c1, 'e'.repeat(40)), to: c0 }).schemas[0].verdict, 'unknown');
+  });
+});
+
+describe('releaseAndroid refuses a versionCode another release took during the build', () => {
+  const root = join(tmp, 'rel-root');
+  const apk = join(root, 'fake.apk');
+  mkdirSync(join(root, 'apps/netlens/android/app'), { recursive: true });
+  writeFileSync(join(root, 'apps/netlens/app.json'), JSON.stringify({ expo: { version: '0.3.0' } }));
+  copyFileSync(new URL('./expo-template.build.gradle', import.meta.url), join(root, 'apps/netlens/android/app/build.gradle'));
+  writeFileSync(apk, 'apk bytes');
+  const build = {
+    assembleRelease: () => apk,
+    inspectApk: () => ({ packageName: 'app.netlens', versionCode: 25, versionName: '0.3.0', minSdk: 24, signers: [SIGNING_CERT_SHA256] }),
+    sha256File: async () => 'c'.repeat(64),
+  };
+  const run = (live: StoreManifest) => {
+    const uploads: string[] = [];
+    const result = releaseAndroid({
+      root, id: 'netlens', versionCode: 25, changelog: '', commit: 'a'.repeat(40), build,
+      fetchManifest: async () => live,
+      upload: async (key) => { uploads.push(key); },
+    });
+    return { result, uploads };
+  };
+
+  it('uploads nothing when the live manifest already holds that versionCode', async () => {
+    const { result, uploads } = run(published(25));
+    await assert.rejects(result, /another release while this one was building/);
+    assert.deepEqual(uploads, []);
+  });
+
+  it('uploads and publishes when the live manifest is still below it', async () => {
+    const { result, uploads } = run(published(24));
+    assert.equal((await result).apps[0].android?.versionCode, 25);
+    assert.deepEqual(uploads, ['apps/netlens/android/25.apk']);
   });
 });
 
@@ -369,7 +447,7 @@ describe('rollback result in the manifest', () => {
     assert.equal(m.apps[0].android?.versionName, '0.2.0');
     assert.equal(m.apps[0].android?.commit, sha);
     assert.equal(upsertAndroidRelease(m, { id: 'netlens', name: 'HomeNet', changelog: '' }, release(43)).apps[0].android?.rolledBackFrom, undefined);
-    assert.equal(androidEntry({ ...{ info: { packageName: 'app.netlens', versionCode: 9, versionName: '1', minSdk: 24 } }, versionName: '1', apkPath: 'x', sha256: 'b'.repeat(64), sizeBytes: 1, commit: sha }).rolledBackFrom, undefined);
+    assert.equal(androidEntry({ info: { packageName: 'app.netlens', versionCode: 9, versionName: '1', minSdk: 24 }, versionName: '1', apkPath: 'x', sha256: 'b'.repeat(64), sizeBytes: 1, commit: sha }).rolledBackFrom, undefined);
   });
 });
 

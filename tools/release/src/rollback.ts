@@ -97,10 +97,16 @@ export function planRollback(o: { repoDir: string; id: string; manifest: StoreMa
     throw new Error(`${id}: ${app.dir}/app.json does not exist or has no expo.version at ${toCommit.slice(0, 7)}. The app is not in that commit.`);
   }
 
-  const knownFrom = fromCommit !== undefined && gitOk(repoDir, ['cat-file', '-e', `${fromCommit}^{commit}`]);
-  const currentRef = knownFrom ? fromCommit : 'HEAD';
+  const local = (sha: string) => gitOk(repoDir, ['cat-file', '-e', `${sha}^{commit}`]);
+  const currentRef = fromCommit !== undefined && local(fromCommit) ? fromCommit : 'HEAD';
   const changed = git(repoDir, ['diff', '--name-only', currentRef, toCommit]).split('\n').filter(Boolean);
   const files = { app: changed.filter((f) => f.startsWith(`${app.dir}/`)), other: changed.filter((f) => !f.startsWith(`${app.dir}/`)).length };
+
+  // Whose data can be on the phones: the published commit and the release a rollback replaced (it may have been
+  // accepted over newer data). Missing locally means we cannot tell. With no commit recorded, HEAD and main are a guess.
+  const rolledFrom = current.rolledBackFrom?.commit;
+  const named = fromCommit ? [fromCommit, ...(rolledFrom ? [rolledFrom] : [])] : undefined;
+  const refs = named ? (named.every(local) ? named : null) : gitOk(repoDir, ['rev-parse', '--verify', '--quiet', mainRef]) ? ['HEAD', mainRef] : null;
 
   const newVersionCode = nextVersionCode(o.manifest, id);
   if (!(newVersionCode > current.versionCode)) throw new Error(`${id}: new versionCode ${newVersionCode} must exceed published ${current.versionCode}.`);
@@ -114,7 +120,7 @@ export function planRollback(o: { repoDir: string; id: string; manifest: StoreMa
     newVersionCode,
     changelog: `Rollback to ${toVersionName} (${toCommit.slice(0, 7)})`,
     files,
-    schemas: checkSchemas(repoDir, id, toCommit, currentRef),
+    schemas: checkSchemas(repoDir, id, toCommit, refs, fromCommit !== undefined),
   };
 }
 
@@ -130,7 +136,7 @@ const MAX_LISTED = 15;
 
 function schemaLine(c: SchemaCheck): string {
   return c.verdict === 'unknown'
-    ? `  ${c.db}: the version cannot be read at one of the two commits, so a newer schema cannot be ruled out`
+    ? `  ${c.db}: what the phones hold cannot be established (a commit is unknown here, a file moved, or no commit is recorded), so a newer schema cannot be ruled out`
     : `  ${c.db}: the phone's data is at version ${c.current}, the older build understands ${c.target}`;
 }
 

@@ -54,11 +54,14 @@ export interface ReleaseAndroidOptions {
   commit: string;
   /** Set for a rollback: the published release this build replaces. */
   rolledBackFrom?: AndroidRelease['rolledBackFrom'];
+  /** Replaceable in tests; the real build tools by default. */
+  build?: { assembleRelease: typeof assembleRelease; inspectApk: typeof inspectApk; sha256File: typeof sha256File };
   upload: (key: string, body: Buffer | string, contentType: string) => Promise<void>;
 }
 
 export async function releaseAndroid(o: ReleaseAndroidOptions): Promise<StoreManifest> {
   const { id, versionCode } = o;
+  const build = o.build ?? { assembleRelease, inspectApk, sha256File };
   const app = APPS[id];
   const appDir = resolve(o.root, app.dir);
   for (const [cmd, ...args] of app.prepare ?? []) execFileSync(cmd, args, { cwd: appDir, stdio: 'inherit' });
@@ -76,8 +79,8 @@ export async function releaseAndroid(o: ReleaseAndroidOptions): Promise<StoreMan
   const versionName: string = JSON.parse(readFileSync(join(appDir, 'app.json'), 'utf8')).expo.version;
   console.log(`\n▶ ${id}: building ${versionName} (${versionCode})`);
 
-  const apk = assembleRelease(appDir, versionCode, versionName);
-  const info = inspectApk(apk);
+  const apk = build.assembleRelease(appDir, versionCode, versionName);
+  const info = build.inspectApk(apk);
   if (info.signers.length !== 1 || info.signers[0] !== SIGNING_CERT_SHA256) {
     throw new Error(`${id}: APK signed by [${info.signers}], expected ${SIGNING_CERT_SHA256}. Is ~/.gradle/gradle.properties set up?`);
   }
@@ -87,7 +90,7 @@ export async function releaseAndroid(o: ReleaseAndroidOptions): Promise<StoreMan
 
   const bytes = readFileSync(apk);
   const apkPath = `apps/${id}/android/${versionCode}.apk`;
-  const android = androidEntry({ info, versionName, apkPath, sha256: await sha256File(apk), sizeBytes: bytes.length, commit: o.commit, rolledBackFrom: o.rolledBackFrom });
+  const android = androidEntry({ info, versionName, apkPath, sha256: await build.sha256File(apk), sizeBytes: bytes.length, commit: o.commit, rolledBackFrom: o.rolledBackFrom });
   assertVersionStillFree(await o.fetchManifest(), id, versionCode);
   console.log(`▶ ${id}: uploading ${apkPath} (${(bytes.length / 1e6).toFixed(1)} MB)`);
   for (let attempt = 1; ; attempt++) {

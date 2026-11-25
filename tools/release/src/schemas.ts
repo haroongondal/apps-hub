@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { APPS } from './apps.ts';
 
 // Per app: where its on-device database version lives; schemas.test.ts keeps `version` and the file list honest.
 export type SchemaSource =
@@ -75,30 +76,40 @@ export interface SchemaCheck {
 
 type Read = { present: false } | { present: true; version: number | null };
 
-function readAt(repoDir: string, sha: string, source: SchemaSource): Read {
+// A file missing at a commit counts as absent only when the app folder is absent too; otherwise it may have moved.
+function readAt(repoDir: string, sha: string, source: SchemaSource, appDir: string): Read {
   if (source.kind === 'unversioned') return { present: false };
-  let text: string;
   try {
-    text = execFileSync('git', ['show', `${sha}:${source.file}`], { cwd: repoDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 });
+    const text = execFileSync('git', ['show', `${sha}:${source.file}`], { cwd: repoDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 });
+    return { present: true, version: readVersion(text, source) };
   } catch {
-    return { present: false };
+    try {
+      execFileSync('git', ['cat-file', '-e', `${sha}:${appDir}`], { cwd: repoDir, stdio: 'ignore' });
+      return { present: true, version: null };
+    } catch {
+      return { present: false };
+    }
   }
-  return { present: true, version: readVersion(text, source) };
 }
 
-export function checkSchemas(repoDir: string, id: string, toCommit: string, currentRef: string): SchemaCheck[] {
+// `refs` are the commits whose data may be on the phone (the highest schema counts); null when they cannot be named.
+// `certain` is false when they are only a guess (no commit recorded), so an ahead schema is "unknown", not proof.
+export function checkSchemas(repoDir: string, id: string, toCommit: string, refs: string[] | null, certain = true): SchemaCheck[] {
+  const appDir = APPS[id]?.dir ?? '';
   const out: SchemaCheck[] = [];
   for (const source of SCHEMAS[id] ?? []) {
     if (source.kind === 'unversioned') continue;
-    const cur = readAt(repoDir, currentRef, source);
-    const tgt = readAt(repoDir, toCommit, source);
-    const current = cur.present ? cur.version : null;
+    const tgt = readAt(repoDir, toCommit, source, appDir);
     const target = tgt.present ? tgt.version : null;
+    const curs = (refs ?? []).map((r) => readAt(repoDir, r, source, appDir)).filter((r) => r.present);
+    const versions = curs.map((r) => (r.present ? r.version : null));
+    const current = versions.length && !versions.includes(null) ? Math.max(...(versions as number[])) : null;
     let verdict: SchemaVerdict = 'ok';
-    if (cur.present && tgt.present) {
-      if (current === null || target === null) verdict = 'unknown';
-      else if (target < current) verdict = 'newer';
-    } else if (cur.present && current === null) verdict = 'unknown';
+    if (refs === null || versions.includes(null)) verdict = 'unknown';
+    else if (curs.length && tgt.present) {
+      if (target === null) verdict = 'unknown';
+      else if (target < (current as number)) verdict = certain ? 'newer' : 'unknown';
+    }
     out.push({ app: id, db: source.db, target, current, verdict });
   }
   return out;
