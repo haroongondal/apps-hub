@@ -131,7 +131,7 @@ Current apps:
   `cache/pdfscan-share/` and must never be widened. `classifyShared` and
   `intakeShared(payload, deps)` are the intake an action can call. Nexus cannot capture call audio
   (Android blocks it); it can import a recording another app saved. Offline OCR
-  (`packages/text-ocr`, Tesseract4Android 4.9.0 Apache-2.0, English only) feeds nothing into Nexus
+  (`packages/text-ocr`, Tesseract4Android 4.9.0 Apache-2.0; English, Arabic and Urdu models) feeds nothing into Nexus
   today.
   AI hub only: Nexus sends every AI call (Gemini embeddings at 512 dimensions, Gemini image
   reading, Groq Whisper transcription with timed segments, and chat for the graph, Ask, Minutes,
@@ -486,7 +486,7 @@ Current apps:
   open. Tests: `tests/dry-run.test.ts` (vitest, no Electron).
 
 - **text-ocr** (`packages/text-ocr`) — Expo local module shared by Design Editor mobile and
-  PDF Editor: Tesseract (English, bundled `tessdata_fast`) plus a clipboard copy, Android only.
+  PDF Editor: Tesseract (English, Arabic and Urdu, bundled `tessdata_fast`; English unless the caller passes a language) plus a clipboard copy, Android only.
   Design Editor: long-press an image, "Copy text" (bridge event `recognizeText`). PDF Editor:
   "+" → "Scan text" (`app/scan-text.tsx`, system camera through expo-image-picker). The Scan
   branch's Phase 4 OCR in `pdf-scan` is separate and unchanged.

@@ -2,6 +2,7 @@ package expo.modules.textocr
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -23,5 +24,17 @@ class RecognizerTest {
   @Test fun dropsEmptyAndBlankText() {
     assertFalse(keepLine(null, 99f))
     assertFalse(keepLine("  \n", 99f))
+  }
+
+  @Test fun noLanguageMeansEnglish() = assertEquals(listOf("eng"), languageCodes(null))
+
+  @Test fun languagesKeepTheirOrder() {
+    assertEquals(listOf("ara", "eng"), languageCodes("ara+eng"))
+    assertEquals(listOf("urd"), languageCodes("urd"))
+  }
+
+  @Test fun unknownOrRepeatedLanguagesAreRefused() {
+    for (bad in listOf("", "fra", "eng+", "+eng", "eng+eng", "../eng", "eng+../ara", "ENG", "ara eng"))
+      assertThrows(bad, IllegalArgumentException::class.java) { languageCodes(bad) }
   }
 }

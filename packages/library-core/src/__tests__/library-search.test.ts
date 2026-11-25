@@ -100,6 +100,21 @@ test('a ZWNJ in the text does not split the word', async () => {
   assert.deepEqual(ids(await lib.search('\u{0645}\u{06CC}\u{062E}\u{0648}\u{0627}\u{0647}\u{0645}')), [a.id]);
 });
 
+// Tesseract's Arabic and Urdu models put a left-to-right or right-to-left mark around each run of the other script
+// (measured in packages/text-ocr/test-fixtures/results.json). That text goes into the Library body as it is, so the
+// index has to cope with the marks.
+test('OCR text with direction marks around English runs is found by every word', async () => {
+  const LRM = '\u{200E}';
+  const RLM = '\u{200F}';
+  const NOTES = '\u{0645}\u{0644}\u{0627}\u{062D}\u{0638}\u{0627}\u{062A}';
+  const TOTAL = '\u{0627}\u{0644}\u{0645}\u{062C}\u{0645}\u{0648}\u{0639}';
+  const { lib } = await openLibrary();
+  const a = await lib.createItem({ kind: 'scan', title: 'Page 1', body: `${LRM}Meeting notes${RLM} ${NOTES} ${LRM}Total${RLM} ${TOTAL} 350 ${LRM}USD${RLM}` });
+  for (const word of ['Meeting', 'notes', NOTES, 'Total', TOTAL, '350', 'USD', `${NOTES} ${TOTAL}`]) {
+    assert.deepEqual(ids(await lib.search(word)), [a.id], word);
+  }
+});
+
 test('list: scope, kind, sort and paging', async () => {
   const { lib } = await openLibrary();
   const work = await lib.createFolder('Work', null);
