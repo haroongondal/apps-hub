@@ -132,6 +132,7 @@ class AiHubCoreModule : Module() {
         c.error?.let { put("error", it) }
         c.httpCode?.let { put("code", it) }
         if (c.fellBack) put("fellBack", true)
+        c.detail?.let { put("detail", it) }
       }
     }
   }

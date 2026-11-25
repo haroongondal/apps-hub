@@ -91,7 +91,7 @@ object ProviderJson {
     }
   }.toString()
 
-  fun parseChat(body: String, served: ModelChoice): ModelTurn = readable(served.service) {
+  fun parseChat(body: String, served: ModelChoice): ModelTurn = readable(served.service, body) {
     val root = Json.parseToJsonElement(body).jsonObject
     val message = root["choices"]!!.jsonArray.first().jsonObject["message"]!!.jsonObject
     val calls = (message["tool_calls"] as? JsonArray).orEmpty().map { tc ->
@@ -127,10 +127,19 @@ object ProviderJson {
     return out.toByteArray()
   }
 
-  inline fun <T> readable(service: Service, block: () -> T): T = try {
+  // The reply came back 2xx but did not parse, so it is logged as HTTP 200 with its shape (field names and counts, never values).
+  inline fun <T> readable(service: Service, body: String, wanted: Int? = null, block: () -> T): T = try {
     block()
   } catch (e: RuntimeException) {
-    throw AiError(AiError.Kind.SERVER, "${service.label} sent a reply AI hub couldn't read. Try again later.")
+    throw AiError(AiError.Kind.SERVER, "${service.label} sent a reply AI hub couldn't read. Try again later.", service = service, httpCode = 200, detail = shapeOf(body, wanted))
+  }
+
+  fun shapeOf(body: String, wanted: Int? = null): String = try {
+    val root = Json.parseToJsonElement(body).jsonObject
+    val data = root["data"] as? JsonArray
+    "fields " + root.keys.take(6).joinToString(",").take(60) + (data?.let { ", data ${it.size}" } ?: "") + (wanted?.let { " of $it texts" } ?: "")
+  } catch (e: Exception) {
+    "not JSON, ${body.length} bytes"
   }
 
   private val REPLAYED = setOf("role", "content", "tool_calls", "reasoning_details")
@@ -164,7 +173,7 @@ class Provider(
       dimensions?.let { put("dimensions", it) }
     }.toString().toByteArray()
     val (_, body) = send(listOf(choice), "embeddings", JSON) { request }
-    return ProviderJson.readable(choice.service) {
+    return ProviderJson.readable(choice.service, body, texts.size) {
       val data = Json.parseToJsonElement(body).jsonObject["data"]!!.jsonArray.map { it.jsonObject }.sortedBy { it["index"]!!.jsonPrimitive.int }
       require(data.size == texts.size)
       data.map { d -> d["embedding"]!!.jsonArray.map { it.jsonPrimitive.float }.toFloatArray() }
@@ -176,7 +185,7 @@ class Provider(
     val fields = if (segments) mapOf("model" to choice.model, "response_format" to "verbose_json") else mapOf("model" to choice.model)
     val request = ProviderJson.multipart(boundary, fields, fileName, mime, audio)
     val (_, body) = send(listOf(choice), "audio/transcriptions", "multipart/form-data; boundary=$boundary") { request }
-    return ProviderJson.readable(choice.service) {
+    return ProviderJson.readable(choice.service, body) {
       val root = Json.parseToJsonElement(body).jsonObject
       val parts = if (!segments) null else root["segments"]!!.jsonArray.map { g ->
         val o = g.jsonObject

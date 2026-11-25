@@ -274,6 +274,21 @@ class ProviderTest {
     assertEquals(0, http.calls.size)
   }
 
+  @Test fun anEmbeddingReplyWithTheWrongCountIsLoggedAsHttp200WithItsShapeAndNoValues() {
+    val http = Fake(HttpReply(200, """{"object":"list","data":[{"index":0,"embedding":[0.123]}],"model":"secret-looking-value"}"""))
+    val e = failure { provider(http, m1).embed(Job.EMBED.default, listOf("a", "b", "c")) }
+    assertEquals(AiError.Kind.SERVER, e.kind)
+    assertEquals(200, e.httpCode)
+    assertEquals(Service.GEMINI, e.service)
+    assertEquals("fields object,data,model, data 1 of 3 texts", e.detail)
+    assertFalse(e.detail!!.contains("secret-looking-value") || e.detail!!.contains("0.123"))
+  }
+
+  @Test fun aReplyThatIsNotJsonIsLoggedWithItsSizeOnly() {
+    val http = Fake(HttpReply(200, "<html>oops</html>"))
+    assertEquals("not JSON, 17 bytes", failure { provider(http, m1).embed(Job.EMBED.default, listOf("a")) }.detail)
+  }
+
   @Test fun embedSendsModelAndInputAndReturnsVectorsInInputOrder() {
     val http = Fake(HttpReply(200, """{"data":[{"index":1,"embedding":[0,1]},{"index":0,"embedding":[1,0.5]}]}"""))
     val out = provider(http, m1).embed(Job.EMBED.default, listOf("a", "b"))

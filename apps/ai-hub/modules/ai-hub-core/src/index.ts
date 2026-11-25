@@ -36,6 +36,7 @@ export interface CallInfo {
   error?: string;
   code?: number;
   fellBack?: boolean;
+  detail?: string;
 }
 
 interface AiHubCoreApi {

@@ -66,6 +66,10 @@ test('requestText says why a request failed: kind, HTTP status and whether the o
     requestText({ job: 'chat', service: 'gemini', time, error: 'server', code: 503, fellBack: true }, now),
     'Chat with Gemini failed: service error (HTTP 503), other service tried too. Used just now',
   );
+  assert.equal(
+    requestText({ job: 'embed', service: 'gemini', time, error: 'server', code: 200, detail: 'fields data, data 1 of 8 texts' }, now),
+    'Embeddings with Gemini failed: service error (HTTP 200), fields data, data 1 of 8 texts. Used just now',
+  );
   assert.equal(requestText({ job: 'embed', service: 'gemini', time, error: 'offline' }, now), 'Embeddings with Gemini failed: no connection. Used just now');
   assert.equal(requestText({ job: 'chat', service: 'groq', time, error: 'something_new' }, now), 'Chat with Groq failed: unexpected error. Used just now');
 });
