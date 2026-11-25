@@ -110,6 +110,27 @@ class ProposalTest {
     }
   }
 
+  @Test fun backAfterANewerProposalReplacedItOrTheOwnerAnsweredStillSaysWhatHappened() {
+    val a = Proposal("d1", "t", "", emptyList(), "x")
+    val b = Proposal("d2", "t", "", emptyList(), "x")
+    val c = Proposal("d3", "t", "", emptyList(), "x")
+    ProposalInbox.put(a) {}
+    try {
+      assertEquals(a, ProposalInbox.take())
+      ProposalInbox.put(b) {}
+      assertEquals("replaced after the screen took it", ProposeTask.CANCELLED, ProposalInbox.answerOnLeaving("d1"))
+      ProposalInbox.settle("d2", false)
+      assertEquals("dropped by the owner", ProposeTask.CANCELLED, ProposalInbox.answerOnLeaving("d2"))
+      ProposalInbox.put(c) {}
+      ProposalInbox.take()
+      ProposalInbox.settle("d3", true)
+      assertEquals("saved by the owner", ProposeTask.HANDED_OVER, ProposalInbox.answerOnLeaving("d3"))
+    } finally {
+      listOf("d1", "d2", "d3").forEach(ProposalInbox::forget)
+    }
+    assertEquals("forgotten ids carry nothing over", ProposeTask.HANDED_OVER, ProposalInbox.answerOnLeaving("d1"))
+  }
+
   @Test fun packageNamesAreCheckedByShape() {
     assertTrue(ProposeTask.isPackageName("com.haroon.inflow"))
     for (bad in listOf("inflow", "com..x", "com.x y", "1com.x", "com.x\n", "x".repeat(199) + ".y")) assertFalse(bad, ProposeTask.isPackageName(bad))

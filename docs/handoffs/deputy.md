@@ -1604,7 +1604,9 @@ Decisions (my call unless marked):
   before that it leaves `cancelled` (`ProposalInbox.answerOnLeaving`, set in
   `finish()`, since Back finishes before `onDestroy`). A
   newer proposal or a share replacing the sheet answers the older caller
-  `cancelled`. A recreated activity (process death) answers `cancelled`.
+  `cancelled`, also when Back reaches `finish()` before that answer lands
+  (`ProposalInbox` remembers how each proposal ended; test
+  `backAfterANewerProposalReplacedItOrTheOwnerAnsweredStillSaysWhatHappened`). A recreated activity (process death) answers `cancelled`.
 - **Kept means saved or started.** (my call) Both return `handed_over`; the sheet's
   Back returns `cancelled`.
 - **Kept apps limit the run** like a saved task's app list; removing them all

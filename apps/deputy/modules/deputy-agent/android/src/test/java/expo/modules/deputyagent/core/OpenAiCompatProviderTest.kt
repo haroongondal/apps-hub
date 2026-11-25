@@ -74,6 +74,14 @@ class OpenAiCompatProviderTest {
     assertEquals(80_000L, testScheduler.currentTime)
   }
 
+  @Test fun aRetryAfterHttpDateSetsTheWaitLikeSeconds() = runTest {
+    val noon = java.time.Instant.parse("2026-11-23T12:00:00Z").toEpochMilli()
+    val date = RetryAfter.parse("Mon, 23 Nov 2026 12:00:45 GMT", noon)
+    val http = FakeHttp(HttpReply(429, "", retryAfterMs = date), ok)
+    provider(http).step(history, emptyList())
+    assertEquals("45 s from the date, above the 10 s floor", 45_000L, testScheduler.currentTime)
+  }
+
   @Test fun aMalformedToolCallIsRetried() = runTest {
     val http = FakeHttp(HttpReply(400, """{"error":{"code":"tool_use_failed","failed_generation":"tap(9"}}"""), ok)
     provider(http).step(history, emptyList())
