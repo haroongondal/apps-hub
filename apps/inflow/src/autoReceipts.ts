@@ -3,8 +3,8 @@ import { MAX_PHOTOS_READ, matchReceipt } from './receipts.ts';
 
 const MIN = 60_000;
 const DAY = 24 * 60 * MIN;
-// A payment screenshot is taken at or after the payment; older transactions are left to the Find receipt row.
-export const AUTO = { lookbackMs: 3 * DAY, beforeMs: 30 * MIN, afterMs: DAY, readsPerRun: 12 };
+// The screenshot is taken at the payment, but a bank email can reach Inflow nearly an hour later (seen: 46 minutes), hence the 3 hours before.
+export const AUTO = { lookbackMs: 3 * DAY, beforeMs: 3 * 60 * MIN, afterMs: DAY, readsPerRun: 12 };
 
 // Words a payment confirmation screen shows; an amount alone also matches a balance or a price.
 const PAID = /\b(?:success\w*|sent|paid|payment|transfer\w*|transaction|receipt|raast)\b/i;

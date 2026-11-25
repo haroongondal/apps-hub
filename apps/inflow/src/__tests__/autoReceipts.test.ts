@@ -62,6 +62,13 @@ test('a matching screenshot is attached to the first source of the payment', asy
   assert.deepEqual(attached, [[7, 'shot']]);
 });
 
+test('a screenshot taken before a delayed bank email arrived is still found', async () => {
+  const t = txn();   // recorded when the email arrived, 46 minutes after the payment and its screenshot
+  const { p, attached } = ports({ txns: [t], photos: [{ uri: 'shot', takenAt: t.at - 46 * 60_000 }], text: { shot: 'Sent Rs 5,000 to Some Person' } });
+  assert.equal(await runAutoReceipts(p, new Map(), () => true), 1);
+  assert.deepEqual(attached, [[7, 'shot']]);
+});
+
 test('payments that have a receipt, are older than three days, or came in are not searched', async () => {
   const photos = [{ uri: 'shot', takenAt: NOW - 1000 }];
   const text = { shot: 'Sent Rs 5,000 to Some Person' };
