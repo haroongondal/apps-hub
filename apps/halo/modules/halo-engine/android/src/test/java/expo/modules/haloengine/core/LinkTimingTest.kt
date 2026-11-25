@@ -46,6 +46,52 @@ class LinkTimingTest {
     assertEquals(t + RereadGate.MIN_GAP_MS, g.onOpen(t + 30_000))
   }
 
+  private class Posted {
+    val delays = mutableListOf<Long>()
+    var removed = 0
+
+    fun slot() = RereadSlot(RereadGate(), { delays += it }, { removed++ }, { 1_000_000L })
+  }
+
+  @Test fun aSlotPostsTheReadAfterTheGatesDelayAndKeepsOnlyOnePending() {
+    val p = Posted()
+    val slot = p.slot()
+    slot.ping()
+    assertEquals(listOf(RereadGate.SETTLE_MS), p.delays)
+    slot.ping()
+    assertEquals(1, p.delays.size)
+  }
+
+  // Links.stop() (the service ends) and Links.clear() (every link switch off) both call slot.cancel().
+  @Test fun cancelTakesThePostedReadOffTheClockAndFreesTheGate() {
+    val p = Posted()
+    val slot = p.slot()
+    slot.opened()
+    slot.opened()
+    assertEquals(1, p.delays.size)
+    val removedBefore = p.removed
+    slot.cancel()
+    assertEquals(removedBefore + 1, p.removed)
+    slot.opened()
+    assertEquals(2, p.delays.size)
+  }
+
+  @Test fun withoutCancelARequestStaysPendingAndBlocksTheNextOne() {
+    val p = Posted()
+    val slot = p.slot()
+    slot.ping()
+    slot.opened()
+    slot.stale()
+    assertEquals(1, p.delays.size)
+  }
+
+  @Test fun cancelBeforeAnyRequestIsHarmless() {
+    val p = Posted()
+    p.slot().cancel()
+    assertEquals(1, p.removed)
+    assertEquals(emptyList<Long>(), p.delays)
+  }
+
   @Test fun theAlwaysOnScreenRereadsOnlyDataOlderThanFifteenMinutes() {
     val g = RereadGate()
     assertEquals(t, g.onStale(t))

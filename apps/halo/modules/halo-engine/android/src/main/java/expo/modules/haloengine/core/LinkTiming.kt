@@ -35,6 +35,26 @@ class RereadGate {
   }
 }
 
+/** The one posted re-read. `cancel` takes the posted read off the clock and frees the gate, so a stopped service or all-off switches never leave a request that blocks the next one. */
+class RereadSlot(private val gate: RereadGate, private val postDelayed: (Long) -> Unit, private val remove: () -> Unit, private val clock: () -> Long) {
+  fun ping() = schedule(gate.onPing(clock()))
+
+  fun opened() = schedule(gate.onOpen(clock()))
+
+  fun stale() = schedule(gate.onStale(clock()))
+
+  fun cancel() {
+    remove()
+    gate.cancel()
+  }
+
+  private fun schedule(at: Long?) {
+    at ?: return
+    remove()
+    postDelayed(maxOf(0L, at - clock()))
+  }
+}
+
 enum class PulseKind { SHIELD, WAITING }
 
 data class PulseState(val lastShield: Long? = null, val lastWaiting: Long? = null)

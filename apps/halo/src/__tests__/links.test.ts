@@ -70,3 +70,21 @@ test('the Links screen does not promise text on the locked always-on screen or h
   assert.doesNotMatch(src, /Amounts are never shown|up to three short titles|short lines for the day/);
   assert.match(src, /only in the preview/);
 });
+
+test('the private briefing switch names the preview, not the always-on screen, which shows counts only', () => {
+  const src = fs.readFileSync(join(import.meta.dirname, '../LinksScreen.tsx'), 'utf8');
+  const row = /<SwitchRow\s+title="([^"]*)"\s+subtitle="([^"]*)"\s+value=\{l\.briefingPrivate\}/.exec(src);
+  assert.ok(row, 'briefingPrivate switch not found');
+  assert.equal(row[1], 'Show private briefing lines in the preview');
+  assert.doesNotMatch(row[1], /always-on/);
+  assert.match(row[2], /The always-on screen never shows them\./);
+});
+
+test('Links.stop and Links.clear both go through slot.cancel, which also frees the gate (RereadSlot is tested on the JVM)', () => {
+  const links = kotlin('android/Links.kt');
+  const body = (name: string) => new RegExp(`fun ${name}\\([^)]*\\)[^{]*\\{([\\s\\S]*?)\\n  \\}`).exec(links)?.[1] ?? '';
+  assert.match(body('stop'), /slot\.cancel\(\)/);
+  assert.match(body('clear'), /slot\.cancel\(\)/);
+  assert.doesNotMatch(links, /gate\.cancel\(\)/);
+  assert.match(kotlin('core/LinkTiming.kt'), /fun cancel\(\) \{\s*remove\(\)\s*gate\.cancel\(\)\s*\}/);
+});

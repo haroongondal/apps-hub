@@ -55,8 +55,8 @@ export default function LinksScreen({ settings, update, onBack }: { settings: Se
         />
         {l.briefing && (
           <SwitchRow
-            title="Show private briefing lines on the always-on screen"
-            subtitle="The preview in Halo also shows medicine and steps, and how many people are home (never their names). The locked screen is unchanged."
+            title="Show private briefing lines in the preview"
+            subtitle="The preview in Halo also shows medicine and steps, and how many people are home (never their names). The always-on screen never shows them."
             value={l.briefingPrivate}
             onChange={(briefingPrivate) => set({ briefingPrivate })}
           />
