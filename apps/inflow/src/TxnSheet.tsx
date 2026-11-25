@@ -6,7 +6,11 @@ import { exactTime } from './format.ts';
 import { ITEM_REMOVED, LOAD_ERROR, SAVE_ERROR } from './messages.ts';
 import { formatAmount } from './money.ts';
 import { deleteTxnConfirm } from './records.ts';
+import { MediaGroup } from './ItemSheet.tsx';
 import { ReceiptSheet } from './ReceiptSheet.tsx';
+
+// The saved messages of a payment that carry a photo.
+const withPhoto = (t: Txn): number[] => t.itemIds.filter((id) => InflowCore.mediaFor(id).some((m) => m.kind === 'image'));
 
 const OWN_OPTIONS = [
   { key: 'yes', label: 'Yes' },
@@ -35,7 +39,8 @@ export function TxnSheet({
   const [sources, setSources] = useState<Array<Item | null>>([]);
   const [error, setError] = useState<string | null>(null);
   const [receiptOpen, setReceiptOpen] = useState(false);
-  const [hasReceipt, setHasReceipt] = useState(false);
+  const [photoIds, setPhotoIds] = useState<number[]>([]);
+  const [photoRev, setPhotoRev] = useState(0);   // a new photo on the same message needs a fresh read
 
   useEffect(() => {
     if (!txn) return;
@@ -45,10 +50,11 @@ export function TxnSheet({
     setChoices(null);
     try {
       setSources(txn.itemIds.map((id) => InflowCore.getItem(id)));
-      setHasReceipt(txn.itemIds.some((id) => InflowCore.mediaFor(id).some((m) => m.kind === 'image')));
+      setPhotoIds(withPhoto(txn));
       setError(null);
     } catch {
       setSources([]);
+      setPhotoIds([]);
       setError(LOAD_ERROR);
     }
   }, [txn?.id]);
@@ -141,7 +147,7 @@ export function TxnSheet({
               <Segmented accessibilityLabel="Own transfer" options={OWN_OPTIONS} value={own ? 'yes' : 'no'} onChange={choose} />
             </Row>
             {txn.itemIds.length > 0 ? (
-              <Row title="Receipt" subtitle={hasReceipt ? "A receipt photo is saved with this payment. Tap to look for another." : "Find a photo from around this date that shows this amount"} onPress={() => setReceiptOpen(true)} />
+              <Row title="Receipt" subtitle={photoIds.length > 0 ? "A receipt photo is saved with this payment. Tap to look for another." : "Find a photo from around this date that shows this amount"} onPress={() => setReceiptOpen(true)} />
             ) : null}
           </Group>
           {choices !== null && (
@@ -152,6 +158,7 @@ export function TxnSheet({
               ))}
             </Group>
           )}
+          {photoIds.map((id) => <MediaGroup key={`${id}:${photoRev}`} itemId={id} title="Receipt" />)}
           <View style={{ gap: space.sm }}>
             {sources.map((item, i) => (
               <Text key={txn.itemIds[i]} selectable tone={item ? 'text' : 'muted'}>
@@ -165,7 +172,12 @@ export function TxnSheet({
       )}
     </Sheet>
     <ReceiptSheet txn={receiptOpen ? txn : null} onClose={() => setReceiptOpen(false)} onAttached={() => {
-      setHasReceipt(true);
+      try {
+        if (txn) setPhotoIds(withPhoto(txn));
+      } catch {
+        setError(LOAD_ERROR);
+      }
+      setPhotoRev((n) => n + 1);
       onChanged();
     }} />
     </>
