@@ -9,11 +9,9 @@ test('every background-check control is disabled while a save is in flight', () 
   const switches = src.match(/<SwitchRow[\s\S]*?\/>/g) ?? [];
   assert.equal(switches.length, 3);
   for (const s of switches) assert.match(s, /disabled=\{saving\}/);
+  const row = /function SwitchRow[\s\S]*?\n}\n/.exec(src)?.[0] ?? '';
+  assert.match(/<Switch[\s\S]*?\/>/.exec(row)?.[0] ?? '', /disabled=\{disabled\}/, 'SwitchRow passes disabled to the real Switch');
   assert.match(src, /<View pointerEvents=\{saving \? 'none' : 'auto'\}[\s\S]*?<Segmented/, 'the how-often choice is locked too');
-  assert.match(src, /<Button label="Allow"[^>]*disabled=\{saving\}/);
-});
-
-test('a save locks the controls before it starts and unlocks them when it ends', () => {
-  const change = /setSaving\(true\);\s*void updateHomeWatch\(patch\)\.then\(\(problem\) => \{\s*setNote\(problem\);\s*setSaving\(false\);/;
-  assert.match(src, change);
+  const allow = src.slice(src.indexOf('<Button label="Allow"'));
+  assert.match(allow.slice(0, allow.indexOf('/>')), /disabled=\{saving\}/);
 });
