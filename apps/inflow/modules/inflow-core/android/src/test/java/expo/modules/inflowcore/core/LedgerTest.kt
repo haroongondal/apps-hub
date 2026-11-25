@@ -492,6 +492,52 @@ class LedgerTest {
     assertEquals(4, store.txns.size)
   }
 
+  // Alfalah sends two SMS for one transfer, seconds apart: "Debited from your A/C" (no name) and "sent to <name> ... Tx ID".
+  private val sentTo = "PKR 5,000.00 sent to Some Person BAF from your BAF A/C **2310 on 2-Nov-26 18:46:10 Tx ID FT26307AAAAAAAAA"
+
+  @Test fun debitedAndSentToOfOneTransferAreOneTxn() {
+    val a = item(debited(), Channel.SMS_NOTIFICATION, t0)!!
+    ledger.addChannel(a, Channel.SMS)   // the inbox copy of the same text joins the first item
+    val b = item(sentTo, Channel.SMS_NOTIFICATION, t0 + 22_000L)
+    assertEquals(a, b)
+    assertEquals(1, store.txns.size)
+    val t = store.txns.values.single()
+    assertEquals("Some Person BAF", t.counterparty)
+    assertEquals("FT26307AAAAAAAAA", t.txId)
+  }
+
+  @Test fun sentToThenDebitedIsOneTxnToo() {
+    val a = item(sentTo, Channel.SMS, t0)
+    assertEquals(a, item(debited(), Channel.SMS, t0 + 22_000L))
+    assertEquals(1, store.txns.size)
+  }
+
+  @Test fun mergingTheNameCanMakeItAnOwnTransfer() {
+    owner = "Some Person"
+    item(debited(), Channel.SMS, t0)
+    item(sentTo, Channel.SMS, t0 + 22_000L)
+    assertTrue(store.txns.values.single().own)
+  }
+
+  @Test fun twoNamedTransfersOfTheSameAmountStayTwo() {
+    item(sentTo, Channel.SMS, t0)
+    item(sentTo.replace("Some Person", "Other Person").replace("FT26307AAAAAAAAA", "FT26307BBBBBBBBB"), Channel.SMS, t0 + 30_000L)
+    assertEquals(2, store.txns.size)
+  }
+
+  @Test fun aSecondDebitAfterACompletedPairStaysSeparate() {
+    item(debited(), Channel.SMS, t0)
+    item(sentTo, Channel.SMS, t0 + 22_000L)
+    item(debited(), Channel.SMS, t0 + 60_000L)
+    assertEquals(2, store.txns.size)
+  }
+
+  @Test fun aNamedTransferMuchLaterThanADebitStaysSeparate() {
+    item(debited(), Channel.SMS, t0)
+    item(sentTo, Channel.SMS, t0 + 5 * min)
+    assertEquals(2, store.txns.size)
+  }
+
   @Test fun moneyOutSumsEveryFormat() {
     val texts = listOf(
       debited(), qr, raast,

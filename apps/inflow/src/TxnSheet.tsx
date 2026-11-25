@@ -35,6 +35,7 @@ export function TxnSheet({
   const [sources, setSources] = useState<Array<Item | null>>([]);
   const [error, setError] = useState<string | null>(null);
   const [receiptOpen, setReceiptOpen] = useState(false);
+  const [hasReceipt, setHasReceipt] = useState(false);
 
   useEffect(() => {
     if (!txn) return;
@@ -44,6 +45,7 @@ export function TxnSheet({
     setChoices(null);
     try {
       setSources(txn.itemIds.map((id) => InflowCore.getItem(id)));
+      setHasReceipt(txn.itemIds.some((id) => InflowCore.mediaFor(id).some((m) => m.kind === 'image')));
       setError(null);
     } catch {
       setSources([]);
@@ -139,7 +141,7 @@ export function TxnSheet({
               <Segmented accessibilityLabel="Own transfer" options={OWN_OPTIONS} value={own ? 'yes' : 'no'} onChange={choose} />
             </Row>
             {txn.itemIds.length > 0 ? (
-              <Row title="Receipt" subtitle="Find a photo from around this date that shows this amount" onPress={() => setReceiptOpen(true)} />
+              <Row title="Receipt" subtitle={hasReceipt ? "A receipt photo is saved with this payment. Tap to look for another." : "Find a photo from around this date that shows this amount"} onPress={() => setReceiptOpen(true)} />
             ) : null}
           </Group>
           {choices !== null && (
@@ -162,7 +164,10 @@ export function TxnSheet({
         </>
       )}
     </Sheet>
-    <ReceiptSheet txn={receiptOpen ? txn : null} onClose={() => setReceiptOpen(false)} onAttached={onChanged} />
+    <ReceiptSheet txn={receiptOpen ? txn : null} onClose={() => setReceiptOpen(false)} onAttached={() => {
+      setHasReceipt(true);
+      onChanged();
+    }} />
     </>
   );
 }
