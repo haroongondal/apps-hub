@@ -30,6 +30,7 @@ class HubLimitsTest {
     assertEquals(Checked("embed-2", 2, "embed"), HubLimits.check(req("embedDimensions"), null))
     assertEquals(Checked("audio-1", 1, "transcribe"), HubLimits.check(req("transcribe"), 1_000))
     assertEquals(Checked("audio-2", 2, "transcribe"), HubLimits.check(req("transcribeSegments"), 1_000))
+    assertEquals(Checked("chat-3", 3, "chat"), HubLimits.check(req("chatV3"), null))
   }
 
   @Test fun requestJsonIsCountedInBytesNotCharacters() {

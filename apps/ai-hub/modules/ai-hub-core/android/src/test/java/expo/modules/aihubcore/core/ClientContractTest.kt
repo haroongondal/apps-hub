@@ -4,7 +4,9 @@ import java.io.File
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -24,6 +26,26 @@ class ClientContractTest {
     assertEquals(768, parse("embedDimensions").dimensions)
     assertEquals(listOf("note.m4a", "audio/mp4", false), parse("transcribe").let { listOf(it.fileName, it.mime, it.segments) })
     assertEquals(true, parse("transcribeSegments").segments)
+    val v3 = parse("chatV3")
+    assertEquals(listOf(3, "required", "low", Service.GEMINI, true), listOf(v3.apiVersion, v3.toolChoice, v3.reasoningEffort, v3.service, v3.needsGemini))
+  }
+
+  // A client built for apiVersion 1 or 2 keeps getting the reply it was built for, even when its request carries a field it has never heard of.
+  @Test fun aVersionTwoClientStillGetsExactlyTheVersionTwoReply() {
+    val turn = ModelTurn(
+      Msg("assistant", buildJsonObject { put("role", "assistant"); put("content", "hello") }),
+      listOf(ToolCall("c1", "look", JsonObject(mapOf("q" to JsonPrimitive("a"))))),
+      TokenUsage(10, 2, 5),
+      "hello",
+      ModelChoice(Service.GEMINI, "gemini-3.5-flash-lite"),
+    )
+    for (version in 1..2) {
+      val old = JsonObject(requests["chat"]!!.jsonObject + mapOf("apiVersion" to JsonPrimitive(version), "toolChoice" to JsonPrimitive("required"), "service" to JsonPrimitive("groq"), "somethingNew" to JsonPrimitive(1)))
+      val request = Request.parse(old.toString())
+      assertEquals(listOf(null, null, 300), listOf(request.toolChoice, request.service, request.maxTokens))
+      assertEquals(replies["chat"], Json.parseToJsonElement(Results.chat(turn, request.apiVersion)))
+      assertEquals(Job.CHAT.default, routeFor(request, Job.entries.associateWith { it.default }).choice)
+    }
   }
 
   @Test fun theHubWritesTheRepliesTheClientParses() {
@@ -35,6 +57,14 @@ class ClientContractTest {
       ModelChoice(Service.GEMINI, "gemini-3.5-flash-lite"),
     )
     assertEquals(replies["chat"], Json.parseToJsonElement(Results.chat(turn)))
+    val signed = ModelTurn(
+      Msg("assistant", replies["chatV3"]!!.jsonObject["raw"]!!.jsonObject),
+      turn.toolCalls,
+      turn.usage,
+      "hello",
+      turn.served,
+    )
+    assertEquals(replies["chatV3"], Json.parseToJsonElement(Results.chat(signed, 3)))
     val b64 = { b: ByteArray -> java.util.Base64.getEncoder().encodeToString(b) }
     assertEquals(replies["embed"], Json.parseToJsonElement(Results.embed(listOf(floatArrayOf(0.5f, 1f), floatArrayOf(-2f, 0.25f)), "gemini-embedding-001", b64)))
     assertEquals(replies["transcribe"], Json.parseToJsonElement(Results.transcribe(Transcript("hi"))))

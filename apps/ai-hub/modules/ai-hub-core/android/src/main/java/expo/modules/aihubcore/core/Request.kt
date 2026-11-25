@@ -32,7 +32,16 @@ data class Request(
   val mime: String? = null,
   val dimensions: Int? = null,
   val segments: Boolean = false,
+  val apiVersion: Int = 1,
+  // apiVersion 3 only: how the model may use the tools, how hard it thinks (Groq), and which service must answer.
+  val toolChoice: String? = null,
+  val reasoningEffort: String? = null,
+  val service: Service? = null,
 ) {
+  // A picture in the messages, or a Gemini thought signature in an earlier assistant turn, only Gemini can take.
+  val needsGemini: Boolean
+    get() = messages.any { it.hasImage || it.hasProviderExtras }
+
   val attachmentCap: Int?
     get() = when (job) {
       Job.VISION -> MAX_IMAGE_BYTES
@@ -71,6 +80,8 @@ data class Request(
 
     private val ID = Regex("[A-Za-z0-9_-]{1,64}")
     private val MIME = Regex("[\\w.+-]+/[\\w.+-]+")
+    private val TOOL_CHOICES = setOf("auto", "required", "none")
+    private val EFFORTS = setOf("low", "medium", "high")
     private val ROLES = setOf("system", "user", "assistant", "tool")
     private val JOBS = mapOf("chat" to Job.CHAT, "vision" to Job.VISION, "embed" to Job.EMBED, "transcribe" to Job.TRANSCRIBE)
     private val PRIORITIES = mapOf("foreground" to Priority.FOREGROUND, "background" to Priority.BACKGROUND)
@@ -103,13 +114,19 @@ data class Request(
           val maxTokens = if (root["maxTokens"] == null) DEFAULT_MAX_TOKENS else {
             root.int("maxTokens")?.takeIf { it in 1..MAX_TOKENS } ?: bad("maxTokens must be a whole number from 1 to $MAX_TOKENS.")
           }
+          val v3 = version >= 3
+          val toolChoice = if (!v3 || root["toolChoice"] == null) null else root.str("toolChoice")?.takeIf { it in TOOL_CHOICES } ?: bad("toolChoice must be auto, required or none.")
+          val effort = if (!v3 || root["reasoningEffort"] == null) null else root.str("reasoningEffort")?.takeIf { it in EFFORTS } ?: bad("reasoningEffort must be low, medium or high.")
+          val service = if (!v3 || root["service"] == null) null else Service.entries.firstOrNull { it.name.equals(root.str("service"), ignoreCase = true) } ?: bad("service must be groq or gemini.")
+          if (v3 && messages.any { m -> m.imageUrls().any { !it.startsWith("data:image/") } }) bad("A picture in a message must be a data:image/ URL. Send it inline or as the attachment.")
+          if (service == Service.GROQ && (job == Job.VISION || messages.any { it.hasImage })) bad("Groq can't read pictures. Leave service out or use gemini.")
           var mime: String? = null
           if (job == Job.VISION) {
             if (messages.none { it.role == "user" }) bad("A vision request needs a user message to carry the image.")
             mime = root.str("mime")?.takeIf { it.startsWith("image/") && MIME.matches(it) }
               ?: bad("A vision request needs mime: the attached image's type, such as image/jpeg.")
           }
-          Request(id, job, priority, messages = messages, tools = tools, maxTokens = maxTokens, mime = mime)
+          Request(id, job, priority, messages = messages, tools = tools, maxTokens = maxTokens, mime = mime, apiVersion = version, toolChoice = toolChoice, reasoningEffort = effort, service = service)
         }
         Job.EMBED -> {
           val texts = (root["texts"] as? JsonArray)?.map { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }
@@ -153,6 +170,10 @@ data class Request(
       ToolSpec(name, o.str("description").orEmpty(), parameters)
     }
   }
+}
+
+private fun Msg.imageUrls(): List<String> = (json["content"] as? JsonArray).orEmpty().mapNotNull { part ->
+  (part as? JsonObject)?.takeIf { it.str("type") == "image_url" }?.let { ((it["image_url"] as? JsonObject)?.str("url")).orEmpty() }
 }
 
 private fun JsonObject.str(key: String): String? = (get(key) as? JsonPrimitive)?.takeIf { it.isString }?.content
@@ -200,7 +221,8 @@ fun decideCallers(pkgs: List<String>, sameSignature: Boolean, switches: Map<Stri
   }
 
 object Results {
-  fun chat(t: ModelTurn): String = buildJsonObject {
+  // From apiVersion 3 the reply also carries `raw`, the assistant message to send back as it came (Gemini's thought signatures ride in it), and the serving `service`; older callers get the reply they always got.
+  fun chat(t: ModelTurn, apiVersion: Int = 1): String = buildJsonObject {
     put("text", t.text)
     put("toolCalls", JsonArray(t.toolCalls.map { c -> buildJsonObject { put("id", c.id); put("name", c.name); put("args", c.args) } }))
     put("usage", buildJsonObject {
@@ -209,6 +231,10 @@ object Results {
       put("outputTokens", t.usage.outputTokens)
     })
     put("model", t.served.model)
+    if (apiVersion >= 3) {
+      put("service", Settings.key(t.served.service))
+      put("raw", t.raw.json)
+    }
   }.toString()
 
   // Each vector as base64 of little-endian float32: JSON numbers would push 8 large vectors past the Binder limit.

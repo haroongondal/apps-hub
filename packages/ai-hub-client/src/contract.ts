@@ -1,6 +1,6 @@
 // The hub's JSON contract with no native import; fixtures/contract.json pins it to the hub's JVM tests.
 
-export const API_VERSION = 2;
+export const API_VERSION = 3;
 export const MAX_TEXTS = 8;
 
 export type ErrorKind =
@@ -72,10 +72,19 @@ interface Common {
   requestId?: string;
 }
 
+export type ToolChoice = 'auto' | 'required' | 'none';
+export type Effort = 'low' | 'medium' | 'high';
+export type Service = 'groq' | 'gemini';
+
 export interface ChatRequest extends Common {
   messages: ChatMessage[];
   tools?: ToolSpec[];
   maxTokens?: number;
+  // apiVersion 3. Any of these (or a picture in a message, or wantRaw) sends the request as version 3; a hub that is older fails it with `version`.
+  toolChoice?: ToolChoice;
+  reasoningEffort?: Effort; // Groq only; Gemini ignores it
+  service?: Service; // pin the service: a run that replays Gemini's thought signatures stays on 'gemini'
+  wantRaw?: boolean; // ask for `raw` in the reply without using anything else from version 3
 }
 
 export interface VisionRequest extends ChatRequest {
@@ -107,6 +116,9 @@ export interface ChatReply {
   toolCalls: ToolCall[];
   usage: { inputTokens: number; cachedTokens: number; outputTokens: number };
   model: string;
+  // apiVersion 3 replies only. `raw` is the assistant message as the service sent it (role, content, tool_calls, reasoning_details): put it back into the next request's messages unchanged, since Gemini's thought signatures ride inside it.
+  raw?: ChatMessage;
+  service?: Service;
 }
 
 export interface EmbedReply {
@@ -138,16 +150,23 @@ function idOf(requestId: string | undefined): string {
   return id;
 }
 
+const hasPicture = (m: ChatMessage): boolean =>
+  Array.isArray(m.content) && m.content.some((p) => isObject(p) && p.type === 'image_url');
+
 // A request that uses nothing newer goes out as apiVersion 1, so a hub that is not updated yet still serves it.
 export function chatJson(job: 'chat' | 'vision', req: ChatRequest & { mime?: string }, requestId?: string): string {
+  const v3 = req.toolChoice !== undefined || req.reasoningEffort !== undefined || req.service !== undefined || req.wantRaw === true || req.messages.some(hasPicture);
   return JSON.stringify({
-    apiVersion: 1,
+    apiVersion: v3 ? 3 : 1,
     requestId: idOf(requestId ?? req.requestId),
     job,
     priority: req.priority ?? 'foreground',
     messages: req.messages,
     ...(req.tools ? { tools: req.tools } : {}),
     ...(req.maxTokens !== undefined ? { maxTokens: req.maxTokens } : {}),
+    ...(req.toolChoice !== undefined ? { toolChoice: req.toolChoice } : {}),
+    ...(req.reasoningEffort !== undefined ? { reasoningEffort: req.reasoningEffort } : {}),
+    ...(req.service !== undefined ? { service: req.service } : {}),
     ...(job === 'vision' ? { mime: req.mime } : {}),
   });
 }
@@ -213,6 +232,8 @@ export function parseChat(json: string): ChatReply {
     })),
     usage: { inputTokens: num(usage.inputTokens), cachedTokens: num(usage.cachedTokens), outputTokens: num(usage.outputTokens) },
     model: o.model,
+    ...(isObject(o.raw) && o.raw.role === 'assistant' ? { raw: o.raw as ChatMessage } : {}),
+    ...(o.service === 'groq' || o.service === 'gemini' ? { service: o.service } : {}),
   };
 }
 

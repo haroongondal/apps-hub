@@ -68,7 +68,7 @@ class RequestTest {
     assertEquals(Request.MAX_AUDIO_BYTES, r.attachmentCap)
   }
 
-  @Test fun rejectsNewerApiVersion() = rejects(json(version = "3"), "newer AI hub")
+  @Test fun rejectsNewerApiVersion() = rejects(json(version = "4"), "newer AI hub")
 
   @Test fun versionOneRequestsStillParseUnchanged() {
     val embed = Request.parse(json("embed", "\"texts\":[\"a\"]", version = "1"))
@@ -76,6 +76,54 @@ class RequestTest {
     val audio = Request.parse(json("transcribe", "\"fileName\":\"n.m4a\",\"mime\":\"audio/mp4\"", version = "1"))
     assertEquals(false, audio.segments)
     assertEquals(Job.CHAT, Request.parse(json(version = "1")).job)
+  }
+
+  private val shot = """{"type":"image_url","image_url":{"url":"data:image/jpeg;base64,QUJD"}}"""
+  private val withShot = """[{"role":"user","content":[{"type":"text","text":"obs"},$shot]}]"""
+
+  @Test fun versionThreeChatCarriesToolChoiceEffortAndService() {
+    val r = Request.parse(json(extra = """"messages":$chatMessages,"toolChoice":"required","reasoningEffort":"low","service":"gemini"""", version = "3"))
+    assertEquals(listOf(3, "required", "low", Service.GEMINI), listOf(r.apiVersion, r.toolChoice, r.reasoningEffort, r.service))
+    val plain = Request.parse(json(version = "3"))
+    assertEquals(listOf(null, null, null), listOf(plain.toolChoice, plain.reasoningEffort, plain.service))
+    for (c in listOf("auto", "required", "none")) assertEquals(c, Request.parse(json(extra = """"messages":$chatMessages,"toolChoice":"$c"""", version = "3")).toolChoice)
+    rejects(json(extra = """"messages":$chatMessages,"toolChoice":"sometimes"""", version = "3"), "toolChoice")
+    rejects(json(extra = """"messages":$chatMessages,"toolChoice":true""", version = "3"), "toolChoice")
+    rejects(json(extra = """"messages":$chatMessages,"reasoningEffort":"max"""", version = "3"), "reasoningEffort")
+    rejects(json(extra = """"messages":$chatMessages,"service":"openai"""", version = "3"), "groq or gemini")
+  }
+
+  @Test fun versionTwoIgnoresTheVersionThreeFieldsInsteadOfFailingOnThem() {
+    for (v in listOf("1", "2")) {
+      val r = Request.parse(json(extra = """"messages":$chatMessages,"toolChoice":"sometimes","reasoningEffort":7,"service":"openai","somethingNew":{"a":1}""", version = v))
+      assertEquals(listOf(Job.CHAT, null, null, null, Request.DEFAULT_MAX_TOKENS), listOf(r.job, r.toolChoice, r.reasoningEffort, r.service, r.maxTokens))
+    }
+  }
+
+  @Test fun aChatMayCarryPicturesInlineFromVersionThree() {
+    val r = Request.parse(json(extra = """"messages":$withShot""", version = "3"))
+    assertTrue(r.needsGemini)
+    assertTrue(r.messages.single().hasImage)
+    assertTrue(!Request.parse(json(version = "3")).needsGemini)
+    rejects(json(extra = """"messages":[{"role":"user","content":[{"type":"image_url","image_url":{"url":"https://example.com/a.jpg"}}]}]""", version = "3"), "data:image/")
+    rejects(json(extra = """"messages":[{"role":"user","content":[{"type":"image_url"}]}]""", version = "3"), "data:image/")
+    rejects(json(extra = """"messages":$withShot,"service":"groq"""", version = "3"), "Groq can't read pictures")
+    rejects(json("vision", """"messages":$chatMessages,"mime":"image/png","service":"groq"""", version = "3"), "Groq can't read pictures")
+  }
+
+  // Deputy's step: about 62 KB of screen text and history plus one 720-px JPEG (200-300 KB as base64) fits the 512 KB cap with room to spare.
+  @Test fun aDeputySizedStepWithOneInlineScreenshotFitsTheCap() {
+    val picture = "A".repeat(300_000)
+    val text = "x".repeat(62_000)
+    val messages = """[{"role":"user","content":[{"type":"text","text":"$text"},{"type":"image_url","image_url":{"url":"data:image/jpeg;base64,$picture"}}]}]"""
+    val r = Request.parse(json(extra = """"messages":$messages,"toolChoice":"required"""", version = "3"))
+    assertTrue(r.needsGemini)
+    assertTrue(json(extra = """"messages":$messages""", version = "3").toByteArray().size < Request.MAX_JSON_BYTES * 0.75)
+  }
+
+  @Test fun aSignedAssistantTurnNeedsGemini() {
+    val signed = """[{"role":"user","content":"T"},{"role":"assistant","content":null,"tool_calls":[{"id":"c","type":"function","function":{"name":"tap","arguments":"{}"},"extra_content":{"google":{"thought_signature":"c2ln"}}}]}]"""
+    assertTrue(Request.parse(json(extra = """"messages":$signed""", version = "3")).needsGemini)
   }
 
   @Test fun embedDimensionsRoundUpToASizeGeminiDocuments() {

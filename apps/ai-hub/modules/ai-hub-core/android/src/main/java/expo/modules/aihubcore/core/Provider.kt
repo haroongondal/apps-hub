@@ -25,6 +25,10 @@ data class TokenUsage(val inputTokens: Long, val cachedTokens: Long, val outputT
 data class Msg(val role: String, val json: JsonObject) {
   val hasImage: Boolean
     get() = (json["content"] as? JsonArray)?.any { (it as? JsonObject)?.get("type")?.jsonPrimitive?.contentOrNull == "image_url" } == true
+
+  // Gemini 3 puts its thought signature in a tool call's extra_content; only Gemini can take that history back.
+  val hasProviderExtras: Boolean
+    get() = (json["tool_calls"] as? JsonArray)?.any { (it as? JsonObject)?.containsKey("extra_content") == true } == true
 }
 
 data class Segment(val start: Double, val end: Double, val text: String)
@@ -163,8 +167,9 @@ class Provider(
     maxTokens: Int,
     reasoningEffort: String? = null,
     toolChoice: String? = null,
+    allowFallback: Boolean = true,
   ): ModelTurn {
-    val fallback = if (messages.any { it.hasImage }) null else fallbackFor(Job.CHAT, choice.service)
+    val fallback = if (!allowFallback || messages.any { it.hasImage }) null else fallbackFor(Job.CHAT, choice.service)
     val (served, body) = send(listOfNotNull(choice, fallback), "chat/completions", JSON) {
       ProviderJson.chatRequest(it, messages, tools, maxTokens, reasoningEffort, toolChoice).toByteArray()
     }

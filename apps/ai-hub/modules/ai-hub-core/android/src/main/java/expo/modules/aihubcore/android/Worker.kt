@@ -27,6 +27,7 @@ import expo.modules.aihubcore.core.Service
 import expo.modules.aihubcore.core.Settings
 import expo.modules.aihubcore.core.Usage
 import expo.modules.aihubcore.core.readCapped
+import expo.modules.aihubcore.core.routeFor
 import expo.modules.aihubcore.core.withImage
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
@@ -82,7 +83,7 @@ class Worker(context: Context) {
       return send(callback, id) { it.onError(id, "invalid", problem) }
     }
     val key = "${caller.uid}:$id"
-    val service = Settings.key(models().getValue(request.job).service)
+    val service = Settings.key(routeFor(request, models()).choice.service)
     val refusal = synchronized(lock) {
       when {
         stopped -> "cancelled" to "AI hub is closing. Try again."
@@ -192,14 +193,16 @@ class Worker(context: Context) {
 
   private fun execute(p: Pending): String {
     val r = p.request
-    val choice = models().getValue(r.job)
+    val chosen = models()
+    val choice = chosen.getValue(r.job)
     val provider = Provider(ring(), transport)
     return when (r.job) {
       Job.CHAT, Job.VISION -> {
         val messages = if (r.job == Job.VISION) withImage(r.messages, r.mime!!, Base64.encodeToString(read(p), Base64.NO_WRAP)) else r.messages
-        val turn = provider.chat(choice, messages, r.tools, r.maxTokens)
+        val route = routeFor(r, chosen)
+        val turn = provider.chat(route.choice, messages, r.tools, r.maxTokens, r.reasoningEffort, r.toolChoice, route.fallback)
         record(p.pkg, r.job, turn.served.service, turn.usage.inputTokens, turn.usage.outputTokens)
-        Results.chat(turn)
+        Results.chat(turn, r.apiVersion)
       }
       Job.EMBED -> Results.embed(provider.embed(choice, r.texts, r.dimensions), choice.model) { Base64.encodeToString(it, Base64.NO_WRAP) }.also { record(p.pkg, r.job, choice.service, 0, 0) }
       Job.TRANSCRIBE -> Results.transcribe(provider.transcribe(choice, read(p), r.fileName!!, r.mime!!, r.segments)).also { record(p.pkg, r.job, choice.service, 0, 0) }
