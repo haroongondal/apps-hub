@@ -56,6 +56,17 @@ with `cd-engineering-tools:parallel-agents-coord` (section 0 loop with the ledge
   guarded by `AI_HUB`; it binds that component and re-checks the signature in
   `onServiceConnected`. A squatted package name gets `not-allowed`, nothing is sent (`HubTrust`).
 
+- 2026-11-25, fix/ai-hub (owner asked for it so Deputy can use the hub): apiVersion 3 adds, for chat
+  and vision, `toolChoice` (auto, required, none), `reasoningEffort` (low, medium, high; Groq only),
+  `service` (pin groq or gemini) and pictures inline in chat messages (`data:image/` URLs only); a
+  version 3 reply adds `raw` (the assistant message as sent, so Gemini's thought signatures come back
+  unrebuilt) and `service`. A v3 chat with a picture or a signed history runs on the owner's vision
+  model (Gemini) and never falls back to Groq. A v1 or v2 request is answered exactly as before: the
+  new fields are ignored and the reply has no `raw`. AIDL unchanged (the contract rides in the JSON),
+  request cap stays 512 KB (Deputy's step is about 62 KB plus one 200-300 KB picture; big pictures
+  should still go as the `vision` attachment because Binder carries the string as UTF-16). The
+  per-call log is unchanged: counts and error kind only, never a prompt, picture or reply. No streaming.
+
 ## Evidence already verified (2026-11-20)
 
 - Provider copies to consolidate, all on origin/main: Deputy `deputy-agent/core/Provider.kt`
@@ -138,3 +149,9 @@ a streaming callback to the AIDL contract as v2). Start a P2 ledger at
 `.superpowers/sdd/ai-hub-p2/progress.md` and follow the same loop. A Store release of the hub
 needs the owner's go (PLAN P6), and the phone checks (a second app binding, a differently signed
 app refused, real Gemini/Groq replies, cancel during a read) need a Store build first.
+
+- 2026-11-25 (fix/ai-hub): apiVersion 3 built (see Decisions). Gates: hub JVM 139/0, ai-hub-client
+  ts 13/0 and Kotlin 12/0 (compiled in the hub's Gradle build with the init script), ai-hub ts 9/0,
+  app-link-contract 139/0, assembleDebug of apps/ai-hub OK. Not run on a phone. Next: Deputy moves
+  onto the hub (fix/deputy-hub) using `aiHub.available(3)`, `service: 'gemini'` and `wantRaw`.
+- 2026-11-25 (fix/ai-hub, security review fixes): a malformed content part (`{"type":{}}`, a non-object part, a part with no type) is now a BadRequest on every apiVersion instead of an exception on the Binder thread; a picture must be a `data:image/` URL on every apiVersion (deliberate tightening, v1/v2 text-only clients unaffected); v3 accepts only `text` and `image_url` parts (v1/v2 keep their leniency about other types). Known deferred, unproven: v3 replies are about twice the size (`raw` repeats the content) and are sent over the oneway callback (async buffer about 512 KB, UTF-16); a DeadObjectException is swallowed in Worker.send and the client then waits up to 5 minutes for a reply.

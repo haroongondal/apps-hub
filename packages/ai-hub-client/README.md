@@ -43,7 +43,7 @@ try {
 | Call | Sends | Returns |
 |---|---|---|
 | `aiHub.available(need = 1)` | nothing, asks the hub's version | `{ ok: true, version }` or `{ ok: false, kind, message }` |
-| `aiHub.chat({ messages, tools?, maxTokens?, priority?, requestId? })` | OpenAI-style messages | `{ text, toolCalls, usage, model }` |
+| `aiHub.chat({ messages, tools?, maxTokens?, toolChoice?, reasoningEffort?, service?, wantRaw?, priority?, requestId? })` | OpenAI-style messages; a message may hold `image_url` parts (`data:image/...` URLs only) | `{ text, toolCalls, usage, model, raw?, service? }` |
 | `aiHub.vision({ ...chat, image, mime })` | `image`: path or `file://` uri of a picture | same as chat |
 | `aiHub.embed({ texts, dimensions?, priority? })` | split into batches of 8, sent one after another | `{ vectors: Float32Array[], dims, model }` in input order |
 | `aiHub.transcribe({ file, fileName, mime, segments?, priority?, requestId? })` | `file`: path or `file://` uri of the audio | `{ text, segments? }`, each segment `{ start, end, text }` in seconds |
@@ -52,6 +52,9 @@ try {
 - `priority` is `foreground` (default, except embed) or `background` (default for embed).
 - `dimensions` is rounded up by the hub to 128, 256, 512, 768, 1536 or 3072; check `dims` in the reply. Gemini only normalises 3072-size vectors, so normalise smaller ones yourself before cosine similarity.
 - `dimensions` and `segments` need hub apiVersion 2. A request without them goes out as version 1, so an older hub still serves it. A request that needs a newer hub than the one installed fails with `version` before it is sent.
+- **apiVersion 3** (chat and vision): `toolChoice` (`auto`, `required`, `none`), `reasoningEffort` (`low`, `medium`, `high`; Groq only, Gemini ignores it), `service` (`groq` or `gemini`: pin the service) and `wantRaw` send the request as version 3, and so does a picture inside a message. A version 3 reply adds `raw`, the assistant message exactly as the service sent it (`role`, `content`, `tool_calls`, `reasoning_details`), and `service`. Put `raw` back into the next request's `messages` unchanged: Gemini's thought signatures ride inside its `tool_calls`, and rebuilding the message from `text` and `toolCalls` loses them. Check `aiHub.available(3)` first, or let an older hub fail the call with `version`.
+- A version 3 chat with a picture in its messages, or with a Gemini signature in an earlier assistant message, runs on Gemini (the owner's vision model) and never falls back to Groq; so does `service: 'gemini'`. `service: 'groq'` with a picture is `invalid`. A run that replays Gemini's signatures should pin `service: 'gemini'` from its first step so its history never meets Groq. Send big pictures as the `vision` attachment (7 MB) rather than inline: inline pictures count against the 512 KB request limit, and the request crosses Binder as UTF-16.
+- The hub answers a version 1 or 2 request exactly as before: version 3 fields are ignored, not refused, and the reply has no `raw`.
 - Attachments must be files on the phone (copy a `content://` pick into the cache first). They go to the hub as a read-only file descriptor.
 
 Native code can use the Kotlin `AiHubClient` directly (`expo.modules.aihubclient.AiHubClient`): `submit(requestJson, attachmentFile)` is a suspend function that returns the hub's reply JSON or throws `AiHubException(kind, message)`. Cancelling the coroutine cancels the request at the hub. It binds the hub for each call and unbinds after, so an idle app does not keep the hub running.
