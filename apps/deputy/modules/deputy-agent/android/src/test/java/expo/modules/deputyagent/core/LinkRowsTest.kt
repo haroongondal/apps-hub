@@ -44,9 +44,18 @@ class LinkRowsTest {
   }
 
   @Test fun theHealthRowReportsTheServiceAndTheKeyAndNoListener() {
-    assertArrayEquals(arrayOf<Any?>("deputy", 1, null, "own", 7L), LinkRows.health(accessibilityOn = true, keySet = true, lastSeenAt = 7L))
-    assertArrayEquals(arrayOf<Any?>("deputy", 0, null, "none", null), LinkRows.health(accessibilityOn = false, keySet = false, lastSeenAt = null))
-    assertEquals(LinkRows.HEALTH_COLUMNS.size, LinkRows.health(true, true, 1L).size)
+    assertArrayEquals(arrayOf<Any?>("deputy", 1, null, "own", 7L), LinkRows.health(accessibilityOn = true, keySet = true, recordedSource = null, lastSeenAt = 7L))
+    assertArrayEquals(arrayOf<Any?>("deputy", 0, null, "none", null), LinkRows.health(accessibilityOn = false, keySet = false, recordedSource = null, lastSeenAt = null))
+    assertEquals(LinkRows.HEALTH_COLUMNS.size, LinkRows.health(true, true, null, 1L).size)
+  }
+
+  @Test fun theAiSourceIsWhatCarriedTheLastStepHubOrOwnAndNoneWithoutAKey() {
+    fun source(key: Boolean, recorded: String?) = LinkRows.health(true, key, recorded, 1L)[3]
+    assertEquals("hub", source(true, "hub"))
+    assertEquals("own", source(true, "own"))
+    assertEquals("own", source(true, null))
+    assertEquals("own", source(true, "something else"))
+    assertEquals("none", source(false, "hub"))
   }
 
   private fun schedule(id: String, name: String, task: String, hour: Int, enabled: Boolean = true, createdAt: Long = 1L) =

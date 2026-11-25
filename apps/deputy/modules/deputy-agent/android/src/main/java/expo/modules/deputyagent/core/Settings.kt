@@ -55,6 +55,9 @@ data class Settings(
       KnownModel("GPT-OSS 20B on Groq", GROQ_URL, "openai/gpt-oss-20b", Prices(0.075, 0.037, 0.30), images = false, effort = "low"),
     )
 
+    fun pricesOfHubModel(model: String, own: Prices) =
+      KNOWN.firstOrNull { it.model == model }?.prices ?: Prices.dearest(KNOWN.map { it.prices } + own + Prices.HUB_CEILING)
+
     fun known(baseUrl: String, model: String) = KNOWN.firstOrNull { it.baseUrl.trimEnd('/') == baseUrl.trimEnd('/') && it.model == model }
 
     fun fromMap(m: Map<String, Any?>): Settings {
