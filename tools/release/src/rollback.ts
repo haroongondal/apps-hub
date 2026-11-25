@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { nextVersionCode, type StoreManifest } from '@apps-hub/store-manifest';
 import { APPS } from './apps.ts';
-import { WHY, checkSchemas, type SchemaCheck } from './schemas.ts';
+import { checkSchemas, type SchemaCheck } from './schemas.ts';
 
 export interface RollbackPlan {
   id: string;
@@ -136,7 +136,7 @@ const MAX_LISTED = 15;
 
 function schemaLine(c: SchemaCheck): string {
   return c.verdict === 'unknown'
-    ? `  ${c.db}: ${c.why ?? 'could not be established'}`
+    ? c.reason === 'missing' ? `  ${c.app}: ${c.db} ${c.why}` : `  ${c.db}: ${c.why ?? 'could not be established'}`
     : `  ${c.db}: the phone's data is at version ${c.current}, the older build understands ${c.target}`;
 }
 
@@ -160,8 +160,9 @@ export function schemaNotice(p: RollbackPlan, accepted: boolean): string[] {
       : []),
     ...(unknown.length
       ? [`Not rolled back: the tool could not tell whether ${p.id}'s data on the phone is newer than the older build can open.`, ...unknown.map(schemaLine),
-         ...(unknown.some((c) => c.why === WHY.commit) ? ['Fetch origin and run it again, or, if you are sure the data is not newer, pass --accept-newer-data.'] : []),
-         ...(unknown.some((c) => c.why !== WHY.commit) ? ["Check the file's history by hand, then pass --accept-newer-data if you are sure the data is not newer."] : [])]
+         ...(unknown.some((c) => c.reason === 'commit') ? ['Fetch origin and run it again, or, if you are sure the data is not newer, pass --accept-newer-data.'] : []),
+         ...(unknown.some((c) => c.reason === 'guess') ? ['The Store has no commit recorded for this release, so the tool compared against HEAD and origin/main; release once normally to record one, or pass --accept-newer-data if you are sure.'] : []),
+         ...(unknown.some((c) => c.reason === 'unreadable') ? ["Check the file's history by hand, then pass --accept-newer-data if you are sure the data is not newer."] : [])]
       : []),
     newer.length ? 'Nothing was built or published. To go back anyway, pass --accept-newer-data.' : 'Nothing was built or published.',
   ];

@@ -105,60 +105,48 @@ describe('checkSchemas', () => {
     return dir;
   };
 
-  it('a registered file missing at the target while the app exists there is unknown when it moved (git sees a rename)', () => {
-    const moved = newRepo('moved');
-    const before = commit(moved, { [OLD]: clipSource(1), 'apps/clipboard/App.tsx': 'x' });
-    mkdirSync(join(moved, CLIP, '..'), { recursive: true });
-    git(moved, 'mv', OLD, CLIP);
-    const after = commit(moved, { [CLIP]: clipSource(2) });
-    assert.equal(checkSchemas(moved, 'clipboard', before, [after])[0].verdict, 'unknown');
-    assert.match(checkSchemas(moved, 'clipboard', before, [after])[0].why ?? '', /moved or been renamed/);
-    assert.equal(checkSchemas(moved, 'clipboard', after, [before])[0].verdict, 'unknown');
-  });
+  const verdicts = (repo: string, target: string, refs: string[]) => checkSchemas(repo, 'clipboard', target, refs)[0];
 
-  it('a database moved with edits, or extracted from another file, is unknown at commits before the move', () => {
-    const bumped = newRepo('bumped');
-    const kt = commit(bumped, { [OLD]: clipSource(1), 'apps/clipboard/App.tsx': 'x' });
-    mkdirSync(join(bumped, CLIP, '..'), { recursive: true });
-    git(bumped, 'mv', OLD, CLIP);
-    const java = commit(bumped, { [CLIP]: clipSource(2) });
-    assert.equal(git(bumped, 'log', '--follow', '--diff-filter=A', '--format=%H', '--', CLIP), java, 'git sees the move as an add, not a rename');
-    for (const [target, refs] of [[kt, [java]], [java, [kt]]] as const) assert.equal(checkSchemas(bumped, 'clipboard', target, [...refs])[0].verdict, 'unknown');
+  it('a registered file missing at a commit while the app folder exists is unknown, whatever happened to it', () => {
+    const renamed = newRepo('renamed');
+    const r1 = commit(renamed, { [OLD]: clipSource(1), 'apps/clipboard/App.tsx': 'x' });
+    mkdirSync(join(renamed, CLIP, '..'), { recursive: true });
+    git(renamed, 'mv', OLD, CLIP);
+    const r2 = commit(renamed, { [CLIP]: clipSource(2) });
+    for (const [target, refs] of [[r1, [r2]], [r2, [r1]]] as const) assert.equal(verdicts(renamed, target, [...refs]).verdict, 'unknown');
+    assert.equal(verdicts(renamed, r1, [r2]).reason, 'missing');
+    assert.match(verdicts(renamed, r1, [r2]).why ?? '', /^is not in the older build's files/);
 
     const extracted = newRepo('extracted');
     const repoKt = 'apps/clipboard/modules/clipboard-core/android/src/main/java/expo/modules/clipboardcore/android/Repo.kt';
-    const before = commit(extracted, { [repoKt]: 'class Repo {\n  val h = SQLiteOpenHelper(context, "clips.db", null, 1)\n  fun a() {}\n}\n', 'apps/clipboard/App.tsx': 'x' });
-    const after = commit(extracted, { [repoKt]: 'class Repo {\n  fun a() {}\n}\n', [CLIP]: clipSource(2) });
-    for (const [target, refs] of [[before, [after]], [after, [before]]] as const) assert.equal(checkSchemas(extracted, 'clipboard', target, [...refs])[0].verdict, 'unknown');
+    const e1 = commit(extracted, { [repoKt]: 'class Repo {\n  val h = SQLiteOpenHelper(context, "clips.db", null, 1)\n  fun a() {}\n}\n', 'apps/clipboard/App.tsx': 'x' });
+    const e2 = commit(extracted, { [repoKt]: 'class Repo {\n  fun a() {}\n}\n', [CLIP]: clipSource(2) });
+    for (const [target, refs] of [[e1, [e2]], [e2, [e1]]] as const) assert.equal(verdicts(extracted, target, [...refs]).verdict, 'unknown');
+
+    const syntax = newRepo('syntax');
+    const s1 = commit(syntax, { [OLD]: clipSource(1), 'apps/clipboard/App.tsx': 'x' });
+    const s2 = commit(syntax, { [CLIP]: 'class ClipDatabase : SQLiteOpenHelper(context, NAME, null, DB_VERSION)\n', [OLD]: 'moved\n' });
+    for (const [target, refs] of [[s1, [s2]], [s2, [s1]]] as const) assert.equal(verdicts(syntax, target, [...refs]).verdict, 'unknown');
   });
 
-  it('a target from before the database was first added is fine, though the app folder exists', () => {
+  it('a target from before the database existed is unknown too, and only an absent app folder is absent', () => {
     const young = newRepo('young');
     const early = commit(young, { 'apps/clipboard/App.tsx': 'x' });
     const added = commit(young, { [CLIP]: clipSource(2) });
-    const later = commit(young, { 'apps/clipboard/App.tsx': 'y' });
-    assert.deepEqual(checkSchemas(young, 'clipboard', early, [later])[0], { app: 'clipboard', db: 'clips.db', target: null, current: 2, verdict: 'ok' });
-    assert.equal(checkSchemas(young, 'clipboard', added, [later])[0].verdict, 'ok');
+    assert.equal(verdicts(young, early, [added]).verdict, 'unknown');
+    assert.equal(verdicts(young, added, [early]).verdict, 'unknown');
+    const noApp = commit(young, { 'apps/other/App.tsx': 'x' });
+    git(young, 'rm', '-q', '-r', 'apps/clipboard');
+    git(young, 'commit', '-m', 'drop');
+    assert.equal(verdicts(young, git(young, 'rev-parse', 'HEAD'), [added]).verdict, 'ok');
+    assert.equal(noApp.length, 40);
   });
 
-  it('applies the same rule to the commits holding the phone\'s data', () => {
-    const young = newRepo('young2');
-    const early = commit(young, { 'apps/clipboard/App.tsx': 'x' });
-    const added = commit(young, { [CLIP]: clipSource(2) });
-    assert.equal(checkSchemas(young, 'clipboard', added, [early])[0].verdict, 'ok');
-    const moved = newRepo('moved2');
-    const before = commit(moved, { [OLD]: clipSource(1), 'apps/clipboard/App.tsx': 'x' });
-    mkdirSync(join(moved, CLIP, '..'), { recursive: true });
-    git(moved, 'mv', OLD, CLIP);
-    const after = commit(moved, { [CLIP]: clipSource(2) });
-    assert.equal(checkSchemas(moved, 'clipboard', after, [before])[0].verdict, 'unknown');
-  });
-
-  it('cannot decide when the file history is unreadable from here', () => {
+  it('cannot decide when the file never existed in the history', () => {
     const lone = newRepo('lone');
     const a = commit(lone, { 'apps/clipboard/App.tsx': 'x' });
     const b = commit(lone, { 'apps/clipboard/App.tsx': 'y' });
-    assert.equal(checkSchemas(lone, 'clipboard', a, [b])[0].verdict, 'unknown');
+    assert.equal(verdicts(lone, a, [b]).verdict, 'unknown');
   });
 
   it('takes the highest schema of several commits, and says unknown when the commits cannot be named or are only a guess', () => {

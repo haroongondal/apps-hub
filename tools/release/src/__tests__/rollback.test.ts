@@ -6,7 +6,6 @@ import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
 import { SIGNING_CERT_SHA256, emptyManifest, upsertAndroidRelease, type AndroidRelease, type StoreManifest } from '@apps-hub/store-manifest';
 import { androidEntry, assertVersionStillFree, releaseAndroid } from '../release-android.ts';
-import { WHY } from '../schemas.ts';
 import { blockingSchemas, formatPlan, gateRollback, planRollback, rollbackFlagError, rolledBackFrom, storeTarget, withWorktree, type RollbackPlan } from '../rollback.ts';
 
 const tmp = mkdtempSync(join(tmpdir(), 'release-rollback-'));
@@ -401,24 +400,28 @@ describe('gateRollback', () => {
   });
 
   it('refuses a schema it cannot read, like a newer one, but says it could not tell instead of calling the data newer', () => {
-    const plan = { ...base, schemas: [{ ...newer, target: null, verdict: 'unknown' as const, why: 'a registered file is missing at one of the commits although the app is there, so it may have moved or been renamed' }] };
+    const plan = { ...base, schemas: [{ ...newer, target: null, verdict: 'unknown' as const, reason: 'missing' as const, why: "is not in the older build's files, so the tool cannot tell whether that build ever opened it. If the database was created after that build, rolling back is safe: pass --accept-newer-data." }] };
     assert.equal(blockingSchemas(plan).length, 1);
     const g = gateRollback(plan, { yes: true, acceptNewerData: false });
     assert.equal(g.exitCode, 1);
     const text = g.lines.join('\n');
     assert.doesNotMatch(text, /newer format/);
     assert.match(text, /could not tell whether netlens's data/);
-    assert.ok(text.includes('devices: a registered file is missing'));
-    assert.match(text, /Check the file's history by hand, then pass --accept-newer-data/);
-    assert.doesNotMatch(text, /Fetch origin/);
-    const fetch = gateRollback({ ...plan, schemas: [{ ...plan.schemas[0], why: WHY.commit }] }, { yes: true, acceptNewerData: false }).lines.join('\n');
+    assert.ok(text.includes("netlens: devices is not in the older build's files, so the tool cannot tell whether that build ever opened it. If the database was created after that build, rolling back is safe: pass --accept-newer-data."));
+    assert.doesNotMatch(text, /Fetch origin|history by hand/);
+    const fetch = gateRollback({ ...plan, schemas: [{ ...plan.schemas[0], reason: 'commit' as const, why: 'x' }] }, { yes: true, acceptNewerData: false }).lines.join('\n');
     assert.match(fetch, /Fetch origin and run it again/);
-    assert.doesNotMatch(fetch, /history by hand/);
+    assert.doesNotMatch(fetch, /history by hand|HEAD and origin\/main/);
+    const guess = gateRollback({ ...plan, schemas: [{ ...plan.schemas[0], reason: 'guess' as const, why: 'x' }] }, { yes: true, acceptNewerData: false }).lines.join('\n');
+    assert.match(guess, /The Store has no commit recorded for this release, so the tool compared against HEAD and origin\/main; release once normally to record one, or pass --accept-newer-data if you are sure\./);
+    assert.doesNotMatch(guess, /Fetch origin/);
+    const unreadable = gateRollback({ ...plan, schemas: [{ ...plan.schemas[0], reason: 'unreadable' as const, why: 'x' }] }, { yes: true, acceptNewerData: false }).lines.join('\n');
+    assert.match(unreadable, /Check the file's history by hand/);
     assert.match(text, nothingYet);
   });
 
   it('prints both sections when one database is ahead and another cannot be established', () => {
-    const text = gateRollback({ ...base, schemas: [newer, { ...newer, db: 'other', verdict: 'unknown' as const, why: 'x' }] }, { yes: true, acceptNewerData: false }).lines.join('\n');
+    const text = gateRollback({ ...base, schemas: [newer, { ...newer, db: 'other', verdict: 'unknown' as const, reason: 'unreadable' as const, why: 'x' }] }, { yes: true, acceptNewerData: false }).lines.join('\n');
     assert.match(text, /stores data in a newer format/);
     assert.match(text, /could not tell/);
   });
