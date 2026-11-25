@@ -181,6 +181,7 @@ Open naming: app name, package (com.haroon.<name>), Store release id, @apps-hub/
 - Gates (2026-11-24): halo-engine JVM 206 (165), notch-island 128 (127), assembleDebug ok, merged manifest `auditManifest` = [];
   halo ts 137 (127), typecheck clean, app-link-contract 133. Mutations checked: private filter, freshness, receiver extras, settle
   time, guard copy drift, share fixture drift, the provider signer check and the locked gate all fail their tests.
+- Fix wave 2026-11-25 (branch fix/halo): the re-read gate wiring is now testable. `RereadSlot` (core/LinkTiming.kt) owns the posted read; `Links.stop()` (service ends) and `Links.clear()` (every link switch off) both call `slot.cancel()`, which removes the posted read and frees the gate (the audit's two `gate.cancel()` calls; neither is about an untrusted read). JVM tests in `LinkTimingTest`, source pin in `links.test.ts`. The private-lines switch now reads "Show private briefing lines in the preview" (the always-on screen shows counts only). Still phone-only: that `Links.stop` runs from `HaloService.onDestroy` and `Links.clear` from the settings write (item 1 below covers the switches-off case).
 - Not checked on the phone (needs Store-signed builds of Halo, TunnelWall, HomeNet, Inflow and Deputy; debug builds refuse each other):
   1. Halo: with every switch in Your other apps off, the Diagnostics event log shows no `links read` line; turn one on and one appears.
   2. TunnelWall Shields on, join a Wi-Fi not in the trusted list: within ~5 s of its ping the edge pulses red, again after 5 min;

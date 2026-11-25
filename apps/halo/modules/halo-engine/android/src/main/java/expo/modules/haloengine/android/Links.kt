@@ -22,6 +22,7 @@ import expo.modules.haloengine.core.RawRow
 import expo.modules.haloengine.core.ReadShare
 import expo.modules.haloengine.core.ShareOwners
 import expo.modules.haloengine.core.RereadGate
+import expo.modules.haloengine.core.RereadSlot
 import expo.modules.haloengine.core.any
 import expo.modules.haloengine.core.readsWaiting
 import java.time.LocalTime
@@ -44,6 +45,7 @@ object Links {
   private var pulse = PulseState()
   private var bubble: WaitingBubble? = null
   private val read = Runnable { readNow() }
+  private val slot = RereadSlot(gate, { main.postDelayed(read, it) }, { main.removeCallbacks(read) }, ::clock)
   private val tick = Runnable { evaluate() }
 
   @Volatile var snapshot = LinkSnapshot()
@@ -53,20 +55,19 @@ object Links {
 
   private fun clock() = SystemClock.elapsedRealtime()
 
-  fun ping(ctx: Context) = main.post { if (wanted(ctx)) schedule(gate.onPing(clock())) }
+  fun ping(ctx: Context) = main.post { if (wanted(ctx)) slot.ping() }
 
-  fun opened(ctx: Context) = main.post { if (wanted(ctx)) schedule(gate.onOpen(clock())) }
+  fun opened(ctx: Context) = main.post { if (wanted(ctx)) slot.opened() }
 
-  fun ensureFresh(ctx: Context) = main.post { if (wanted(ctx)) schedule(gate.onStale(clock())) }
+  fun ensureFresh(ctx: Context) = main.post { if (wanted(ctx)) slot.stale() }
 
   fun settingsChanged(ctx: Context) = main.post {
-    if (!wanted(ctx)) clear() else schedule(gate.onOpen(clock()))
+    if (!wanted(ctx)) clear() else slot.opened()
     evaluate()
   }
 
   fun stop() = main.post {
-    main.removeCallbacks(read)
-    gate.cancel()
+    slot.cancel()
     main.removeCallbacks(tick)
     bubble?.remove()
     bubble = null
@@ -77,15 +78,8 @@ object Links {
     return HaloService.current(ctx).links.any
   }
 
-  private fun schedule(at: Long?) {
-    at ?: return
-    main.removeCallbacks(read)
-    main.postDelayed(read, maxOf(0L, at - clock()))
-  }
-
   private fun clear() {
-    main.removeCallbacks(read)
-    gate.cancel()
+    slot.cancel()
     snapshot = LinkSnapshot()
     pulse = PulseState()
     onChange?.invoke()
