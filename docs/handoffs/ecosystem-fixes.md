@@ -332,6 +332,134 @@ Read-only queries on `/Users/outsentia/Documents/apps-hub` on 2026-11-25:
 - `git rev-list --count main..origin/main`: **387** commits behind. `origin/main..main`: 1 commit, `226a9470` "Strongroom: suggest a strong password on signup forms" (2026-11-10), not on origin under that subject. Its content is on main in later form (`PasswordGenerator.kt` and its test are byte-identical; the other four files were changed again afterwards), so nothing is lost by ignoring it. Merge base with origin/main is `93f21a16` (2026-11-06).
 - The Model Host decision is **unanswered**. From `git show origin/model-host:docs/handoffs/model-host.md` ("Current state + exact next step", Phase 0 done on the phone 2026-11-06): **A (recommended)** stop Model Host for this phone, Deputy stays on the cloud, keep the bench and the results; **B** build the Picker only (Kev-0.8B text-only, `-t 2 -c 4096`, 0.35 gate; about 9 s per pick, 2.8 GB RAM, overrides the spec's 2 s and 16/20 bar); **C** spend one hour trying the MNN-LLM runtime on the same phone (needs the phone and the queue). Picker, Deputy-with-screenshot and Thinker all failed the bar on the owner's Redmi Note 14 Pro 4G. Branch `model-host` (PR #27 closed) still holds the unmerged bench, spec, plan and handoff, so it stays until the owner answers.
 
+## Stream results (from the stream reports in `fix-work/reports/`, written 2026-11-25; branch tips at 20:40, re-run `git rev-parse` before use)
+
+Every branch is cut from origin/main `964e19ab`, has no push and no attribution line, and every phone check is "not run" (full steps in `docs/handoffs/phone-checks.md`). Gate numbers are the streams' own real output; the docs stream re-ran only the doctor and the merge probe (below).
+
+| Stream | Branch (tip) | Items | Result | Gates the stream reported |
+|---|---|---|---|---|
+| A release safety | `fix/release` (e7d18ccf) | A1 plan then `--yes`; A2 schema check and `--accept-newer-data`; A3 `rolledBackFrom` and Store row; A4 CI failure | DONE all four. A4: the failure on the #87 merge (run 45426964968) was a real version race, not a flaky test | release 74 pass, store-manifest 10, store 24, root 3335 pass, typecheck clean |
+| C1 AI hub v3 | `fix/ai-hub` (f06e5f70) | `raw`, `toolChoice`, images in chat, `reasoningEffort`, `service` pin (beyond the brief), v2 compatibility | DONE; own security review: 0 critical, high or medium, 2 low, both fixed | hub JVM 142, ai-hub-client Kotlin 12 and ts 13, ai-hub ts 9, app-link-contract 139, root 3299 pass; `:app:assembleDebug` not re-run after the last fix |
+| C2 Deputy on the hub | `fix/deputy-hub` (abc96c02, contains `fix/ai-hub`) | hub first, own key once as fallback, one service per run | DONE; own security review 1 medium (fixed); code review follow-up (unknown model priced at a Pro ceiling, plain "too long" message) | Deputy JVM 372 pass, deputy ts 25, root 3300 pass |
+| B Deputy | `fix/deputy` (4f9d65c7) | `finish()` after a replaced proposal; checks of no re-download, saved-files report, 429 wait | DONE; the three checks already had tests | Deputy JVM 350 pass, deputy ts 24 |
+| B Halo | `fix/halo` (cffc941f) | `gate.cancel()` through `RereadSlot`; link-switch copy | DONE | halo-engine 214, notch-island 128, halo ts 140 |
+| B HomeNet | `fix/homenet` (b5a60c74) | `useHomeWatch` controller, serial update chain | DONE; regression audit: accepted deletion of one brittle source-text test (the unlock path goes on the phone list) | core 376, netlens 1 |
+| B Inflow | `fix/inflow` (2dbe94b8) | refresher, hub routing and health consent wiring tests; pass rows in the briefing cards line | DONE | inflow-core JVM 867, inflow ts 152 |
+| B TunnelWall | `fix/tunnelwall` (b2c3256b) | kill switch and shield window tests (`KillSwitch.afterEstablish`, `TunnelLinkStore`) | DONE; the `holdBlock` edge is pinned, not fixed; owner finding below | JVM 223 (app plus module), open-tunnel-core 45, ts 155 |
+| D Strongroom | `fix/strongroom` (e924043c) | optional `expiresOn` on a pass; Wi-Fi networks as QR passes | DONE additively (no vault format change); security fix for the edit rule and NFC | strongroom-core 190, strongroom ts 116, extension unit 139, Gradle 679 JVM pass |
+| E OCR | `fix/ocr` (fefca1f0) | Arabic and Urdu, language choice in Nexus Scan text | DONE; accuracy measured on synthetic pictures only, not on a phone | text-ocr 9, library-core 121, pdf-editor-mobile 223, Gradle text-ocr 11 and pdf-scan 59 |
+| F Design Editor | `fix/design-editor` (6758adf3) | C7 brand kit from an image | Already on main (4fc78b36); only a wiring test (3 tests) added; Gradle skipped (no native change) | design-editor-mobile 154 |
+| H docs | `fix/docs` | H1, H2, H4 research, this file, G, H3 | see below | doctor, probe merge |
+
+Not seen when this was written: the results of the scoped invariant re-review of `fix/release` and the independent code review of `fix/deputy-hub` (the coordinator had them running); read the coordinator's `fix-work/progress.md` for them.
+
+## G1. `expo-doctor` (run 2026-11-25 from `fix-docs`)
+
+**Plain `pnpm doctor` is not this script.** In pnpm 12 it is pnpm's own check ("Versions, Cache directory, Registry connectivity, Install smoke test": all passed, 1 warning about Corepack). It does not run `expo-doctor`. The root script is `pnpm run doctor` (`pnpm -r --if-present run doctor`), and only four apps carry a `doctor` script. `AGENTS.md` and `CLAUDE.md` now say `pnpm run doctor`; `.claude/agents/repo-verifier.md` and `.claude/skills/upgrading-dependencies/SKILL.md` still say `pnpm doctor` (listed under "Docs still to fix").
+
+Baseline, origin/main `964e19ab` (this worktree before any fix): `pnpm -r --no-bail --if-present run doctor` exits 1 (ELIFECYCLE in 4 packages). Every app is **16/18 checks passed**, and the two failures are identical everywhere, so nothing is new: (1) "Check for common project setup issues": the `android` and `ios` directories of local Expo modules are gitignored (the repo's pattern is too general for this check; the repo commits those module directories on purpose, see CLAUDE.md "Each app's android/ is a committed Expo prebuild"); (2) "Check for app config fields that may not be synced in a non-CNG project": the apps contain committed native folders and also have prebuild fields in `app.json`.
+
+| App | Has a `doctor` script | Baseline (origin/main) | On its branch(es) |
+|---|---|---|---|
+| HomeNet `apps/netlens` | yes | 16/18 | `fix/homenet` 16/18 |
+| TunnelWall `apps/open_tunnel_vpn` | yes | 16/18 (matches the 16/18 baseline the TunnelWall stream also saw) | `fix/tunnelwall` 16/18 |
+| Nexus `apps/pdf-editor-mobile` | yes | 16/18 | `fix/ocr` 16/18 |
+| Design Editor mobile `apps/design-editor-mobile` | yes | 16/18 | `fix/design-editor` 16/18; `fix/ocr` 16/18 (shares `text-ocr`) |
+| Deputy `apps/deputy` | no (ran the binary from `apps/netlens` inside its folder) | 16/18 | `fix/deputy` 16/18; `fix/deputy-hub` 16/18 (adds the `ai-hub-client` workspace dependency) |
+| Inflow `apps/inflow` | no (same way) | 16/18 | `fix/inflow` 16/18; `fix/ocr` 16/18 |
+| Halo `apps/halo` | no (same way) | 16/18 | `fix/halo` 16/18 |
+| Strongroom `apps/strongroom` | no (same way) | 16/18 | `fix/strongroom` 16/18 |
+| AI hub `apps/ai-hub` | no (same way) | 16/18 | `fix/ai-hub` 16/18 |
+| Store `apps/store` | no (same way) | 16/18 | `fix/release` 16/18 |
+| Clipboard `apps/clipboard` | no (same way) | 16/18 | no branch touches it |
+| autonomous-browsing, sieve, strongroom-extension, pdf-editor-desktop, design-editor (Mac) | not Expo apps | not run | not run |
+
+Same two failures on every row (checked: `grep '✖'` over every log). No branch changed the result. The "not synced" and "gitignored" failures predate the fixes; fixing them is outside this wave (would change `.gitignore` and the CNG strategy: owner decision, not taken).
+
+## Merge probe (read-only, in a throwaway worktree that was then removed)
+
+Method: `git worktree add --detach .../fix-merge-probe`, then `git merge --no-commit --no-ff` of the twelve branches in the planned order, one commit each (conflicts resolved with `--ours` only to keep going), then the worktree was removed.
+
+- Onto origin/main `964e19ab` (where the branches were cut): **all 12 merges clean, no conflict**, including `AGENTS.md` (Strongroom, OCR, deputy-hub and docs each edit different paragraphs) and `docs/handoffs/deputy.md` (both Deputy branches add text in different places).
+- Onto the current origin/main `8631d144` (after #110): **one conflict**, `apps/inflow/package.json`, in the `test` script. Main's #110 added `src/__tests__/autoReceipts.test.ts`, `fix/inflow` added `src/__tests__/health-consent.test.ts`: keep both names in the one line. Nothing else conflicts.
+- On the merged tree (all 12 branches onto `8631d144`, `fix/inflow`'s test line resolved to main's side so its `health-consent.test.ts` did not run): `pnpm install --frozen-lockfile --prefer-offline` passed (the lockfile edits of `fix/deputy-hub` and the `fix/ocr` package changes agree), `pnpm -r --no-bail --workspace-concurrency=2 --if-present run typecheck` exit 0 with 0 `error TS`, and `pnpm -r --no-bail --workspace-concurrency=2 test` exit 0 with 3374 passing and 0 failing across 34 packages. No Gradle was run on the merged tree.
+- The probe merged the tips in the Stream results table (`fix/release` e7d18ccf and `fix/deputy-hub` abc96c02 were the newest commits when it ran). Streams were still adding commits, so re-probe once more right before the real merges; the probe script is nothing more than the loop "`git merge --no-commit --no-ff <branch>`, list conflicted files, commit, next" in the order of the PR plan.
+
+## PR plan
+
+One PR per branch (the owner pushes; nothing is pushed). Order, with the release each one needs afterwards (`pnpm release <id>`, only on the owner's go, merge with `[skip ci]` per owner memory):
+
+| Order | Branch | Merge note | Releases (id) | Why this place |
+|---|---|---|---|---|
+| 1 | `fix/release` | tooling, manifest field, Store row | `store` | Store must carry the "Rolled back from" row and the health screen before anything is checked in it |
+| 2 | `fix/ai-hub` | | `ai-hub` | The hub must be on the phone before any hub path or link can be phone-tested |
+| 3 | `fix/deputy-hub` | contains `fix/ai-hub`; merges as two extra commits after step 2 | `deputy` | Needs the v3 hub |
+| 4 | `fix/deputy` | | (same Deputy release) | |
+| 5 | `fix/halo` | | `halo` | |
+| 6 | `fix/homenet` | | `netlens` | |
+| 7 | `fix/inflow` | resolve `apps/inflow/package.json` (keep both test files) | `inflow` | Reads Strongroom pass rows |
+| 8 | `fix/tunnelwall` | | `open-tunnel` | |
+| 9 | `fix/strongroom` | | `strongroom` (and reload the unpacked extension) | |
+| 10 | `fix/ocr` | | `pdf-editor` (Nexus); Inflow and Design Editor mobile grow about 1.8 MB at their next release | |
+| 11 | `fix/design-editor` | a test only | none | |
+| 12 | `fix/docs` | last: its AGENTS.md text says the hub is apiVersion 3 and Deputy calls it | none | |
+
+Release order for the phone checks: Store, AI hub, Deputy, then Halo, HomeNet, Inflow, TunnelWall, Strongroom, Nexus (details and the checks each unlocks: `docs/handoffs/phone-checks.md`).
+
+## Docs still to fix (docs and code that still disagree; not fixed here)
+
+Fixed in this pass (on `fix/docs`): the AGENTS.md AI hub paragraph (apiVersion 3, hub-only apps, Deputy), the AGENTS.md HomeNet sentence (controller), `pnpm doctor` in `AGENTS.md` and `CLAUDE.md`, the app-link-contract README (Nexus is its own app, Inflow is wired to the release signing, so signing findings (a) and (b) were stale; finding (c) about AI hub had already been corrected by the earlier docs pass), the ecosystem.md ledger.
+
+Still open:
+
+1. `.claude/agents/repo-verifier.md` line 25 and `.claude/skills/upgrading-dependencies/SKILL.md` lines 20 and 39 say `pnpm doctor`; it should be `pnpm run doctor`. Not edited: these are agent and skill instructions, outside the docs scope of this stream.
+2. `apps/pdf-editor-mobile/AGENTS.md` is the stock Expo template: it says `npx expo install`, "if `ios/` and `android/` do not exist they are generated" and "never create or edit them by hand", while the repo uses pnpm and commits each app's `android/` (CLAUDE.md). It also names Expo Router and EAS, which this app and the Store flow do not use. The root AGENTS.md and CLAUDE.md win; consider replacing the file.
+3. `apps/open_tunnel_vpn/AGENTS.md` (rule 3, the kill-switch boundary) matches the code (`KillSwitch`, `TunnelLinkStore`): no disagreement found. The new owner finding (`startTunnel` ignores `holdBlock`'s result) is in no doc but this file and `phone-checks.md`; once decided, put it into `docs/handoffs/network-toolkit.md`.
+4. `docs/handoffs/deputy.md` still has the E2 section "Result: not feasible with AI hub apiVersion 2. Deputy stays on its own keys." (around line 1680) without a pointer to the new "AI hub first" section that `fix/deputy-hub` appended at the end. History, but a reader of the middle of the file is misled.
+5. `docs/handoffs/ai-hub.md` line 90 says "No app uses it yet" in a note written before the hub had callers; three apps are hub-only and Deputy is hub-first on `fix/deputy-hub`.
+6. `AGENTS.md` "Verification Commands" has no native gate lines for AI hub, Clipboard, the Store and the text-ocr module. The hub gate needs an init script that includes `ai-hub-client` (see `packages/ai-hub-client/README.md`); its exact command was not written into the root file because it was not run from there.
+7. `docs/handoffs/ecosystem.md` keeps its first-wave history; this pass only added bracketed notes and the new final section, so older sentences about "no owner go yet", "Deputy not wired to the hub" and "apps keep own keys" still read as history in the middle of the file.
+8. `docs/app-store.md` line 149 ("`--rollback` without `--dry-run` builds and publishes") is true on main and false on `fix/release`, which rewrites that section; nothing to do after the merge, but do not edit it separately.
+9. `docs/handoffs/design-editor-media.md` and `network-toolkit.md` carry phone-check lists that this wave's `phone-checks.md` condenses; if a list is changed in one place, change it in the other (no tool enforces it).
+10. The HomeNet first-wave phone list was not kept in the repo (the handoff points at "the C4 report" and "the P4 report" outside it); `phone-checks.md` rebuilds it from the AGENTS.md paragraph, so it may differ from the original reports.
+
+## OWNER DECISIONS (final list, collected from all stream reports and the coordinator ledger)
+
+Recommended answer first where there is one. Nothing below was decided by the docs stream.
+
+### Release safety (stream A)
+1. A1: rollback prints the plan and needs `--yes` to build and publish. Built (my call, ecosystem decision 18). Recommended: keep.
+2. A2: `--accept-newer-data`, built and marked: lets a rollback through when the phone's data is newer than the target's schema, still needs `--yes`, never deletes anything (recovering would mean clearing app storage). Keep or drop? Dropping means deleting the flag, one branch in `schemaNotice` and one doc paragraph. Related (my calls, say if you disagree): the check compares against the release published on the phone (HEAD only as a fallback), "cannot tell" refuses like "newer", `--dry-run` stays as a no-op alias, and a Nexus rollback to before `scan-core` or `knowledge-core` existed needs `--accept-newer-data` unless the marker search proves the database absent. Residual: a chain of accepted rollbacks (c2 to c1 to c0) forgets c2 once the manifest entry is replaced again.
+3. Write-once APK keys in `tools/store-api` (a Worker deploy): the real CI failure on the #87 merge (run 45426964968, 2026-11-24 15:33) was two releases publishing the same `versionCode` (pdf-editor 25) while the first was still building; the loser overwrote the winner's APK key and the manifest kept the winner's hash. A guard that re-reads the manifest before upload is built (`assertVersionStillFree`) and shrinks the window to the upload time; the proper fix is refusing a PUT to an existing `apps/*/android/<n>.apk` key. Recommended: do it (needs the owner's Worker deploy, confirm the Cloudflare account first).
+
+### AI: which apps are hub-only and which fall back (stream C)
+4. State today (read from AGENTS.md and the reports): **hub-only** (no key of their own, owner decision 2026-11-24, #91 to #93): Nexus, Inflow, Design Editor phone. **Hub first with the own key as a fallback**: Deputy, on `fix/deputy-hub` only (on main Deputy uses its own key only). The Design Editor Mac app keeps its own keys. HomeNet, TunnelWall, Halo, Clipboard, Strongroom and the Store have no AI call. Decision: should Deputy go hub-only too (drop the own-key fallback and the requirement of an own key to Run)? As built, the own key is still needed to Run (setup unchanged) and takes over only before the hub has answered once in a run.
+5. Deputy pricing: the brief said "not counted"; built differently (my call): a hub step is priced by the reply's model, and an unknown model at a high ceiling (Gemini 3 Pro's published prices, since the model id is free text) so the cost limits still trip. Say if you want a "not counted" label instead.
+6. `maxTokens` 4096 per Deputy hub step (my call). The hub `service` pin (groq or gemini; a pinned request never falls back) is a request field beyond the brief, kept because Gemini's thought signatures in a replayed history are refused by Groq. The hub now rejects a non-`data:image/` picture on every version (a deliberate tightening, my call). Say if any of the three should go.
+7. Unverified on a real key: Groq-produced history later served by Gemini (key exhaustion, or a Groq step then a picture step) may be refused for missing thought signatures; Deputy pins Gemini for a whole run to avoid it. Binder carries a 512 KB request as about 800 KB: close to the 1 MB per-process limit (the hub's known open item).
+
+### Strongroom (stream D)
+8. Accept that an older build editing a dated pass saves it without the date (neither old decoder keeps unknown keys, and shipped code cannot change), or update the phone and the extension together before using dates. Built additively. Recommended: update both together.
+9. Inflow reading `pass` expiry rows: BUILT on `fix/inflow` (counts only, wording "N cards and passes expire this month", my call). Nothing to decide unless you want other wording.
+10. Not built, on purpose (a secret would cross apps or need a new native field): a Wi-Fi "Copy password" button, and the TunnelWall and HomeNet links to a Strongroom Wi-Fi entry. Say if you want either.
+
+### OCR (stream E)
+11. Size: Nexus grows by about 1.72 MiB (measured on the debug APK, deflated 1,806,493 bytes); Design Editor mobile and Inflow share the module and grow by about 1.8 MB each at their next release (not measured). Option: split the models so only Nexus ships `ara` and `urd`.
+12. The confidence filter stays at 40 for every language; a nearly right Arabic line scoring 30 to 40 is dropped (one of four test pictures lost half its lines). Lower it for Arabic and Urdu only if the phone shows the same.
+13. Urdu Nastaliq reads poorly (CER 37 to 52 percent on synthetic pictures); the wording says clear printed text and to check the result. Nothing to do unless you want a different engine.
+14. CV photo import, Design Editor Copy text and Inflow receipts stay English-only (only Scan text has the language choice); no language auto-detect and no "Arabic and Urdu together" choice. OCR text feeds nothing in Nexus (the Library normalisation is proven by a test, not a screen), and the notices screen for Leptonica, IJG and libpng is still open.
+
+### TunnelWall
+15. Pre-existing finding (not changed): `OpenTunnelVpnService.startTunnel` (about line 194) calls `if (armed) holdBlock()` and ignores the result. Path: armed, block held, an engine started since and failed before its own `establish()`, owner switches relay, `holdBlock`'s `establish()` fails: the old block is closed, "not blocking" is published, the service is NOT torn down and the new engine starts, so traffic can leave unprotected until it establishes. Options: (a) call `failStart` when `holdBlock` returns false while armed (recommended: it already holds or ends correctly); (b) keep the old fd and do not publish "not blocking" (risks claiming a block an established engine already replaced); (c) both, with engine-established tracking.
+
+### Docs and housekeeping
+16. Remote branches: approve or edit the 37 "merged by squash" deletions (the `git push origin --delete` block in H1 above) and the clean merged-worktree removals (H2). Nothing was deleted.
+17. `extension-email-login`: two commits after PR #36 are not on main (the email sign-in walk in `apps/strongroom-extension/test/e2e.mjs` and the deploy facts: migration 0003 applied to live D1, Worker version c3685565). Port them, or leave the branch.
+18. `model-host`: Model Host A (recommended in its handoff: stop for this phone, keep the bench), B (build the Picker only) or C (one hour on the MNN-LLM runtime). The branch stays until you answer. `autopilot` (closed PR #46, superseded by #52) can go.
+19. Local only: `photo-search` has 6 unpushed handoff-doc commits newer than main's file; `notebox/baseline-single` (12 commits, no remote) is probably superseded by Inflow; uncommitted work sits in the `nexus`, `extension-email-login`, `strongroom-extension`, `sieve` and `photo-search` worktrees.
+20. Parked minors (none blocks a merge): Halo test nits (`links.test.ts` line 79 a vacuous `doesNotMatch`, line 89 a regex on implementation text, `LinkTimingTest` lines 79 to 86 a misnamed test); Strongroom `Wifi.kt` line 23 trims U+001C to U+001F and U+FEFF differently from JavaScript (cosmetic, one line); HomeNet residual: two overlapping saves where the first fails leaves the latest ref at the pre-first value (not reachable with controls disabled) and the deleted brittle source test on the BackgroundChecks unlock path goes on the phone list; AI hub: no direct test of `Msg.hasImage` with an object type (the second guard) and a replay refused if a provider ever returns a non-text, non-image content part; Deputy hub: a hub dying mid-call can make step 1 reach both Gemini (via the hub) and the own provider (both owner-configured); Design Editor: its Gradle gate was skipped (no native change), the owner may want it before any release; 3 older lint errors remain.
+21. Security reviews: `fix/ai-hub`, `fix/deputy-hub` and `fix/strongroom` were reviewed; `fix/ocr` was not (nothing new leaves the phone; one new input, validated natively and tested); Strongroom's share now carries pass names when "Show names" is on (the owner's existing opt-in, same switch as cards).
+
 ## File map
 
 - This file: `docs/handoffs/ecosystem-fixes.md` (branch `fix/docs`). Previous wave: `docs/handoffs/ecosystem.md` (not edited here; the H3 pass edits it later).
@@ -354,19 +482,22 @@ Read-only queries on `/Users/outsentia/Documents/apps-hub` on 2026-11-25:
 | H1/H2/H4 docs research | `fix-docs` | `fix/docs` | `brief-docs-a.md` |
 
 - Source docs for the research: `docs/handoffs/ecosystem.md` (Reuse table), `docs/handoffs/model-host.md` (on `origin/model-host` only).
+- `docs/handoffs/phone-checks.md` (new, docs stream): every phone check still not run, per app, in order, with the merge and release order the checks need.
+- `docs/handoffs/ecosystem.md`: updated by the docs stream (merged PRs #75 to #111, bracketed notes where the fixes made a statement false, new final section).
 
 ## Session log
 
 - 2026-11-25 (coordinator): wave dispatched from origin/main `964e19ab`; baseline test and typecheck recorded; first-wave streams running in parallel, one worktree each (ledger in `fix-work/progress.md`).
 - 2026-11-25 (docsa): H1, H2 and H4 research done; this file created; commit "Handoff: ecosystem fixes ledger, branch and worktree classification" on `fix/docs`. No remote branch, worktree or tag was deleted or pushed.
+- 2026-11-25 (docsb): G1 doctor run (every app 16/18, same two failures as the baseline), G2 `phone-checks.md` written (all checks NOT RUN, phone untouched), G3 ecosystem.md brought up to what merged and the first wave's now-false statements annotated, H3 docs pass (AGENTS.md AI hub and HomeNet sentences, `pnpm run doctor`, app-link-contract README signing and Nexus sentences), stream results, merge probe (clean on `964e19ab`; one conflict on `8631d144`), PR plan, "Docs still to fix" and the final owner decision list added to this file.
 
 ## Current state and exact next step
 
-State: H1, H2 and H4 facts are recorded above and committed on `fix/docs` (not pushed). The coordinator keeps this section current as streams report.
+State (2026-11-25, after the docs stream): every stream reported and is committed on its `fix/*` branch (tips in "Stream results"; two scoped reviews were still running). H1, H2, H4, the doctor table, the merge probe, the PR plan, "Docs still to fix", the owner decisions and `docs/handoffs/phone-checks.md` are written and committed on `fix/docs`. Nothing is pushed, merged, released or deployed, and no phone check has run. The coordinator keeps this section current.
 
 Next, in order:
 
-1. Coordinator: collect each stream's report from `fix-work/reports/<stream>.md`, add one line each to the session log.
-2. H3 docs pass (a later agent): edit ecosystem.md and the per-app AGENTS.md paragraphs from the stream reports; fill the phone-checks list (every phone check is "not run").
+1. Coordinator: read the two scoped reviews that were still running (`fix/release`, `fix/deputy-hub`), re-run `git rev-parse` for the tips and the merge probe once more, and fold any late commit into "Stream results" and `phone-checks.md`.
+2. Owner: answer the OWNER DECISIONS list above (items 1 to 3 and 15 change code or a Worker; the rest are choices).
 3. Owner: approve (or edit) the H1 group a `git push origin --delete` block and the H2 removal blocks; decide on class b and c rows (`extension-email-login`, `model-host`, `autopilot`) and on the Model Host A/B/C question; look at the REAL and REVIEW worktrees (uncommitted work in `nexus`, `extension-email-login`, `strongroom-extension`, `sieve`, `photo-search`).
 4. Owner's go for any merge, release or deploy; hub first, then Deputy (C1 before C2).

@@ -26,7 +26,9 @@ Current apps:
   that only calls itself "<person>'s …" is suggested on the Home tab and moves the tag only when
   the owner says yes. The sync (`syncHome`) sends only the home and the device snapshot; native
   keeps the stored switches, and the JS calls are ordered (`orderHomeWatch` in
-  `packages/core/src/home-watch.ts`).
+  `packages/core/src/home-watch.ts`) and queued one after another by `createHomeWatchController`
+  (`packages/core/src/home-watch-controller.ts`, tested with a fake binding; the `useHomeWatch`
+  hook only wires it to React, AppState and permissions).
   "Share with my other Haroon apps" (off by default) serves two read-only signature-guarded
   shares on `com.haroon.netlens.applink` (`com.haroon.permission.AUTOPILOT`, `AppLinkCaller`
   first): `who_is_home` (person tag, present 0/1, last seen time) and `new_devices` (first seen
@@ -459,11 +461,19 @@ Current apps:
   and a per-call log of app, job, service and time (never prompt, reply or key; newest 200; the
   owner can clear it; whether it stays is the owner's call). Apps use it through
   `packages/ai-hub-client` (Kotlin `AiHubClient` plus TS `aiHub`; the AIDL copy is checked byte
-  for byte against the hub's), keep their own key as a fallback on `hub-missing`, `not-allowed`,
-  `version` and `no-key`, and never log prompts or replies. Request contract `apiVersion` 2
-  (embed `dimensions`, transcribe `segments`); version 1 requests still work. Callers today:
-  Nexus, Inflow and Design Editor (phone); Deputy does not call it. Plan: `docs/ai-hub/PLAN.md`;
-  progress: `docs/handoffs/ai-hub.md`.
+  for byte against the hub's) and never log prompts or replies. The client reports `hub-missing`,
+  `not-allowed`, `version` and `no-key` as the kinds an app may fall back on. Nexus, Inflow and
+  Design Editor (phone) are hub-only (no key of their own, owner decision 2026-11-24, #91 to #93);
+  Deputy uses the hub first and keeps its own key as the fallback. Request contract `apiVersion` 3:
+  version 2 had embed `dimensions` and transcribe `segments`; version 3 adds, for chat and vision,
+  `toolChoice` (auto, required, none), `reasoningEffort` (Groq only), a `service` pin (groq or
+  gemini; a pinned request never falls back to the other service) and pictures inline in chat
+  messages (`data:image/` URLs only, on every version), and its reply adds `raw` (the service's
+  assistant message untouched, so Gemini's thought signatures survive a replay) and `service`. A
+  chat with a picture or a signed history runs on Gemini only. Versions 1 and 2 are answered
+  exactly as before (the new fields are ignored, no `raw`). The request cap stays 512 KB (UTF-8
+  bytes; a big picture goes as the `vision` attachment, not inline). Callers: Nexus, Inflow, Design
+  Editor (phone) and Deputy. Plan: `docs/ai-hub/PLAN.md`; progress: `docs/handoffs/ai-hub.md`.
 - **sieve** (`apps/sieve`) — the owner's ad blocker for Chrome (Manifest V3), sold through
   the Chrome Web Store (release state in `docs/handoffs/sieve.md`). Filter compiler and
   settings logic in `packages/sieve-core`; how to install and what is verified in
@@ -632,5 +642,5 @@ pnpm --filter design-editor test:e2e
 # Chrome extension in real Chromium (build first; needs playwright-core, see its README):
 pnpm --filter strongroom-extension build && pnpm --filter strongroom-extension test:e2e
 # Environment sanity:
-pnpm doctor                     # expo-doctor in every app that ships it
+pnpm run doctor                 # expo-doctor in every app that ships it (plain `pnpm doctor` is pnpm's own check, not this script)
 ```
