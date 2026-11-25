@@ -55,4 +55,28 @@ class KillSwitchTest {
     assertFalse(KillSwitch.reusesBlock(held = false, engineStartedSince = false))
     assertFalse(KillSwitch.reusesBlock(held = false, engineStartedSince = true))
   }
+
+  @Test
+  fun aBlockThatEstablishedReplacesTheOldOneAndIsPublished() {
+    assertEquals(KillSwitch.BlockOutcome(held = true, closeOld = true, publish = true), KillSwitch.afterEstablish(hadBlock = true, established = true))
+    assertEquals(KillSwitch.BlockOutcome(held = true, closeOld = true, publish = true), KillSwitch.afterEstablish(hadBlock = false, established = true))
+  }
+
+  // Known edge, pinned as it is today: the old fd is closed even though the new establish() failed (see KillSwitch.afterEstablish).
+  @Test
+  fun aFailedEstablishStillClosesTheOldBlockAndReportsNotBlocking() {
+    assertEquals(KillSwitch.BlockOutcome(held = false, closeOld = true, publish = false), KillSwitch.afterEstablish(hadBlock = true, established = false))
+  }
+
+  @Test
+  fun aFailedEstablishWithNoOldBlockPublishesNothing() {
+    assertEquals(KillSwitch.BlockOutcome(held = false, closeOld = true, publish = null), KillSwitch.afterEstablish(hadBlock = false, established = false))
+  }
+
+  @Test
+  fun aLiveBlockIsNeverRetriedSoTheEdgeNeedsAnEngineStartedSince() {
+    // holdBlock calls afterEstablish only when reusesBlock is false.
+    assertTrue(KillSwitch.reusesBlock(held = true, engineStartedSince = false))
+    assertFalse(KillSwitch.reusesBlock(held = true, engineStartedSince = true))
+  }
 }

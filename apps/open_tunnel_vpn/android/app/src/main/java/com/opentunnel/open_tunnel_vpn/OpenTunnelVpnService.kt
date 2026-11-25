@@ -487,9 +487,10 @@ class OpenTunnelVpnService : VpnService() {
         .establish()
     }.onFailure { Log.w(TAG, "could not block traffic: ${it.javaClass.simpleName}") }.getOrNull()
     engineStartedSinceBlock = false
-    stale?.let { runCatching { it.close() } }
-    if (blockFd != null) publishBlocking(true) else if (stale != null) publishBlocking(false)
-    return blockFd != null
+    val outcome = KillSwitch.afterEstablish(stale != null, blockFd != null)
+    if (outcome.closeOld) stale?.let { runCatching { it.close() } }
+    outcome.publish?.let(::publishBlocking)
+    return outcome.held
   }
 
   private fun releaseBlock() {
