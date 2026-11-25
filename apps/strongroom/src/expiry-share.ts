@@ -13,5 +13,5 @@ export const EXPIRY_SHARE = defineShare<ExpiryRow>()({
   authority: 'com.haroon.strongroom.applink',
   path: 'expiry',
   columns: { kind: 'string', label: 'string', expires_on: 'string', days_left: 'long' },
-  description: 'Card expiry dates (and card names only when the owner turns on Show names), read by sibling apps when the owner turns on sharing',
+  description: 'Card and pass expiry dates (and their names only when the owner turns on Show names), read by sibling apps when the owner turns on sharing',
 });

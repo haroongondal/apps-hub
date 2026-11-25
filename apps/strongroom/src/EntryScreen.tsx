@@ -167,7 +167,10 @@ export function EntryScreen({ id, onBack, onEdit, onLocked }: Props) {
   } else if (entry?.type === 'note') {
     fields.push(<Row key="text" title="Note" subtitle={value(entry.text ?? '')} />);
   } else if (entry?.type === 'pass') {
-    if (entry.wifi) fields.push(secretRow('code', undefined, 'Wi-Fi password', (raw) => parseWifi(raw)?.password || 'None (open network)'));
+    if (entry.wifi) fields.push(secretRow('code', undefined, 'Wi-Fi password', (raw) => {
+      const w = parseWifi(raw);
+      return w ? w.password || 'None (open network)' : raw;
+    }));
     else fields.push(<Row key="format" title="Format" subtitle={value(entry.format === 'code128' ? 'Code 128' : entry.format === 'ean13' ? 'EAN-13' : 'QR')} />, secretRow('code'));
     if (entry.expiresOn) fields.push(<Row key="expiresOn" title="Expires" subtitle={value(entry.expiresOn)} />);
   }
@@ -180,7 +183,7 @@ export function EntryScreen({ id, onBack, onEdit, onLocked }: Props) {
       {message && <Notice tone={message.tone}>{message.text}</Notice>}
       {entry && (
         <>
-          {entry.type === 'pass' && <PassView id={id} onLocked={onLocked} />}
+          {entry.type === 'pass' && <PassView id={id} onLocked={onLocked} presentable={entry.presentable !== false} />}
           <Group>{fields}</Group>
           {entry.type === 'login' && entry.totp && (
             <Button label="Remove code" variant="secondary" onPress={() => setRemovingCode(true)} block />

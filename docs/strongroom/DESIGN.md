@@ -937,7 +937,9 @@ raised while it is open) and can be presented over NFC for 60 seconds.
   to existing vectors. Older builds ignore the key when they read; one that edits the pass
   saves it without the date. A date that does not read is dropped on decode and the pass
   stays usable. A Wi-Fi network is a QR pass whose code is the standard `WIFI:` string and
-  whose name is the network name; nothing new is stored. The expiry share serves a row for a
+  whose name is the network name; nothing new is stored. It opens in the Wi-Fi form only when
+  that form wrote the exact code; any other `WIFI:` pass edits as a plain pass. A `WIFI:` code is never
+  presented over NFC (the password is in it). The expiry share serves a row for a
   pass only when it has a date.
 - **Not yet proven on a phone.** The Type 4 tag logic is tested against a fake
   reader. Whether HyperOS lets Strongroom win the NDEF AID over Google Wallet, and

@@ -132,6 +132,14 @@ export function parseWifi(code: string): { ssid: string; password: string; secur
   return { ssid: fields.S, password: fields.P ?? '', security: fields.T === 'nopass' ? 'nopass' : 'WPA' };
 }
 
+// A pass may be edited as a Wi-Fi network ONLY when this screen could have written it: a QR whose code is exactly wifiCode(name, password, security).
+// Anything else (another network name than the entry's, extra fields such as H:, E:, I:, T:WEP, T:SAE, a non-QR format) is edited as a plain pass with its code untouched,
+// because the Wi-Fi form would rebuild the code and lose what it does not know. Same rule as Wifi.editable in Wifi.kt, which drives EntryView.wifi.
+export function editableWifi(name: string, code: string, format: PassFormat): { password: string; security: WifiSecurity } | null {
+  const w = format === 'qr' ? parseWifi(code) : null;
+  return w && wifiCode(name.trim(), w.password, w.security) === code ? { password: w.password, security: w.security } : null;
+}
+
 export function validateWifi(ssid: string, password: string, security: WifiSecurity): string | null {
   if (!ssid.trim()) return 'Enter the network name.';
   if (security === 'WPA' && !password) return 'Enter the Wi-Fi password, or choose Open for a network with none.';

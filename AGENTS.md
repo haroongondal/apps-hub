@@ -269,8 +269,10 @@ Current apps:
   records and `vault-vectors.json` are unchanged and older builds read the pass and ignore the key;
   an older build that edits such a pass saves it without the date). A Wi-Fi network is a pass too:
   a QR pass whose code is the standard `WIFI:` string, the network name is the entry's name, and
-  it appears in the Add screen as "Wi-Fi"; its password never leaves the vault or crosses to
-  another app. Expiry share (opt-in, off by default): while on, each unlock and change
+  it appears in the Add screen as "Wi-Fi" and edits as one only when the form itself wrote the
+  code (anything else edits as a plain pass, code untouched); its password never leaves the
+  vault, crosses to another app or goes over NFC (Hold to reader is hidden and refused for a
+  `WIFI:` code). Expiry share (opt-in, off by default): while on, each unlock and change
   writes a small expiry index (card or pass kind, label and date only, sealed with the
   device Keystore key, readable while the vault is locked but not while the phone is) that a
   read-only app link (`content://com.haroon.strongroom.applink/expiry`, signature permission plus

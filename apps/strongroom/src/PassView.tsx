@@ -9,10 +9,12 @@ import { secondsLeft, secondsLeftText } from './forms.ts';
 interface Props {
   id: string;
   onLocked: () => void;
+  // False for a Wi-Fi code: it holds the password, which is never sent over NFC.
+  presentable: boolean;
 }
 
 // The barcode at full width on a bright screen, and the "Hold to reader" sheet that arms the NFC tag.
-export function PassView({ id, onLocked }: Props) {
+export function PassView({ id, onLocked, presentable }: Props) {
   const [width, setWidth] = useState(0);
   const [uri, setUri] = useState<string | null>(null);
   const [ratio, setRatio] = useState(1);
@@ -113,7 +115,7 @@ export function PassView({ id, onLocked }: Props) {
           />
         )}
         {error && <Notice tone="danger">{error}</Notice>}
-        <Button label="Hold to reader" variant="secondary" onPress={present} block />
+        {presentable && <Button label="Hold to reader" variant="secondary" onPress={present} block />}
       </View>
       <Sheet visible={until !== null} onClose={stop} title="Hold to reader" doneLabel="Cancel">
         <Text>Hold the back of your phone to the reader.</Text>

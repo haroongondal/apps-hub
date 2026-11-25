@@ -3,7 +3,7 @@ import { AppState } from 'react-native';
 import { Button, Field, Group, Header, Notice, Row, Screen, Segmented, confirmAction } from '@apps-hub/ui';
 import Vault, { type EntryInput, type PassFormat, type TotpInfo } from 'strongroom-vault';
 import { isLocked, messageOf } from './call.ts';
-import { normalisePassCode, parseWifi, validateExpiry, validatePass, validateWifi, wifiCode, type WifiSecurity } from './forms.ts';
+import { editableWifi, normalisePassCode, validateExpiry, validatePass, validateWifi, wifiCode, type WifiSecurity } from './forms.ts';
 import { BackButton, SecretField } from './parts.tsx';
 
 // Wi-Fi is a pass whose code is a WIFI: string (forms.ts), so it is a screen kind and not an entry type.
@@ -101,7 +101,7 @@ export function EditScreen({ id, onBack, onSaved, onLocked }: Props) {
       if (e.type === 'pass') {
         const code = Vault.reveal(id, 'code');
         Object.assign(fields, { format: e.format ?? 'qr', code, expiresOn: e.expiresOn ?? '' });
-        const wifi = e.wifi ? parseWifi(code) : null;
+        const wifi = editableWifi(e.name, code, e.format ?? 'qr');
         if (wifi) (shownKind = 'wifi'), Object.assign(fields, { password: wifi.password, security: wifi.security });
       }
       setKind(shownKind);

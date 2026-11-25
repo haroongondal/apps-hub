@@ -65,9 +65,11 @@ export interface EntryView {
   text?: string;
   totp?: TotpInfo;
   format?: PassFormat;
-  // A pass: its last valid day (YYYY-MM-DD) when it has one, and whether its code is a Wi-Fi network (the code itself only travels through reveal).
+  // A pass: its last valid day (YYYY-MM-DD) when it has one, and whether the Wi-Fi form can edit it exactly (a QR the form itself wrote; anything else is a plain pass). The code itself only travels through reveal.
   expiresOn?: string;
   wifi?: boolean;
+  // false when the code holds a Wi-Fi password: it is never presented over NFC.
+  presentable?: boolean;
 }
 
 export interface ImportPreview {
