@@ -16,10 +16,12 @@ test('every choice has a plain label and a hint that tells the person to check A
   }
 });
 
-test('the Urdu hints say what the sample pictures showed: clear printed text works, curly lettering does not', () => {
+test('the Urdu hints say what the sample pictures showed: plain print reads well, the book and newspaper style and mixing with English are often misread', () => {
   const urdu = OCR_LANGUAGES.find((l) => l.id === 'urd')!;
-  assert.match(urdu.hint, /clear, printed text/);
-  assert.match(urdu.hint, /misread/);
+  assert.match(urdu.hint, /plain, clear print reads well/i);
+  assert.match(urdu.hint, /books and newspapers.*misread/);
+  const mixed = OCR_LANGUAGES.find((l) => l.id === 'urd+eng')!;
+  assert.match(mixed.hint, /mixed with English is often misread/);
 });
 
 test('a saved value is used when it is a choice, and anything else falls back to English', () => {

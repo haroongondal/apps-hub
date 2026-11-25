@@ -79,7 +79,7 @@ export default function ScanTextScreen() {
       <Group>
         <Row title="Language of the text" subtitle={chosen.label} trailing={<Button label="Change" size="sm" variant="secondary" onPress={() => setPicking(true)} />} />
       </Group>
-      <Sheet visible={picking} onClose={() => setPicking(false)} title="Language of the text">
+      <Sheet visible={picking} onClose={() => setPicking(false)} title="Language of the text" doneLabel="Cancel">
         <Group footer="Pick the language before you take the photo. Nothing leaves this phone.">
           {OCR_LANGUAGES.map((l) => (
             <Row key={l.id} title={l.label} subtitle={l.hint} trailing={l.id === lang ? <Pill label="Chosen" tone="ok" /> : undefined} onPress={() => choose(l.id)} accessibilityLabel={l.id === lang ? `${l.label}, chosen` : l.label} />

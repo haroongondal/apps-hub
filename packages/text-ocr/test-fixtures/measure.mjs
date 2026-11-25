@@ -5,6 +5,7 @@
 import { createWorker } from 'tesseract.js';
 import fs from 'node:fs';
 import path from 'node:path';
+// Dev-only script: it reaches into library-core by path (text-ocr does not depend on it) to fold text the way the Library's search does.
 import { normalizeForSearch } from '../../library-core/src/normalize.ts';
 
 const here = path.dirname(new URL(import.meta.url).pathname);
