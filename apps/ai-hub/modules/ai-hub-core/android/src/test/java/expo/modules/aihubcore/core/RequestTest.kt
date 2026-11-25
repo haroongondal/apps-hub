@@ -121,6 +121,28 @@ class RequestTest {
     assertTrue(json(extra = """"messages":$messages""", version = "3").toByteArray().size < Request.MAX_JSON_BYTES * 0.75)
   }
 
+  @Test fun aMalformedContentPartIsABadRequestNotAnExceptionOnTheBinderThread() {
+    for (bad in listOf("""[{"role":"user","content":[{"type":{}}]}]""", """[{"role":"user","content":["text"]}]""", """[{"role":"user","content":[{"text":"no type"}]}]""")) {
+      for (extra in listOf("", ""","service":"groq"""")) rejects(json(extra = """"messages":$bad$extra""", version = "3"), "type")
+    }
+    rejects(json(extra = """"messages":[{"role":"user","content":[{"type":{}}]}]""", version = "2"), "type")
+  }
+
+  @Test fun everyVersionTakesPicturesAsDataUrlsOnly() {
+    val link = """[{"role":"user","content":[{"type":"image_url","image_url":{"url":"https://example.com/a.jpg"}}]}]"""
+    for (v in listOf("1", "2", "3")) rejects(json(extra = """"messages":$link""", version = v), "data:image/")
+    for (v in listOf("1", "2", "3")) assertTrue(Request.parse(json(extra = """"messages":$withShot""", version = v)).messages.single().hasImage)
+  }
+
+  @Test fun versionThreeTakesOnlyTextAndPictureParts() {
+    val file = """[{"role":"user","content":[{"type":"file","file":{"id":"x"}}]}]"""
+    rejects(json(extra = """"messages":$file""", version = "3"), "text or image_url")
+    // Older versions keep their old leniency about other part types.
+    assertEquals(Job.CHAT, Request.parse(json(extra = """"messages":$file""", version = "2")).job)
+    val text = """[{"role":"user","content":[{"type":"text","text":"Hi"}]}]"""
+    for (v in listOf("1", "2", "3")) assertEquals(Job.CHAT, Request.parse(json(extra = """"messages":$text""", version = v)).job)
+  }
+
   @Test fun aSignedAssistantTurnNeedsGemini() {
     val signed = """[{"role":"user","content":"T"},{"role":"assistant","content":null,"tool_calls":[{"id":"c","type":"function","function":{"name":"tap","arguments":"{}"},"extra_content":{"google":{"thought_signature":"c2ln"}}}]}]"""
     assertTrue(Request.parse(json(extra = """"messages":$signed""", version = "3")).needsGemini)

@@ -81,6 +81,7 @@ data class Request(
     private val ID = Regex("[A-Za-z0-9_-]{1,64}")
     private val MIME = Regex("[\\w.+-]+/[\\w.+-]+")
     private val TOOL_CHOICES = setOf("auto", "required", "none")
+    private val PART_TYPES = setOf("text", "image_url")
     private val EFFORTS = setOf("low", "medium", "high")
     private val ROLES = setOf("system", "user", "assistant", "tool")
     private val JOBS = mapOf("chat" to Job.CHAT, "vision" to Job.VISION, "embed" to Job.EMBED, "transcribe" to Job.TRANSCRIBE)
@@ -118,7 +119,11 @@ data class Request(
           val toolChoice = if (!v3 || root["toolChoice"] == null) null else root.str("toolChoice")?.takeIf { it in TOOL_CHOICES } ?: bad("toolChoice must be auto, required or none.")
           val effort = if (!v3 || root["reasoningEffort"] == null) null else root.str("reasoningEffort")?.takeIf { it in EFFORTS } ?: bad("reasoningEffort must be low, medium or high.")
           val service = if (!v3 || root["service"] == null) null else Service.entries.firstOrNull { it.name.equals(root.str("service"), ignoreCase = true) } ?: bad("service must be groq or gemini.")
-          if (v3 && messages.any { m -> m.imageUrls().any { !it.startsWith("data:image/") } }) bad("A picture in a message must be a data:image/ URL. Send it inline or as the attachment.")
+          val parts = messages.flatMap { m -> (m.json["content"] as? JsonArray).orEmpty() }
+          if (parts.any { it !is JsonObject || it.str("type") == null }) bad("Each part of a message's content must be an object with a type.")
+          if (v3 && parts.any { (it as JsonObject).str("type") !in PART_TYPES }) bad("A message part must be text or image_url.")
+          // Every apiVersion: a picture is only ever a data:image/ URL, so the hub never makes a service fetch a link.
+          if (messages.any { m -> m.imageUrls().any { !it.startsWith("data:image/") } }) bad("A picture in a message must be a data:image/ URL. Send it inline or as the attachment.")
           if (service == Service.GROQ && (job == Job.VISION || messages.any { it.hasImage })) bad("Groq can't read pictures. Leave service out or use gemini.")
           var mime: String? = null
           if (job == Job.VISION) {

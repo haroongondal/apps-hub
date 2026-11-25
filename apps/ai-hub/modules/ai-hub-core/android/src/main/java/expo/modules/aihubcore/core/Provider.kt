@@ -24,7 +24,7 @@ data class TokenUsage(val inputTokens: Long, val cachedTokens: Long, val outputT
 
 data class Msg(val role: String, val json: JsonObject) {
   val hasImage: Boolean
-    get() = (json["content"] as? JsonArray)?.any { (it as? JsonObject)?.get("type")?.jsonPrimitive?.contentOrNull == "image_url" } == true
+    get() = (json["content"] as? JsonArray)?.any { ((it as? JsonObject)?.get("type") as? JsonPrimitive)?.contentOrNull == "image_url" } == true
 
   // Gemini 3 puts its thought signature in a tool call's extra_content; only Gemini can take that history back.
   val hasProviderExtras: Boolean
