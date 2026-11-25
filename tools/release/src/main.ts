@@ -6,7 +6,7 @@ import { APPS } from './apps.ts';
 import { checkReleasable, readHead } from './guard.ts';
 import { releaseAndroid } from './release-android.ts';
 import { makeUploader } from './upload.ts';
-import { formatPlan, installDeps, planRollback, storeTarget, withWorktree } from './rollback.ts';
+import { formatPlan, gateRollback, installDeps, planRollback, rollbackFlagError, rolledBackFrom, storeTarget, withWorktree } from './rollback.ts';
 
 const ROOT = resolve(import.meta.dirname, '../../..');
 const ENV_FILE = join(homedir(), '.config/apps-hub/release.env');
@@ -21,16 +21,19 @@ const { values, positionals } = parseArgs({
     rollback: { type: 'boolean', default: false },
     to: { type: 'string' },
     'dry-run': { type: 'boolean', default: false },
+    yes: { type: 'boolean', default: false },
+    'accept-newer-data': { type: 'boolean', default: false },
   },
 });
 
 const ids = values.all ? Object.keys(APPS) : positionals;
 if (ids.length === 0 || ids.some((id) => !APPS[id])) {
-  console.error(`usage: pnpm release <${Object.keys(APPS).join('|')}> [--platform android|ios|all] [--all] [-m changelog] [--from-branch]\n       pnpm release <app> --rollback [--to <sha|tag>] [--dry-run] [-m changelog] [--from-branch]`);
+  console.error(`usage: pnpm release <${Object.keys(APPS).join('|')}> [--platform android|ios|all] [--all] [-m changelog] [--from-branch]\n       pnpm release <app> --rollback [--to <sha|tag>] [-m changelog] [--from-branch]   (prints the plan only)\n       pnpm release <app> --rollback --yes [--to <sha|tag>] [--accept-newer-data] [-m changelog]   (builds and publishes)`);
   process.exit(1);
 }
-if (values.rollback ? ids.length !== 1 || values.all : values['dry-run'] || values.to) {
-  console.error('--rollback takes exactly one app (no --all). --to and --dry-run only work with --rollback.');
+const flagError = rollbackFlagError(values, ids.length);
+if (flagError) {
+  console.error(flagError);
   process.exit(1);
 }
 if (values.platform !== 'android') {
@@ -68,7 +71,9 @@ if (values.rollback) {
   const id = ids[0];
   const plan = planRollback({ repoDir: ROOT, id, manifest, to: values.to });
   console.log(formatPlan(plan, storeTarget(API)));
-  if (values['dry-run']) process.exit(0);
+  const gate = gateRollback(plan, { yes: values.yes, acceptNewerData: values['accept-newer-data'] });
+  if (gate.lines.length) console.log(`\n${gate.lines.join('\n')}`);
+  if (!gate.proceed) process.exit(gate.exitCode);
   // The rebuilt old commit gets a NEW, higher versionCode: Android refuses an install over a higher one.
   console.log(`\nBuilding ${plan.toCommit.slice(0, 7)} in a temporary worktree (pnpm install first).`);
   manifest = await withWorktree(ROOT, plan.toCommit, async (root) => {
@@ -80,11 +85,12 @@ if (values.rollback) {
       versionCode: plan.newVersionCode,
       changelog: values.changelog ? changelog : withBranchTag(plan.changelog),
       commit: plan.toCommit,
+      rolledBackFrom: rolledBackFrom(plan),
       upload,
     });
   });
   await upload(MANIFEST_PATH, JSON.stringify(manifest, null, 2), 'application/json');
-  console.log(`✔ ${id} rolled back to ${plan.toVersionName} as ${plan.newVersionCode} published`);
+  console.log(`✔ ${id} rolled back to ${plan.toVersionName} (commit ${plan.toCommit.slice(0, 7)}) from ${plan.fromVersionName} (${plan.fromVersionCode}), published as versionCode ${plan.newVersionCode}`);
   process.exit(0);
 }
 

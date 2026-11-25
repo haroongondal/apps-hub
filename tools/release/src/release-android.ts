@@ -18,6 +18,7 @@ export function androidEntry(a: {
   sha256: string;
   sizeBytes: number;
   commit: string;
+  rolledBackFrom?: AndroidRelease['rolledBackFrom'];
 }): AndroidRelease {
   return {
     packageName: a.info.packageName,
@@ -29,7 +30,16 @@ export function androidEntry(a: {
     signingCertSha256: SIGNING_CERT_SHA256,
     sizeBytes: a.sizeBytes,
     commit: a.commit,
+    ...(a.rolledBackFrom ? { rolledBackFrom: a.rolledBackFrom } : {}),
   };
+}
+
+/** The build takes minutes; refuse to upload under a versionCode another release took meanwhile (the key would be overwritten). */
+export function assertVersionStillFree(manifest: StoreManifest, id: string, versionCode: number): void {
+  const published = manifest.apps.find((a) => a.id === id)?.android?.versionCode;
+  if (published !== undefined && versionCode <= published) {
+    throw new Error(`${id}: versionCode ${versionCode} was published by another release while this one was building. Nothing was uploaded; run it again.`);
+  }
 }
 
 export interface ReleaseAndroidOptions {
@@ -42,6 +52,8 @@ export interface ReleaseAndroidOptions {
   changelog: string;
   /** Full sha of the commit checked out at `root`. */
   commit: string;
+  /** Set for a rollback: the published release this build replaces. */
+  rolledBackFrom?: AndroidRelease['rolledBackFrom'];
   upload: (key: string, body: Buffer | string, contentType: string) => Promise<void>;
 }
 
@@ -75,7 +87,8 @@ export async function releaseAndroid(o: ReleaseAndroidOptions): Promise<StoreMan
 
   const bytes = readFileSync(apk);
   const apkPath = `apps/${id}/android/${versionCode}.apk`;
-  const android = androidEntry({ info, versionName, apkPath, sha256: await sha256File(apk), sizeBytes: bytes.length, commit: o.commit });
+  const android = androidEntry({ info, versionName, apkPath, sha256: await sha256File(apk), sizeBytes: bytes.length, commit: o.commit, rolledBackFrom: o.rolledBackFrom });
+  assertVersionStillFree(await o.fetchManifest(), id, versionCode);
   console.log(`▶ ${id}: uploading ${apkPath} (${(bytes.length / 1e6).toFixed(1)} MB)`);
   for (let attempt = 1; ; attempt++) {
     try {

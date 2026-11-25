@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
 import { SIGNING_CERT_SHA256, emptyManifest, upsertAndroidRelease, type AndroidRelease, type StoreManifest } from '@apps-hub/store-manifest';
-import { androidEntry } from '../release-android.ts';
-import { formatPlan, planRollback, storeTarget, withWorktree } from '../rollback.ts';
+import { androidEntry, assertVersionStillFree } from '../release-android.ts';
+import { blockingSchemas, formatPlan, gateRollback, planRollback, rollbackFlagError, rolledBackFrom, storeTarget, withWorktree, type RollbackPlan } from '../rollback.ts';
 
 const tmp = mkdtempSync(join(tmpdir(), 'release-rollback-'));
 after(() => rmSync(tmp, { recursive: true, force: true }));
@@ -239,5 +239,145 @@ describe('androidEntry', () => {
     assert.equal(entry.signingCertSha256, SIGNING_CERT_SHA256);
     const m = upsertAndroidRelease(emptyManifest(), { id: 'netlens', name: 'HomeNet', changelog: '' }, entry);
     assert.equal(m.apps[0].android?.commit, sha);
+  });
+});
+
+const DB_FILE = 'apps/netlens/src/db/device-store-sqlite.ts'; // the registry's HomeNet schema file
+function schemaFixture(versions: [number, number, number]) {
+  const root = join(tmp, `schema${n++}`);
+  const origin = join(root, 'origin.git');
+  const clone = join(root, 'clone');
+  mkdirSync(root);
+  git(root, 'init', '--bare', '-b', 'main', origin);
+  git(root, 'clone', origin, clone);
+  git(clone, 'checkout', '-B', 'main');
+  const shas = versions.map((v, i) => {
+    mkdirSync(join(clone, 'apps/netlens/src/db'), { recursive: true });
+    writeFileSync(join(clone, DB_FILE), `await db.execAsync('PRAGMA user_version = ${v}');\n`);
+    return commitVersion(clone, `0.${i + 1}.0`);
+  });
+  git(clone, 'push', 'origin', 'main');
+  return { clone, shas };
+}
+
+describe('rollback over a database', () => {
+  it('records what the plan shows: versions, files that change, and every database at both commits', () => {
+    const { clone, shas: [c1, c2, c3] } = schemaFixture([1, 1, 2]);
+    const plan = planRollback({ repoDir: clone, id: 'netlens', manifest: published(41, c3) });
+    assert.equal(plan.toCommit, c2);
+    assert.deepEqual(plan.schemas, [{ app: 'netlens', db: 'devices (expo-sqlite)', target: 1, current: 2, verdict: 'newer' }]);
+    assert.deepEqual(plan.files.app.sort(), [DB_FILE, 'apps/netlens/app.json'].sort());
+    assert.equal(plan.files.other, 0);
+    const out = formatPlan(plan, 'store.example');
+    assert.ok(out.includes('apps/netlens/android/42.apk is uploaded and manifest.json now points netlens at it'));
+    assert.ok(out.includes(`commit ${c2.slice(0, 7)}, rolled back from 0.3.0 (41)`));
+    assert.match(out, /files in apps\/netlens that change: 2$/m);
+    assert.equal(planRollback({ repoDir: clone, id: 'netlens', manifest: published(41, c3), to: c1 }).schemas[0].target, 1);
+  });
+
+  it('is fine when the schema did not change, and when the older build had a lower one that the phone never saw', () => {
+    const { clone, shas: [, , c3] } = schemaFixture([2, 2, 2]);
+    assert.equal(planRollback({ repoDir: clone, id: 'netlens', manifest: published(41, c3) }).schemas[0].verdict, 'ok');
+  });
+
+  it('compares with HEAD when the current release has no commit recorded', () => {
+    const { clone, shas: [c1] } = schemaFixture([1, 1, 2]);
+    const plan = planRollback({ repoDir: clone, id: 'netlens', manifest: published(5), to: c1 });
+    assert.equal(plan.schemas[0].current, 2);
+    assert.equal(plan.schemas[0].verdict, 'newer');
+  });
+});
+
+describe('gateRollback', () => {
+  const base: RollbackPlan = {
+    id: 'netlens', fromCommit: 'a'.repeat(40), fromVersionCode: 41, fromVersionName: '0.3.0', toCommit: 'b'.repeat(40), toVersionName: '0.2.0',
+    newVersionCode: 42, changelog: '', files: { app: [], other: 0 }, schemas: [],
+  };
+  const newer = { app: 'netlens', db: 'devices', target: 1, current: 2, verdict: 'newer' as const };
+  const nothingYet = /Nothing was built or published/;
+
+  it('only prints the plan without --yes', () => {
+    const g = gateRollback(base, { yes: false, acceptNewerData: false });
+    assert.equal(g.proceed, false);
+    assert.equal(g.exitCode, 0);
+    assert.match(g.lines.join('\n'), /run it again with --yes/);
+  });
+
+  it('builds and publishes with --yes when no schema is ahead', () => {
+    assert.deepEqual(gateRollback(base, { yes: true, acceptNewerData: false }), { proceed: true, exitCode: 0, lines: [] });
+  });
+
+  it('refuses a rollback over a newer schema, with or without --yes, in plain words', () => {
+    const plan = { ...base, schemas: [newer] };
+    for (const yes of [false, true]) {
+      const g = gateRollback(plan, { yes, acceptNewerData: false });
+      assert.equal(g.proceed, false);
+      assert.equal(g.exitCode, 1);
+      const text = g.lines.join('\n');
+      assert.match(text, /Not rolled back/);
+      assert.match(text, /data is at version 2, the older build understands 1/);
+      assert.match(text, /--accept-newer-data/);
+      assert.match(text, nothingYet);
+    }
+  });
+
+  it('refuses a schema it cannot read, like a newer one', () => {
+    const plan = { ...base, schemas: [{ ...newer, target: null, verdict: 'unknown' as const }] };
+    assert.equal(blockingSchemas(plan).length, 1);
+    assert.equal(gateRollback(plan, { yes: true, acceptNewerData: false }).exitCode, 1);
+  });
+
+  it('--accept-newer-data prints what is lost and still needs --yes to go ahead', () => {
+    const plan = { ...base, schemas: [newer] };
+    const stop = gateRollback(plan, { yes: false, acceptNewerData: true });
+    assert.equal(stop.proceed, false);
+    assert.equal(stop.exitCode, 0);
+    const go = gateRollback(plan, { yes: true, acceptNewerData: true });
+    assert.equal(go.proceed, true);
+    assert.match(go.lines.join('\n'), /will not open this data until a newer release is installed/);
+  });
+
+  it('rolledBackFrom carries the replaced release, and omits an unknown commit', () => {
+    assert.deepEqual(rolledBackFrom(base), { versionCode: 41, versionName: '0.3.0', commit: 'a'.repeat(40) });
+    assert.deepEqual(rolledBackFrom({ ...base, fromCommit: undefined }), { versionCode: 41, versionName: '0.3.0' });
+  });
+});
+
+describe('rollbackFlagError', () => {
+  it('keeps --yes, --dry-run, --to and --accept-newer-data to a single-app rollback', () => {
+    assert.equal(rollbackFlagError({ rollback: true }, 1), null);
+    assert.equal(rollbackFlagError({ rollback: true, yes: true, 'accept-newer-data': true, to: 'abc' }, 1), null);
+    assert.equal(rollbackFlagError({ rollback: true, 'dry-run': true }, 1), null);
+    assert.match(rollbackFlagError({ rollback: true }, 2) ?? '', /exactly one app/);
+    assert.match(rollbackFlagError({ rollback: true, all: true }, 1) ?? '', /exactly one app/);
+    assert.match(rollbackFlagError({ rollback: true, yes: true, 'dry-run': true }, 1) ?? '', /contradict/);
+    for (const v of [{ yes: true }, { 'dry-run': true }, { to: 'abc' }, { 'accept-newer-data': true }]) assert.match(rollbackFlagError(v, 1) ?? '', /only work with --rollback/);
+    assert.equal(rollbackFlagError({}, 3), null);
+  });
+});
+
+describe('rollback result in the manifest', () => {
+  it('androidEntry records rolledBackFrom, and the Store manifest keeps it until the next normal release', () => {
+    const sha = 'ab12'.repeat(10);
+    const from = { versionCode: 41, versionName: '0.3.0', commit: 'cd34'.repeat(10) };
+    const entry = androidEntry({
+      info: { packageName: 'app.netlens', versionCode: 42, versionName: '0.2.0', minSdk: 24 },
+      versionName: '0.2.0', apkPath: 'apps/netlens/android/42.apk', sha256: 'b'.repeat(64), sizeBytes: 123, commit: sha, rolledBackFrom: from,
+    });
+    const m = upsertAndroidRelease(published(41), { id: 'netlens', name: 'HomeNet', changelog: 'Rollback to 0.2.0' }, entry);
+    assert.deepEqual(m.apps[0].android?.rolledBackFrom, from);
+    assert.equal(m.apps[0].android?.versionName, '0.2.0');
+    assert.equal(m.apps[0].android?.commit, sha);
+    assert.equal(upsertAndroidRelease(m, { id: 'netlens', name: 'HomeNet', changelog: '' }, release(43)).apps[0].android?.rolledBackFrom, undefined);
+    assert.equal(androidEntry({ ...{ info: { packageName: 'app.netlens', versionCode: 9, versionName: '1', minSdk: 24 } }, versionName: '1', apkPath: 'x', sha256: 'b'.repeat(64), sizeBytes: 1, commit: sha }).rolledBackFrom, undefined);
+  });
+});
+
+describe('assertVersionStillFree', () => {
+  it('refuses to upload under a versionCode that another release published during the build', () => {
+    assert.doesNotThrow(() => assertVersionStillFree(published(24), 'netlens', 25));
+    assert.doesNotThrow(() => assertVersionStillFree(emptyManifest(), 'netlens', 2));
+    assert.throws(() => assertVersionStillFree(published(25), 'netlens', 25), /another release while this one was building.*Nothing was uploaded/);
+    assert.throws(() => assertVersionStillFree(published(26), 'netlens', 25), /Nothing was uploaded/);
   });
 });
