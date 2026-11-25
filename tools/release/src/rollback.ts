@@ -4,17 +4,22 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { nextVersionCode, type StoreManifest } from '@apps-hub/store-manifest';
 import { APPS } from './apps.ts';
+import { checkSchemas, type SchemaCheck } from './schemas.ts';
 
 export interface RollbackPlan {
   id: string;
   /** Full sha the current published build came from, when the manifest records it. */
   fromCommit?: string;
   fromVersionCode: number;
+  fromVersionName: string;
   toCommit: string;
   toVersionName: string;
   /** Strictly above the published versionCode: Android refuses an install over a higher one. */
   newVersionCode: number;
   changelog: string;
+  /** Files that differ between the release being replaced and the target (HEAD when no commit is recorded). */
+  files: { app: string[]; other: number };
+  schemas: SchemaCheck[];
 }
 
 const git = (cwd: string, args: string[]): string =>
@@ -92,27 +97,109 @@ export function planRollback(o: { repoDir: string; id: string; manifest: StoreMa
     throw new Error(`${id}: ${app.dir}/app.json does not exist or has no expo.version at ${toCommit.slice(0, 7)}. The app is not in that commit.`);
   }
 
+  const local = (sha: string) => gitOk(repoDir, ['cat-file', '-e', `${sha}^{commit}`]);
+  const currentRef = fromCommit !== undefined && local(fromCommit) ? fromCommit : 'HEAD';
+  const changed = git(repoDir, ['diff', '--name-only', currentRef, toCommit]).split('\n').filter(Boolean);
+  const files = { app: changed.filter((f) => f.startsWith(`${app.dir}/`)), other: changed.filter((f) => !f.startsWith(`${app.dir}/`)).length };
+
+  // Whose data can be on the phones: the published commit and the release a rollback replaced (it may have been
+  // accepted over newer data). Missing locally means we cannot tell. With no commit recorded, HEAD and main are a guess.
+  const rolledFrom = current.rolledBackFrom?.commit;
+  const named = fromCommit ? [fromCommit, ...(rolledFrom ? [rolledFrom] : [])] : undefined;
+  const refs = named ? (named.every(local) ? named : null) : gitOk(repoDir, ['rev-parse', '--verify', '--quiet', mainRef]) ? ['HEAD', mainRef] : null;
+
   const newVersionCode = nextVersionCode(o.manifest, id);
   if (!(newVersionCode > current.versionCode)) throw new Error(`${id}: new versionCode ${newVersionCode} must exceed published ${current.versionCode}.`);
   return {
     id,
     fromCommit,
     fromVersionCode: current.versionCode,
+    fromVersionName: current.versionName,
     toCommit,
     toVersionName,
     newVersionCode,
     changelog: `Rollback to ${toVersionName} (${toCommit.slice(0, 7)})`,
+    files,
+    schemas: checkSchemas(repoDir, id, toCommit, refs, fromCommit !== undefined),
   };
 }
 
-/** The dry-run output. `target` is the Store host (or "Store"); nothing here touches the network. */
+export function blockingSchemas(p: RollbackPlan): SchemaCheck[] {
+  return p.schemas.filter((c) => c.verdict !== 'ok');
+}
+
+export function rolledBackFrom(p: RollbackPlan): { versionCode: number; versionName: string; commit?: string } {
+  return { versionCode: p.fromVersionCode, versionName: p.fromVersionName, ...(p.fromCommit ? { commit: p.fromCommit } : {}) };
+}
+
+const MAX_LISTED = 15;
+
+function schemaLine(c: SchemaCheck): string {
+  return c.verdict === 'unknown'
+    ? c.reason === 'missing' ? `  ${c.app}: ${c.db} ${c.why}` : `  ${c.db}: ${c.why ?? 'could not be established'}`
+    : `  ${c.db}: the phone's data is at version ${c.current}, the older build understands ${c.target}`;
+}
+
+/** Why a rollback is refused, or what the owner accepted with --accept-newer-data. Empty when every schema is fine. */
+export function schemaNotice(p: RollbackPlan, accepted: boolean): string[] {
+  const newer = p.schemas.filter((c) => c.verdict === 'newer');
+  const unknown = p.schemas.filter((c) => c.verdict === 'unknown');
+  if (newer.length + unknown.length === 0) return [];
+  if (accepted) {
+    return [
+      '--accept-newer-data: rolling back over data that may be newer.',
+      ...[...newer, ...unknown].map(schemaLine),
+      'The app will not open newer data until a newer release is installed. The rollback itself deletes nothing,',
+      'but the newer format is unreadable to the old build, and clearing the app\'s storage to recover would lose it.',
+    ];
+  }
+  return [
+    ...(newer.length
+      ? [`Not rolled back: ${p.id} stores data in a newer format than the older build can open.`, ...newer.map(schemaLine),
+         'Installing the older build over it would leave the app unable to start with that data until a newer release is installed.']
+      : []),
+    ...(unknown.length
+      ? [`Not rolled back: the tool could not tell whether ${p.id}'s data on the phone is newer than the older build can open.`, ...unknown.map(schemaLine),
+         ...(unknown.some((c) => c.reason === 'commit') ? ['Fetch origin and run it again, or, if you are sure the data is not newer, pass --accept-newer-data.'] : []),
+         ...(unknown.some((c) => c.reason === 'guess') ? ['The Store has no commit recorded for this release, so the tool compared against HEAD and origin/main; release once normally to record one, or pass --accept-newer-data if you are sure.'] : []),
+         ...(unknown.some((c) => c.reason === 'unreadable') ? ["Check the file's history by hand, then pass --accept-newer-data if you are sure the data is not newer."] : [])]
+      : []),
+    newer.length ? 'Nothing was built or published. To go back anyway, pass --accept-newer-data.' : 'Nothing was built or published.',
+  ];
+}
+
+/** What the owner has to confirm: the plan, then either why it stops or that --yes is needed. */
+export function gateRollback(p: RollbackPlan, o: { yes: boolean; acceptNewerData: boolean }): { proceed: boolean; exitCode: 0 | 1; lines: string[] } {
+  const notice = schemaNotice(p, o.acceptNewerData);
+  if (blockingSchemas(p).length > 0 && !o.acceptNewerData) return { proceed: false, exitCode: 1, lines: notice };
+  if (!o.yes) return { proceed: false, exitCode: 0, lines: [...notice, 'Nothing was built or published. This is the plan only: run it again with --yes to build and publish.'] };
+  return { proceed: true, exitCode: 0, lines: notice };
+}
+
+export function rollbackFlagError(v: { rollback?: boolean; all?: boolean; to?: string; yes?: boolean; 'dry-run'?: boolean; 'accept-newer-data'?: boolean }, appCount: number): string | null {
+  if (v.rollback) {
+    if (appCount !== 1 || v.all) return '--rollback takes exactly one app (no --all).';
+    if (v.yes && v['dry-run']) return '--yes and --dry-run contradict each other. Drop --dry-run: without --yes a rollback only prints its plan.';
+    return null;
+  }
+  return v['dry-run'] || v.to || v.yes || v['accept-newer-data'] ? '--to, --yes, --dry-run and --accept-newer-data only work with --rollback.' : null;
+}
+
+/** The plan output. `target` is the Store host (or "Store"); nothing here touches the network. */
 export function formatPlan(p: RollbackPlan, target: string): string {
+  const listed = p.files.app.slice(0, MAX_LISTED).map((f) => `  ${f}`);
+  if (p.files.app.length > MAX_LISTED) listed.push(`  and ${p.files.app.length - MAX_LISTED} more`);
   return [
     `app: ${p.id}`,
     `from: ${p.fromCommit ?? 'unknown commit'} (versionCode ${p.fromVersionCode})`,
     `to commit: ${p.toCommit} (${p.toVersionName})`,
     `new versionCode: ${p.newVersionCode}`,
     `target: ${target}`,
+    `Store changes: apps/${p.id}/android/${p.newVersionCode}.apk is uploaded and manifest.json now points ${p.id} at it`,
+    `  (shown as ${p.toVersionName}, commit ${p.toCommit.slice(0, 7)}, rolled back from ${p.fromVersionName} (${p.fromVersionCode}))`,
+    `files in ${APPS[p.id].dir} that change: ${p.files.app.length}`,
+    ...listed,
+    `files outside it that change (shared packages, lockfile): ${p.files.other}`,
   ].join('\n');
 }
 

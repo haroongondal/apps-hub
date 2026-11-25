@@ -42,6 +42,22 @@ test('version lines add the short commit of the published build, and hide it whe
   assert.equal(versionLines(app, installed()).length, 1);
 });
 
+test('version lines say a build is a rollback, with the build it replaced, and only for the published build', () => {
+  const rolled: StoreApp = { ...withCommit, android: { ...withCommit.android!, rolledBackFrom: { versionCode: 4, versionName: '0.3.0' } } };
+  assert.deepEqual(versionLines(rolled, installed()), [
+    { label: 'Installed', version: '0.2.0 (5)' },
+    { label: 'Build from commit', version: '8b8db0d' },
+    { label: 'Rolled back from', version: '0.3.0 (4)' },
+  ]);
+  assert.deepEqual(versionLines(rolled, old).slice(-2), [
+    { label: 'Available build from commit', version: '8b8db0d' },
+    { label: 'Rolled back from', version: '0.3.0 (4)' },
+  ]);
+  const noCommit: StoreApp = { ...app, android: { ...app.android!, rolledBackFrom: { versionCode: 4, versionName: '0.3.0' } } };
+  assert.deepEqual(versionLines(noCommit, null).at(-1), { label: 'Rolled back from', version: '0.3.0 (4)' });
+  assert.equal(versionLines(rolled, installed({ versionCode: 6 })).length, 1);
+});
+
 test('version lines show installed and, when newer, available', () => {
   assert.deepEqual(versionLines(app, null), [{ label: 'Available', version: '0.2.0 (5)' }]);
   assert.deepEqual(versionLines(app, installed()), [{ label: 'Installed', version: '0.2.0 (5)' }]);

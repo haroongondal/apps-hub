@@ -39,6 +39,10 @@ export const AndroidReleaseSchema = z.object({
   sizeBytes: z.number().int().positive(),
   /** Full git sha the APK was built from. Absent on releases made before rollback support. */
   commit: gitSha.optional(),
+  /** Set only on a rollback build: the published release it replaced. Absent otherwise; old readers drop it. */
+  rolledBackFrom: z
+    .object({ versionCode: z.number().int().positive(), versionName: z.string().min(1), commit: gitSha.optional() })
+    .optional(),
 });
 
 export const IosReleaseSchema = z.object({
