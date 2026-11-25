@@ -161,11 +161,10 @@ changelog with `[branch build <short sha>]`. CI is not affected: it builds a pus
   refuses too, but says "could not tell whether the data is newer" and names the database and the reason, instead of
   calling the data newer. It cannot tell in these cases, each with its own advice: a recorded commit is missing locally
   (fetch origin and run again; the check never guesses from `HEAD`), the Store has no commit recorded for the release
-  (the tool compared against the higher of `HEAD` and `origin/main`, which is only a guess: release once normally to
-  record one), a file exists but its constant cannot be read (check by hand), and **a registered file is missing at a
+  and the target is below the higher of `HEAD` and `origin/main` (only a guess: release once normally to record one), a file exists but its constant cannot be read (check by hand), and **a registered file is missing at a
   commit while the app folder is there**. That last case is deliberately the simplest possible rule: the tool does not
-  try to work out whether the database did not exist yet or was moved, renamed, extracted or rewritten (rename
-  detection and marker searches were tried and each missed a way to move a database). The message says "<database> is
+  try to work out whether the database did not exist yet or was moved, renamed, extracted or rewritten (every
+  heuristic tried for that missed a way to move a database). The message says "<database> is
   not in the older build's files, so the tool cannot tell whether that build ever opened it. If the database was
   created after that build, rolling back is safe: pass --accept-newer-data." The cost: **a rollback to a build from
   before a database existed (for example Nexus before the scan and knowledge tracks, TunnelWall before `firewall.db`)
