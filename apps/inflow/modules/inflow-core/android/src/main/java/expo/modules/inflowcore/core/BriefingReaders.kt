@@ -85,17 +85,22 @@ object BriefingReaders {
     return AppLine(BriefingKind.HOME, text)
   }
 
+  // Cards and passes (Strongroom's expiry rows): counts only, never a name or a date.
   fun cards(rows: List<Map<String, Any?>>, today: LocalDate): AppLine? {
     val month = YearMonth.from(today)
-    val n = rows.count { r ->
+    fun count(kind: String) = rows.count { r ->
       val ends = runCatching { LocalDate.parse(r["expires_on"] as String) }.getOrNull()
-      r["kind"] == "card" && ends != null && !ends.isBefore(today) && YearMonth.from(ends) == month
+      r["kind"] == kind && ends != null && !ends.isBefore(today) && YearMonth.from(ends) == month
     }
-    return when (n) {
-      0 -> null
-      1 -> AppLine(BriefingKind.CARDS, "1 card expires this month")
-      else -> AppLine(BriefingKind.CARDS, "$n cards expire this month")
+    val cards = count("card")
+    val passes = count("pass")
+    val text = when {
+      cards + passes == 0 -> return null
+      passes == 0 -> if (cards == 1) "1 card expires this month" else "$cards cards expire this month"
+      cards == 0 -> if (passes == 1) "1 pass expires this month" else "$passes passes expire this month"
+      else -> "${cards + passes} cards and passes expire this month"
     }
+    return AppLine(BriefingKind.CARDS, text)
   }
 
   // A scheduled run is not waiting for the owner; a run at its OK gate and a draft are.
