@@ -60,7 +60,7 @@ class BriefingReadersTest {
     val lines = read(r)
     assertEquals(
       listOf(
-        AppLine(BriefingKind.HOME, "Ali and Sara are home"), AppLine(BriefingKind.CARDS, "1 card expires this month"),
+        AppLine(BriefingKind.HOME, "Ali and Sara are home"), AppLine(BriefingKind.CARDS, "2 cards and passes expire this month"),
         AppLine(BriefingKind.TASKS, "2 tasks are waiting for you"), AppLine(BriefingKind.NEXUS, "3 things in Nexus today"),
       ),
       lines,
@@ -126,6 +126,17 @@ class BriefingReadersTest {
     assertEquals("4 people are home", BriefingReaders.home(rows("Ali", "Sara", "Omar", "Zed"))?.text)
     assertEquals("A".repeat(12) + " is home", BriefingReaders.home(rows("A".repeat(60)))?.text)
     assertEquals(null, BriefingReaders.home(emptyList()))
+  }
+
+  @Test fun cardsAndPassesAreCountedTogetherByThisMonthOnlyAndNeverNamed() {
+    fun row(kind: String, on: String, label: String = "CANARY") = mapOf<String, Any?>("kind" to kind, "label" to label, "expires_on" to on, "days_left" to 1L)
+    assertEquals("1 pass expires this month", BriefingReaders.cards(listOf(row("pass", "2026-11-30")), today)?.text)
+    assertEquals("2 passes expire this month", BriefingReaders.cards(listOf(row("pass", "2026-11-25"), row("pass", "2026-11-30")), today)?.text)
+    assertEquals("1 card expires this month", BriefingReaders.cards(listOf(row("card", "2026-11-30"), row("pass", "2026-12-01")), today)?.text)
+    assertEquals("3 cards and passes expire this month", BriefingReaders.cards(listOf(row("card", "2026-11-24"), row("card", "2026-11-30"), row("pass", "2026-11-26")), today)?.text)
+    // Past, next month, unknown kinds and unreadable dates count for nothing, and no label reaches the line.
+    assertEquals(null, BriefingReaders.cards(listOf(row("pass", "2026-11-23"), row("pass", "2026-12-01"), row("ticket", "2026-11-30"), row("pass", "soon")), today))
+    assertTrue(!BriefingReaders.cards(listOf(row("pass", "2026-11-30")), today)!!.text.contains("CANARY"))
   }
 
   @Test fun countsAreZeroAsNoLine() {
