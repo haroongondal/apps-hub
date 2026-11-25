@@ -31,7 +31,8 @@ export type EntryInput =
   | { type: 'login'; name: string; username: string; password: string; sites: string[]; note: string; totp?: string; apps?: string[] }
   | { type: 'card'; name: string; holder: string; number: string; expMonth: number | null; expYear: number | null; cvc: string; note: string }
   | { type: 'note'; name: string; text: string }
-  | { type: 'pass'; name: string; code: string; format: PassFormat; note: string };
+  // expiresOn: YYYY-MM-DD, '' or absent for none.
+  | { type: 'pass'; name: string; code: string; format: PassFormat; note: string; expiresOn?: string };
 
 // A login's authenticator code, without its secret: the raw otpauth URI never leaves the vault except through the scanner.
 export interface TotpInfo {
@@ -64,6 +65,9 @@ export interface EntryView {
   text?: string;
   totp?: TotpInfo;
   format?: PassFormat;
+  // A pass: its last valid day (YYYY-MM-DD) when it has one, and whether its code is a Wi-Fi network (the code itself only travels through reveal).
+  expiresOn?: string;
+  wifi?: boolean;
 }
 
 export interface ImportPreview {

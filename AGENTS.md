@@ -264,12 +264,19 @@ Current apps:
   (Settings): Kotlin reads the unlocked vault's logins and flags weak passwords (plain rules),
   reused ones (in-memory hashes, never stored or logged) and ones on the bundled SecLists 10k
   list (MIT); only entry ids, flag kinds and counts reach JS, and nothing leaves the vault
-  boundary or the phone. Expiry share (opt-in, off by default): while on, each unlock and change
-  writes a small expiry index (card kind, label and end-of-month date only, sealed with the
+  boundary or the phone. Passes take an optional expiry date (`expiresOn`, `YYYY-MM-DD`, one
+  extra key in the sealed record, absent when unset, so the vault format version, existing
+  records and `vault-vectors.json` are unchanged and older builds read the pass and ignore the key;
+  an older build that edits such a pass saves it without the date). A Wi-Fi network is a pass too:
+  a QR pass whose code is the standard `WIFI:` string, the network name is the entry's name, and
+  it appears in the Add screen as "Wi-Fi"; its password never leaves the vault or crosses to
+  another app. Expiry share (opt-in, off by default): while on, each unlock and change
+  writes a small expiry index (card or pass kind, label and date only, sealed with the
   device Keystore key, readable while the vault is locked but not while the phone is) that a
   read-only app link (`content://com.haroon.strongroom.applink/expiry`, signature permission plus
-  `AppLinkCaller`) serves to same-key sibling apps; labels are "Card" unless the owner picks Show
-  names; never card numbers, codes, holders, notes, logins or pass data; turning it off deletes
+  `AppLinkCaller`) serves to same-key sibling apps; labels are "Card" or "Pass" unless the owner
+  picks Show names; never card numbers, codes, holders, notes, logins, Wi-Fi passwords or pass
+  codes; a pass without a date gives no row; turning it off deletes
   the index under the same lock the writer takes, so a sync in flight cannot bring it back. The
   provider also answers `content://com.haroon.strongroom.applink/health` (app id, null
   accessibility and listener, `ai_source` none, a heartbeat written when the app opens or

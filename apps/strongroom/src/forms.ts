@@ -98,3 +98,42 @@ export const normalisePassCode = (code: string, format: PassFormat): string => {
 export const secondsLeft = (until: number, now: number): number => Math.max(0, Math.ceil((until - now) / 1000));
 
 export const secondsLeftText = (n: number): string => `${plural(n, 'second', 'seconds')} left`;
+
+export const EXPIRY_BAD = 'Enter the expiry date as year-month-day, such as 2027-03-31.';
+
+// Empty is fine (no date). Same rule as the native parser (parseExpiry in Entry.kt), which has the last word on Save.
+export function validateExpiry(text: string): string | null {
+  const t = text.trim();
+  if (t === '') return null;
+  const m = /^(2\d{3})-(\d{2})-(\d{2})$/.exec(t);
+  const real = m && new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))).toISOString().slice(0, 10) === t;
+  return real ? null : EXPIRY_BAD;
+}
+
+// A Wi-Fi network is a pass: a QR whose code is the standard WIFI: string phones scan to join. Nothing in the vault format is new,
+// and an older build shows it as a plain QR pass. The network name is the entry's name.
+export type WifiSecurity = 'WPA' | 'nopass';
+
+const wifiEscape = (s: string) => s.replace(/[\\;,:"]/g, (c) => `\\${c}`);
+
+export function wifiCode(ssid: string, password: string, security: WifiSecurity): string {
+  return security === 'nopass' ? `WIFI:T:nopass;S:${wifiEscape(ssid)};;` : `WIFI:T:WPA;S:${wifiEscape(ssid)};P:${wifiEscape(password)};;`;
+}
+
+// Reads back what wifiCode wrote (and the same string from another app). null when it is not a Wi-Fi code.
+export function parseWifi(code: string): { ssid: string; password: string; security: WifiSecurity } | null {
+  if (!code.startsWith('WIFI:')) return null;
+  const fields: Record<string, string> = {};
+  for (const part of code.slice(5).match(/(?:\\.|[^;\\])+/g) ?? []) {
+    const i = part.search(/(?<!\\):/);
+    if (i > 0) fields[part.slice(0, i)] = part.slice(i + 1).replace(/\\(.)/g, '$1');
+  }
+  if (fields.S === undefined) return null;
+  return { ssid: fields.S, password: fields.P ?? '', security: fields.T === 'nopass' ? 'nopass' : 'WPA' };
+}
+
+export function validateWifi(ssid: string, password: string, security: WifiSecurity): string | null {
+  if (!ssid.trim()) return 'Enter the network name.';
+  if (security === 'WPA' && !password) return 'Enter the Wi-Fi password, or choose Open for a network with none.';
+  return null;
+}

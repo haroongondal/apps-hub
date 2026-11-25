@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ean13CheckDigit, normalisePassCode, secondsLeft, secondsLeftText, validatePass } from '../forms.ts';
+import { ean13CheckDigit, normalisePassCode, parseWifi, secondsLeft, secondsLeftText, validateExpiry, validatePass, validateWifi, wifiCode } from '../forms.ts';
 
 test('a pass needs a name and a code', () => {
   assert.equal(validatePass('  ', '123', 'qr'), 'Give this pass a name.');
@@ -53,4 +53,31 @@ test('the countdown says "1 second left" and "N seconds left"', () => {
   assert.equal(secondsLeftText(1), '1 second left');
   assert.equal(secondsLeftText(0), '0 seconds left');
   assert.equal(secondsLeftText(60), '60 seconds left');
+});
+
+test('an expiry date is optional, and when typed is a real day as year-month-day', () => {
+  assert.equal(validateExpiry(''), null);
+  assert.equal(validateExpiry('  '), null);
+  assert.equal(validateExpiry(' 2027-03-31 '), null);
+  assert.equal(validateExpiry('2028-02-29'), null);
+  for (const bad of ['2027-02-29', '2027-13-01', '31/03/2027', '2027-3-31', '1999-12-31', 'soon']) {
+    assert.equal(validateExpiry(bad), 'Enter the expiry date as year-month-day, such as 2027-03-31.', bad);
+  }
+});
+
+test('a Wi-Fi network becomes the standard WIFI: code and reads back, odd characters included', () => {
+  assert.equal(wifiCode('Home', 'hunter2hunter2', 'WPA'), 'WIFI:T:WPA;S:Home;P:hunter2hunter2;;');
+  assert.equal(wifiCode('Cafe', '', 'nopass'), 'WIFI:T:nopass;S:Cafe;;');
+  const tricky = { ssid: 'Mum & Dad; "5G": ok', password: 'a\\b;c,d:e"f', security: 'WPA' as const };
+  assert.deepEqual(parseWifi(wifiCode(tricky.ssid, tricky.password, 'WPA')), tricky);
+  assert.deepEqual(parseWifi(wifiCode('Cafe', 'ignored', 'nopass')), { ssid: 'Cafe', password: '', security: 'nopass' });
+  assert.equal(parseWifi('https://example.com'), null);
+  assert.equal(parseWifi('WIFI:T:WPA;P:x;;'), null);
+});
+
+test('a Wi-Fi code needs a network name and, unless open, a password', () => {
+  assert.equal(validateWifi('  ', 'x', 'WPA'), 'Enter the network name.');
+  assert.equal(validateWifi('Home', '', 'WPA'), 'Enter the Wi-Fi password, or choose Open for a network with none.');
+  assert.equal(validateWifi('Home', '', 'nopass'), null);
+  assert.equal(validateWifi('Home', 'pw', 'WPA'), null);
 });

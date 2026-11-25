@@ -3,16 +3,23 @@ import { AppState } from 'react-native';
 import { Button, Field, Group, Header, Notice, Row, Screen, Segmented, confirmAction } from '@apps-hub/ui';
 import Vault, { type EntryInput, type PassFormat, type TotpInfo } from 'strongroom-vault';
 import { isLocked, messageOf } from './call.ts';
-import { normalisePassCode, validatePass } from './forms.ts';
+import { normalisePassCode, parseWifi, validateExpiry, validatePass, validateWifi, wifiCode, type WifiSecurity } from './forms.ts';
 import { BackButton, SecretField } from './parts.tsx';
 
-type Kind = EntryInput['type'];
+// Wi-Fi is a pass whose code is a WIFI: string (forms.ts), so it is a screen kind and not an entry type.
+type Kind = EntryInput['type'] | 'wifi';
 
 const KINDS = [
   { key: 'login', label: 'Login' },
   { key: 'card', label: 'Card' },
   { key: 'note', label: 'Note' },
   { key: 'pass', label: 'Pass' },
+  { key: 'wifi', label: 'Wi-Fi' },
+] as const;
+
+const SECURITY = [
+  { key: 'WPA', label: 'Password' },
+  { key: 'nopass', label: 'Open' },
 ] as const;
 
 const FORMATS = [
@@ -22,7 +29,7 @@ const FORMATS = [
 ] as const;
 
 // totp stays null when untouched: the stored code, if any, is then left alone by the save.
-const BLANK = { name: '', username: '', password: '', sites: '', holder: '', number: '', expMonth: '', expYear: '', cvc: '', note: '', text: '', code: '', format: 'qr' as PassFormat, totp: null as string | null };
+const BLANK = { name: '', username: '', password: '', sites: '', holder: '', number: '', expMonth: '', expYear: '', cvc: '', note: '', text: '', code: '', format: 'qr' as PassFormat, expiresOn: '', security: 'WPA' as WifiSecurity, totp: null as string | null };
 type Draft = typeof BLANK;
 
 // An empty box means "not set"; anything else must be a whole number in range.
@@ -41,9 +48,13 @@ function build(kind: Kind, d: Draft, keepApps: string[] | null): EntryInput | st
     return keepApps ? { ...login, apps: keepApps } : login;
   }
   if (kind === 'note') return { type: 'note', name, text: d.text };
+  if (kind === 'wifi') {
+    const problem = validateWifi(name, d.password, d.security) ?? validateExpiry(d.expiresOn);
+    return problem ?? { type: 'pass', name, code: wifiCode(name, d.password, d.security), format: 'qr', note: d.note, expiresOn: d.expiresOn.trim() };
+  }
   if (kind === 'pass') {
-    const problem = validatePass(name, d.code, d.format);
-    return problem ?? { type: 'pass', name, code: normalisePassCode(d.code, d.format), format: d.format, note: d.note };
+    const problem = validatePass(name, d.code, d.format) ?? validateExpiry(d.expiresOn);
+    return problem ?? { type: 'pass', name, code: normalisePassCode(d.code, d.format), format: d.format, note: d.note, expiresOn: d.expiresOn.trim() };
   }
   const expMonth = whole(d.expMonth, 1, 12);
   const expYear = whole(d.expYear, 2000, 2999);
@@ -86,8 +97,14 @@ export function EditScreen({ id, onBack, onSaved, onLocked }: Props) {
         Object.assign(fields, { holder: e.holder ?? '', expMonth: e.expMonth ? String(e.expMonth) : '', expYear: e.expYear ? String(e.expYear) : '' });
         Object.assign(fields, { number: Vault.reveal(id, 'number'), cvc: Vault.reveal(id, 'cvc') });
       }
-      if (e.type === 'pass') Object.assign(fields, { format: e.format ?? 'qr', code: Vault.reveal(id, 'code') });
-      setKind(e.type);
+      let shownKind: Kind = e.type;
+      if (e.type === 'pass') {
+        const code = Vault.reveal(id, 'code');
+        Object.assign(fields, { format: e.format ?? 'qr', code, expiresOn: e.expiresOn ?? '' });
+        const wifi = e.wifi ? parseWifi(code) : null;
+        if (wifi) (shownKind = 'wifi'), Object.assign(fields, { password: wifi.password, security: wifi.security });
+      }
+      setKind(shownKind);
       setApps(e.apps ?? []);
       set(fields);
       setLoaded(true);
@@ -145,7 +162,7 @@ export function EditScreen({ id, onBack, onSaved, onLocked }: Props) {
       {id === null && <Segmented options={KINDS} value={kind} onChange={setKind} accessibilityLabel="Entry type" />}
       {loaded && (
         <>
-          <Field label="Name" value={draft.name} onChangeText={(name) => set({ name })} autoCorrect={false} />
+          <Field label={kind === 'wifi' ? 'Network name' : 'Name'} value={draft.name} onChangeText={(name) => set({ name })} autoCorrect={false} />
           {kind === 'login' && (
             <>
               <Field label="Username" value={draft.username} onChangeText={(username) => set({ username })} autoCapitalize="none" autoCorrect={false} />
@@ -190,6 +207,23 @@ export function EditScreen({ id, onBack, onSaved, onLocked }: Props) {
               <SecretField label="Code" hint="The number or text the barcode stands for." shown={shown} value={draft.code} onChangeText={(code) => set({ code })} mono />
               <Segmented options={FORMATS} value={draft.format} onChange={(format) => set({ format })} accessibilityLabel="Barcode format" />
             </>
+          )}
+          {kind === 'wifi' && (
+            <>
+              <Segmented options={SECURITY} value={draft.security} onChange={(security) => set({ security })} accessibilityLabel="Network security" />
+              {draft.security === 'WPA' && <SecretField label="Wi-Fi password" shown={shown} value={draft.password} onChangeText={(password) => set({ password })} />}
+            </>
+          )}
+          {(kind === 'pass' || kind === 'wifi') && (
+            <Field
+              label="Expires on"
+              hint="Optional, as year-month-day, such as 2027-03-31."
+              value={draft.expiresOn}
+              onChangeText={(expiresOn) => set({ expiresOn })}
+              keyboardType="numbers-and-punctuation"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
           )}
           {kind === 'note' ? (
             <SecretField label="Note" value={draft.text} onChangeText={(text) => set({ text })} shown multiline minHeight={160} />

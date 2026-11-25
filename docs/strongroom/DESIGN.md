@@ -932,6 +932,13 @@ raised while it is open) and can be presented over NFC for 60 seconds.
   reads the record as unreadable, keeps it unchanged and never drops it. The shared
   TS model (`packages/strongroom-core/src/entry.ts`) has `Pass`, and one JSON literal
   is pinned in both the Kotlin and the TS tests so the two encoders cannot drift.
+- **Optional expiry date and Wi-Fi (2026-11-25).** A pass may carry `expiresOn`
+  (`YYYY-MM-DD`): one extra key, absent when unset, no format version change, no change
+  to existing vectors. Older builds ignore the key when they read; one that edits the pass
+  saves it without the date. A date that does not read is dropped on decode and the pass
+  stays usable. A Wi-Fi network is a QR pass whose code is the standard `WIFI:` string and
+  whose name is the network name; nothing new is stored. The expiry share serves a row for a
+  pass only when it has a date.
 - **Not yet proven on a phone.** The Type 4 tag logic is tested against a fake
   reader. Whether HyperOS lets Strongroom win the NDEF AID over Google Wallet, and
   whether a given reader accepts the capability container, are checked only by the
@@ -941,7 +948,7 @@ raised while it is open) and can be presented over NFC for 60 seconds.
 
 The Password check runs in Kotlin over the unlocked vault and gives the screen only ids, flag kinds
 and counts (weak by plain rules, reused, on the bundled SecLists 10k list). The expiry share is an
-opt-in, read-only app link (`packages/app-link-contract`) serving card expiry dates (and card names
+opt-in, read-only app link (`packages/app-link-contract`) serving card and pass expiry dates (and their names
 only if the owner chooses) from a small index sealed by the device key, so sibling apps can read it
 while the vault is locked. Rules, decisions and the threat model: `docs/handoffs/strongroom.md`,
 section "Password check and expiry share".

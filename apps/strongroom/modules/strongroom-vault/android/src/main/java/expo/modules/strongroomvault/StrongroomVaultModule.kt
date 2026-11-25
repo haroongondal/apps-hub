@@ -1086,7 +1086,8 @@ private fun view(id: String, e: Entry): Map<String, Any?>? = when (e) {
     "last4" to e.number.filter(Char::isDigit).takeLast(4), "expMonth" to e.expMonth, "expYear" to e.expYear, "note" to e.note,
   )
   is Entry.Note -> mapOf("id" to id, "type" to "note", "name" to e.name, "note" to "", "text" to e.text)
-  is Entry.Pass -> mapOf("id" to id, "type" to "pass", "name" to e.name, "format" to e.format.id, "note" to e.note)
+  is Entry.Pass -> mapOf("id" to id, "type" to "pass", "name" to e.name, "format" to e.format.id, "note" to e.note, "wifi" to e.code.startsWith("WIFI:")) +
+    (e.expiresOn?.let { mapOf("expiresOn" to it.toString()) } ?: emptyMap())
   is Entry.Deleted -> null
 }
 

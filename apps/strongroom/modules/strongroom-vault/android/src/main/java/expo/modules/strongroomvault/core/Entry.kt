@@ -1,5 +1,7 @@
 package expo.modules.strongroomvault.core
 
+import java.time.DateTimeException
+import java.time.LocalDate
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonArrayBuilder
@@ -74,8 +76,10 @@ sealed interface Entry {
     val format: PassFormat,
     val note: String,
     override val updatedAt: Long,
+    /** Optional last day the pass is valid. An older build that edits the pass drops it. */
+    val expiresOn: LocalDate? = null,
   ) : Entry {
-    override fun toString() = "Pass(name=$name, code=***, format=${format.id}, note=***, updatedAt=$updatedAt)"
+    override fun toString() = "Pass(name=$name, code=***, format=${format.id}, note=***, expiresOn=$expiresOn, updatedAt=$updatedAt)"
   }
 
   data class Deleted(override val updatedAt: Long) : Entry
@@ -91,6 +95,14 @@ enum class PassFormat(val id: String) {
     fun of(id: String): PassFormat? = entries.firstOrNull { it.id == id }
   }
 }
+
+/** `YYYY-MM-DD`, a real day in 2000..2999; null for anything else. */
+fun parseExpiry(s: String): LocalDate? =
+  try {
+    LocalDate.parse(s).takeIf { it.year in 2000..2999 && it.toString() == s }
+  } catch (e: DateTimeException) {
+    null
+  }
 
 object EntryJson {
   fun encode(e: Entry): String = buildJsonObject {
@@ -126,6 +138,7 @@ object EntryJson {
         put("code", e.code)
         put("format", e.format.id)
         put("note", e.note)
+        if (e.expiresOn != null) put("expiresOn", e.expiresOn.toString()) // absent, never null, like totp
       }
       is Entry.Deleted -> put("type", "deleted")
     }
@@ -163,6 +176,8 @@ object EntryJson {
         format = PassFormat.of(o.string("format")) ?: malformed("format"),
         note = o.string("note"),
         updatedAt = updatedAt,
+        // A date that doesn't read is dropped, not fatal: the pass itself stays usable.
+        expiresOn = (o["expiresOn"] as? JsonPrimitive)?.takeIf { it.isString }?.content?.let(::parseExpiry),
       )
       "deleted" -> Entry.Deleted(updatedAt)
       else -> null // a type from a newer build: the callers keep the sealed record untouched and count it unreadable
