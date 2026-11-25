@@ -120,7 +120,7 @@ export interface AppSetting {
   label: string;
   record: boolean;
   keepDays: number | null;
-  // Only SMS and email apps are ever sent to the AI.
+  // Only SMS and email apps are sent to the AI by default; any other app goes only for chats the owner picked in Autopilot.
   aiEligible: boolean;
 }
 

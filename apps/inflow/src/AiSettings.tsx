@@ -105,7 +105,7 @@ function RunPanel({ status, onChanged }: { status: AiStatus; onChanged: () => vo
         error={capError ?? undefined}
         mono
       />
-      <Group title="AI status" footer="Inflow sends only SMS and email to the AI. WhatsApp and other apps are never sent. Health numbers go to Ask AI only if you turn that on in Settings.">
+      <Group title="AI status" footer="Inflow sends SMS and email to the AI. WhatsApp and other apps go only for chats you pick in Autopilot. Health numbers go to Ask AI only if you turn that on in Settings.">
         <Row title={capLabel(status.capUsd, status.spentTodayUsd)} subtitle={`${status.queued === 0 ? 'Nothing waiting' : `${status.queued} waiting`} · ${status.lastRunAt === null ? 'Not sent yet' : `Last sent ${whenLabel(status.lastRunAt, Date.now())}`}`} />
         {!status.on && <Row title={<Text tone="muted">{AI_OFF_NOTE}</Text>} />}
       </Group>
