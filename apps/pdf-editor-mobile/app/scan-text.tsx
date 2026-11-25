@@ -1,10 +1,12 @@
-import { Button, Empty, Field, Header, Notice, Screen, space, Text } from '@apps-hub/ui';
+import { Button, Empty, Field, Group, Header, Notice, Pill, Row, Screen, Sheet, space, Text } from '@apps-hub/ui';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, View } from 'react-native';
-import TextOcr, { allText } from 'text-ocr';
+import TextOcr, { allText, OCR_LANGUAGES, type OcrLanguage } from 'text-ocr';
+
+import { loadOcrLanguage, saveOcrLanguage } from '../src/scan/ocr-language';
 
 type State =
   | { type: 'idle' }
@@ -17,6 +19,9 @@ type State =
 export default function ScanTextScreen() {
   const [state, setState] = useState<State>({ type: 'idle' });
   const [copied, setCopied] = useState(false);
+  const [lang, setLang] = useState<OcrLanguage>(loadOcrLanguage);
+  const langRef = useRef(lang); // scan() is memoised once, so it reads the choice from here
+  const [picking, setPicking] = useState(false);
   const busy = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -32,7 +37,7 @@ export default function ScanTextScreen() {
       uri = shot.assets?.[0]?.uri;
       if (shot.canceled || !uri) return setState({ type: 'idle' });
       setState({ type: 'reading' });
-      const result = await TextOcr.recognizeFile(uri);
+      const result = await TextOcr.recognizeFile(uri, langRef.current);
       setState({ type: 'done', text: allText(result.lines) });
     } catch (err) {
       setState({ type: 'error', message: err instanceof Error ? err.message : String(err) });
@@ -58,11 +63,29 @@ export default function ScanTextScreen() {
     }
   };
 
+  const choose = (next: OcrLanguage) => {
+    langRef.current = next;
+    setLang(next);
+    saveOcrLanguage(next);
+    setPicking(false);
+  };
+  const chosen = OCR_LANGUAGES.find((l) => l.id === lang)!;
+
   const again = <Button label="Scan again" variant="secondary" onPress={() => void scan()} />;
 
   return (
     <Screen scroll>
       <Header title="Scan text" subtitle="Take a photo of some text, then copy it." trailing={<Button label="Done" size="sm" variant="ghost" onPress={() => router.back()} />} />
+      <Group>
+        <Row title="Language of the text" subtitle={chosen.label} trailing={<Button label="Change" size="sm" variant="secondary" onPress={() => setPicking(true)} />} />
+      </Group>
+      <Sheet visible={picking} onClose={() => setPicking(false)} title="Language of the text" doneLabel="Cancel">
+        <Group footer="Pick the language before you take the photo. Nothing leaves this phone.">
+          {OCR_LANGUAGES.map((l) => (
+            <Row key={l.id} title={l.label} subtitle={l.hint} trailing={l.id === lang ? <Pill label="Chosen" tone="ok" /> : undefined} onPress={() => choose(l.id)} accessibilityLabel={l.id === lang ? `${l.label}, chosen` : l.label} />
+          ))}
+        </Group>
+      </Sheet>
       {state.type === 'idle' && (
         <Empty title="Nothing scanned yet" body="Point the camera at the text and take a photo." action={<Button label="Scan text" onPress={() => void scan()} />} />
       )}
@@ -93,7 +116,7 @@ export default function ScanTextScreen() {
       )}
       {state.type === 'done' && state.text === '' && (
         <Notice tone="warn" action={again}>
-          No text found. Hold the phone steady, add light and try again.
+          {`No text found. Hold the phone steady, add light and try again. If the text is in another language, change the language first (now ${chosen.label}).`}
         </Notice>
       )}
       {state.type === 'done' && state.text !== '' && (

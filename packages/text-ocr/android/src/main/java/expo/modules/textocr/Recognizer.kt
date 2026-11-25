@@ -11,7 +11,8 @@ import java.io.InputStream
 
 const val MAX_SIDE = 3000
 const val MIN_LINE_CONFIDENCE = 40
-private const val ENG_SIZE = 4113088L // bytes of assets/tessdata/eng.traineddata; build.gradle checks its sha256
+/** Bytes of each assets/tessdata/<code>.traineddata (tessdata_fast); build.gradle checks their sha256. */
+private val MODEL_SIZES = mapOf("eng" to 4113088L, "ara" to 1432056L, "urd" to 1398718L)
 
 /** Smallest power of two that brings the longest side to MAX_SIDE or less. */
 fun sampleSizeFor(width: Int, height: Int, maxSide: Int = MAX_SIDE): Int {
@@ -54,24 +55,37 @@ fun decodeUpright(open: () -> InputStream?): Bitmap {
   return upright
 }
 
-private fun installTessdata(context: Context): File {
+/**
+ * The model codes in a Tesseract language string such as "ara+eng", in order. The string comes from JS and goes
+ * into a file path, so only bundled codes are accepted; null means English, which is what every older caller got.
+ */
+fun languageCodes(lang: String?): List<String> {
+  val codes = (lang ?: "eng").split('+')
+  require(codes.all { it in MODEL_SIZES } && codes.toSet().size == codes.size) { "Unknown text language: $lang" }
+  return codes
+}
+
+private fun installTessdata(context: Context, codes: List<String>): File {
   val dir = File(context.filesDir, "tessdata").apply { mkdirs() }
-  val target = File(dir, "eng.traineddata")
-  if (target.length() != ENG_SIZE) {
-    val tmp = File(dir, "eng.traineddata.tmp")
-    context.assets.open("tessdata/eng.traineddata").use { i -> tmp.outputStream().use { i.copyTo(it) } }
-    if (!tmp.renameTo(target)) throw IllegalStateException("Cannot install the English text model")
+  for (code in codes) {
+    val target = File(dir, "$code.traineddata")
+    if (target.length() != MODEL_SIZES.getValue(code)) {
+      val tmp = File(dir, "$code.traineddata.tmp")
+      context.assets.open("tessdata/$code.traineddata").use { i -> tmp.outputStream().use { i.copyTo(it) } }
+      if (!tmp.renameTo(target)) throw IllegalStateException("Cannot install the text model for $code")
+    }
   }
   return context.filesDir
 }
 
 /** One Tesseract run per call; TessBaseAPI is not thread-safe, so it never outlives the call. */
-fun recognize(context: Context, open: () -> InputStream?): Map<String, Any> {
-  val dataPath = installTessdata(context).absolutePath
+fun recognize(context: Context, lang: String?, open: () -> InputStream?): Map<String, Any> {
+  val codes = languageCodes(lang)
+  val dataPath = installTessdata(context, codes).absolutePath
   val bmp = decodeUpright(open)
   val api = TessBaseAPI()
   try {
-    if (!api.init(dataPath, "eng")) throw IllegalStateException("Cannot start the text reader")
+    if (!api.init(dataPath, codes.joinToString("+"))) throw IllegalStateException("Cannot start the text reader")
     api.pageSegMode = TessBaseAPI.PageSegMode.PSM_AUTO
     api.setImage(bmp)
     api.getUTF8Text() // runs the recognition; the iterator below reads its result

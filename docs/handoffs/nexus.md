@@ -281,7 +281,7 @@ Owner decision: Nexus uses AI hub and nothing else. Read this section before the
         again with other content: the old word no longer finds it, the new one does. Keep it out: minutes words no
         longer find it, transcript words still do.
     19. Right after making minutes the item status shows working briefly, then the same "N ideas, N links".
-    20. The Library "+" sheet shows "Scan text" once; Scan text reads English, not Arabic (English model only).
+    20. The Library "+" sheet shows "Scan text" once; Scan text has a "Language of the text" row; with Arabic or Urdu chosen it reads Arabic or Urdu (see the OCR section below).
     21. Chrome, a page, Share, Nexus: one row "Link, saved as a note"; Add: a note with title and URL that opens.
         Share again and Cancel (and again with Back): nothing added.
     22. Files, a PDF, Share, Nexus, Add: a PDF item and the editor opens. Gallery, 3 photos: three "Photo" rows and
@@ -407,7 +407,7 @@ Checked 2026-11-23 (Nexus wave 2, task 4) from the sources, not from memory. Off
 | Leptonica (`libleptonica.so`) | 1.85.0 | BSD-2-Clause style (Leptonica licence) | `cpp/leptonica/src/leptonica-license.txt` at tag 4.9.0; version from the README |
 | libjpeg (`libjpeg.so`) | 9f (14-Jan-2024) | IJG licence | `cpp/libjpeg/src/jversion.h` and README "LEGAL ISSUES" at tag 4.9.0 |
 | libpng (`libpngx.so`) | 1.6.48 | PNG Reference Library License v2 | `cpp/libpng/src/LICENSE` and README at tag 4.9.0 |
-| `eng.traineddata` (tessdata_fast) | tessdata_fast `main` | Apache-2.0 | Bundled at `packages/text-ocr/android/src/main/assets/tessdata/`; sha256 `7d4322bd…70b2`, 4,113,088 bytes, pinned by `verifyEngTraineddata` in `build.gradle` (runs before `preBuild`); its git blob id `bbef4675…` equals upstream `tesseract-ocr/tessdata_fast/eng.traineddata` (GitHub contents API); repo licence Apache-2.0 |
+| `eng.traineddata` (tessdata_fast) | tessdata_fast `main` | Apache-2.0 | Bundled at `packages/text-ocr/android/src/main/assets/tessdata/`; sha256 `7d4322bd…70b2`, 4,113,088 bytes, pinned by `verifyTraineddata` in `build.gradle` (runs before `preBuild`); its git blob id `bbef4675…` equals upstream `tesseract-ocr/tessdata_fast/eng.traineddata` (GitHub contents API); repo licence Apache-2.0 |
 
 - F-Droid: every licence above is FOSS. The JitPack AAR ships prebuilt `.so` files, so an F-Droid build would
   have to build Tesseract4Android from source (srclib) instead of taking the JitPack binary. Nexus ships through the
@@ -415,9 +415,11 @@ Checked 2026-11-23 (Nexus wave 2, task 4) from the sources, not from memory. Off
 - Attribution: Leptonica's BSD licence, the IJG licence and libpng's licence ask for their notices in the
   documentation of a binary distribution. The app has no open-source notices screen yet (open finding).
 - The app ships arm64-v8a only, so only the arm64 `.so` files (about 7.5 MB) go into the APK.
-- Language coverage: English only. Arabic and Urdu need an owner decision (tessdata_fast `ara.traineddata`
-  1,432,056 bytes, `urd.traineddata` 1,398,718 bytes, or `script/Arabic.traineddata` 9,311,038 bytes; sizes from
-  the GitHub contents API, nothing downloaded).
+- Language coverage (fix/ocr, 2026-11-25): English, Arabic and Urdu. `ara.traineddata` (1,432,056 bytes, sha256
+  `e3206d3d…e729`) and `urd.traineddata` (1,398,718 bytes, sha256 `62e8250c…555f`) from `tesseract-ocr/tessdata_fast`
+  at commit `87416418…29bd` (Apache-2.0, repo LICENSE read; git blob ids `c8d129c6…` and `715a159d…` equal the upstream
+  contents API), pinned in `verifyTraineddata`. `script/Arabic.traineddata` (9.3 MB) was not used. Accuracy on a small
+  synthetic sample: `packages/text-ocr/test-fixtures/README.md`; the Scan text language row and hints follow it.
 - What reaches Nexus: nothing. "Scan text" saves nothing (it copies text to the clipboard); `scan` items have an
   `ocr_text` column that nothing fills yet; `image` items are read by Gemini vision, not by the offline OCR.
 

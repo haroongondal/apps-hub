@@ -17,14 +17,14 @@ class TextOcrModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("TextOcr")
 
-    AsyncFunction("recognizeBase64") { base64: String ->
+    AsyncFunction("recognizeBase64") { base64: String, lang: String? ->
       val bytes = Base64.decode(base64, Base64.DEFAULT)
-      recognize(context) { ByteArrayInputStream(bytes) }
+      recognize(context, lang) { ByteArrayInputStream(bytes) }
     }
 
-    AsyncFunction("recognizeFile") { uri: String ->
+    AsyncFunction("recognizeFile") { uri: String, lang: String? ->
       val u = Uri.parse(uri)
-      recognize(context) { context.contentResolver.openInputStream(u) }
+      recognize(context, lang) { context.contentResolver.openInputStream(u) }
     }
 
     AsyncFunction("copy") { text: String ->
