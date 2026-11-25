@@ -14,7 +14,7 @@ Run from the repo root. Node ≥ 22, pnpm via corepack. Android builds need `JAV
 pnpm install
 pnpm test                 # every workspace package's "test" script
 pnpm typecheck            # tsc --noEmit per package
-pnpm doctor               # expo-doctor per app
+pnpm run doctor           # expo-doctor per app (plain `pnpm doctor` is pnpm's own check, not this script)
 pnpm --filter netlens android          # run an app on a device/emulator
 
 # One test file / one test (TS runs directly under node's type stripping, no Jest)
