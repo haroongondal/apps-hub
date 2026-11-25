@@ -59,6 +59,7 @@ import expo.modules.strongroomvault.core.PasswordHealth
 import expo.modules.strongroomvault.core.LostState
 import expo.modules.strongroomvault.core.RecoveryKey
 import expo.modules.strongroomvault.core.SmsCodes
+import expo.modules.strongroomvault.core.Wifi
 import expo.modules.strongroomvault.core.SyncAuthError
 import expo.modules.strongroomvault.core.SyncHttpError
 import expo.modules.strongroomvault.core.SyncOfflineError
@@ -739,6 +740,7 @@ class StrongroomVaultModule : Module() {
 
     AsyncFunction("presentPass") Coroutine { id: String ->
       val pass = passOf(id)
+      if (!Wifi.mayPresent(pass.code)) throw CodedException("NO_NFC_WIFI", "A Wi-Fi password isn't sent over NFC. Show the QR code instead.", null)
       val hasHce = context.packageManager.hasSystemFeature(PackageManager.FEATURE_NFC_HOST_CARD_EMULATION)
       val adapter = NfcAdapter.getDefaultAdapter(context)
       if (!hasHce || adapter == null) throw CodedException("NO_NFC", "This phone can't present a pass over NFC. Show the barcode instead.", null)
@@ -1086,7 +1088,8 @@ private fun view(id: String, e: Entry): Map<String, Any?>? = when (e) {
     "last4" to e.number.filter(Char::isDigit).takeLast(4), "expMonth" to e.expMonth, "expYear" to e.expYear, "note" to e.note,
   )
   is Entry.Note -> mapOf("id" to id, "type" to "note", "name" to e.name, "note" to "", "text" to e.text)
-  is Entry.Pass -> mapOf("id" to id, "type" to "pass", "name" to e.name, "format" to e.format.id, "note" to e.note)
+  is Entry.Pass -> mapOf("id" to id, "type" to "pass", "name" to e.name, "format" to e.format.id, "note" to e.note, "wifi" to Wifi.editable(e.name, e.code, e.format), "presentable" to Wifi.mayPresent(e.code)) +
+    (e.expiresOn?.let { mapOf("expiresOn" to it.toString()) } ?: emptyMap())
   is Entry.Deleted -> null
 }
 

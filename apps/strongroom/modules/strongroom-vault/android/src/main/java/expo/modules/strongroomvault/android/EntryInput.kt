@@ -8,6 +8,7 @@ import expo.modules.strongroomvault.core.Entry
 import expo.modules.strongroomvault.core.Matching
 import expo.modules.strongroomvault.core.Otp
 import expo.modules.strongroomvault.core.PassFormat
+import expo.modules.strongroomvault.core.parseExpiry
 import expo.modules.strongroomvault.core.Site
 
 internal object EntryInput {
@@ -68,7 +69,10 @@ internal object EntryInput {
     val code = input.text("code")
     val format = PassFormat.of(input.text("format")) ?: throw IllegalArgumentException("unknown pass format")
     (Barcode.encodeMatrix(code, format.id) as? BarcodeResult.Error)?.let { throw CodedException("BAD_PASS", it.message, null) }
-    return Entry.Pass(name, code, format, input.text("note"), 0)
+    // "" or absent = no date. A key present but unreadable is refused so a typo never silently drops the reminder.
+    val typed = (input["expiresOn"] as? String)?.trim().orEmpty()
+    val expiresOn = typed.takeIf { it.isNotEmpty() }?.let { parseExpiry(it) ?: throw CodedException("BAD_PASS", "Enter the expiry date as year-month-day, such as 2027-03-31.", null) }
+    return Entry.Pass(name, code, format, input.text("note"), 0, expiresOn)
   }
 
   fun site(typed: String): Site? = typed.trim().let { Matching.siteFromUrl(if ("://" in it) it else "https://$it") }

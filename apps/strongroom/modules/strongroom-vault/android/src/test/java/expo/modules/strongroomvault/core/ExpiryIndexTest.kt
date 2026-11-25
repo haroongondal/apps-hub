@@ -22,6 +22,19 @@ class ExpiryIndexTest {
     )
   }
 
+  @Test fun aPassWithADateGivesARowAndOneWithoutGivesNone() {
+    val dated = Entry.Pass("Gym", "GYM-0001", PassFormat.QR, "desk 4", 8, LocalDate.of(2026, 12, 15))
+    val all = entries + ("g" to dated)
+    assertEquals(
+      listOf(ExpiryItem("card", "Card", LocalDate.of(2026, 11, 30)), ExpiryItem("pass", "Pass", LocalDate.of(2026, 12, 15)), ExpiryItem("card", "Card", LocalDate.of(2027, 2, 28))),
+      ExpiryIndex.build(all, showNames = false),
+    )
+    assertEquals(listOf("Card", "Gym", "Visa travel"), ExpiryIndex.build(all, showNames = true).map { it.label })
+    assertEquals("Pass", ExpiryIndex.build(mapOf("g" to dated.copy(name = "  ")), showNames = true).single().label)
+    val text = String(ExpiryIndex.encode(ExpiryIndex.build(all, showNames = false)), Charsets.UTF_8)
+    for (secret in listOf("GYM-0001", "Gym", "desk 4")) assertFalse(secret, text.contains(secret))
+  }
+
   @Test fun showNamesUsesTheCardNameOrCardWhenBlank() {
     assertEquals(listOf("Card", "Visa travel"), ExpiryIndex.build(entries, showNames = true).map { it.label })
     val long = Entry.Card("x".repeat(200), "", "", 1, 2030, "", "", 1)

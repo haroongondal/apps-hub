@@ -80,6 +80,23 @@ class EntryJsonTest {
     assertEquals(pass, EntryJson.decode(json))
   }
 
+  // The same literal is asserted in strongroom-core's entry-pass.test.ts. The key is absent without a date, so every existing pass encodes as before.
+  @Test fun passExpiryIsOneOptionalKeyPinnedToTheTypeScriptEncoder() {
+    val pass = Entry.Pass("Gym \"Club\"", "1234567890128", PassFormat.EAN13, "desk\nopen 6-22", 1_700_000_004_000, java.time.LocalDate.of(2027, 3, 31))
+    val json =
+      """{"type":"pass","name":"Gym \"Club\"","code":"1234567890128","format":"ean13","note":"desk\nopen 6-22","expiresOn":"2027-03-31","updatedAt":1700000004000}"""
+    assertEquals(json, EntryJson.encode(pass))
+    assertEquals(pass, EntryJson.decode(json))
+    assertNull((EntryJson.decode(EntryJson.encode(pass.copy(expiresOn = null))) as Entry.Pass).expiresOn)
+  }
+
+  @Test fun aPassDateThatDoesNotReadIsDroppedAndThePassStays() {
+    for (bad in listOf("\"soon\"", "\"2027-13-01\"", "\"2027-02-30\"", "\"27-03-31\"", "\"2027-3-31\"", "\"1999-12-31\"", "5", "null")) {
+      val json = """{"type":"pass","name":"n","code":"1","format":"qr","note":"","expiresOn":$bad,"updatedAt":5}"""
+      assertEquals(bad, Entry.Pass("n", "1", PassFormat.QR, "", 5), EntryJson.decode(json))
+    }
+  }
+
   @Test fun everyPassFormatHasItsStableId() {
     assertEquals(listOf("qr", "code128", "ean13"), PassFormat.entries.map { it.id })
     for (f in PassFormat.entries) assertEquals(f, PassFormat.of(f.id))

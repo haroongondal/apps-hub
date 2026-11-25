@@ -15,15 +15,19 @@ data class ExpiryItem(val kind: String, val label: String, val expiresOn: LocalD
 
 object ExpiryIndex {
   const val CARD = "card"
+  const val PASS = "pass"
   const val MAX_LABEL = 60
   private const val CARD_LABEL = "Card"
+  private const val PASS_LABEL = "Pass"
 
-  // Passes have no expiry date in the vault format yet, so only cards produce rows; "pass" stays a valid kind for when they do.
+  // One row per card with a month and year and per pass with an expiry date: kind, label and date only. Labels are the generic kind unless showNames.
   fun build(entries: Map<String, Entry>, showNames: Boolean): List<ExpiryItem> =
     entries.values.mapNotNull { e ->
-      val card = e as? Entry.Card ?: return@mapNotNull null
-      val ends = endOfMonth(card.expMonth, card.expYear) ?: return@mapNotNull null
-      ExpiryItem(CARD, if (showNames) label(card.name) else CARD_LABEL, ends)
+      when (e) {
+        is Entry.Card -> endOfMonth(e.expMonth, e.expYear)?.let { ExpiryItem(CARD, if (showNames) label(e.name, CARD_LABEL) else CARD_LABEL, it) }
+        is Entry.Pass -> e.expiresOn?.let { ExpiryItem(PASS, if (showNames) label(e.name, PASS_LABEL) else PASS_LABEL, it) }
+        else -> null
+      }
     }.sortedWith(compareBy({ it.expiresOn }, { it.label }))
 
   fun endOfMonth(month: Int?, year: Int?): LocalDate? {
@@ -62,5 +66,5 @@ object ExpiryIndex {
     }
   }
 
-  private fun label(name: String): String = name.trim().take(MAX_LABEL).ifEmpty { CARD_LABEL }
+  private fun label(name: String, fallback: String): String = name.trim().take(MAX_LABEL).ifEmpty { fallback }
 }

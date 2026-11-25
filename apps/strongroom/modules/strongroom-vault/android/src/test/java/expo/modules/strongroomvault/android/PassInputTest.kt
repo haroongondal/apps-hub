@@ -18,6 +18,15 @@ class PassInputTest {
     assertEquals(Entry.Pass("Gym", "ABC-123", PassFormat.CODE128, "front desk", 0), e)
   }
 
+  @Test fun anExpiryDateIsOptionalAndRefusedWhenItDoesNotRead() {
+    assertEquals(null, (EntryInput.toEntry(input(), null) as Entry.Pass).expiresOn)
+    assertEquals(null, (EntryInput.toEntry(input() + ("expiresOn" to "  "), null) as Entry.Pass).expiresOn)
+    assertEquals(java.time.LocalDate.of(2027, 3, 31), (EntryInput.toEntry(input() + ("expiresOn" to " 2027-03-31 "), null) as Entry.Pass).expiresOn)
+    for (bad in listOf("31/03/2027", "2027-02-30", "soon")) {
+      assertEquals("Enter the expiry date as year-month-day, such as 2027-03-31.", assertThrows(CodedException::class.java) { EntryInput.toEntry(input() + ("expiresOn" to bad), null) }.message)
+    }
+  }
+
   @Test fun refusesABlankName() {
     assertEquals("Give the pass a name.", assertThrows(CodedException::class.java) { EntryInput.toEntry(input(name = "  "), null) }.message)
   }

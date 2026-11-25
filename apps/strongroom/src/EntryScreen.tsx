@@ -4,7 +4,7 @@ import { Button, Group, Header, Notice, Readout, Row, Screen, Sheet, Text, space
 import Vault, { type EntryView, type TotpCode } from 'strongroom-vault';
 import { isLocked, messageOf } from './call.ts';
 import { PassView } from './PassView.tsx';
-import { groupCode, plural } from './forms.ts';
+import { groupCode, parseWifi, plural } from './forms.ts';
 import { BackButton, HIDE_FROM_ACCESSIBILITY } from './parts.tsx';
 
 type Secret = 'password' | 'number' | 'cvc' | 'code';
@@ -111,11 +111,12 @@ export function EntryScreen({ id, onBack, onEdit, onLocked }: Props) {
     </Text>
   );
 
-  const secretRow = (field: Secret, empty?: string) => (
+  // as: what a revealed value shows, when that is a part of it (a Wi-Fi pass reveals its whole code but shows only the password).
+  const secretRow = (field: Secret, empty?: string, title = LABEL[field], as: (raw: string) => string = (raw) => raw) => (
     <Row
       key={field}
-      title={LABEL[field]}
-      subtitle={value(revealed[field] ?? empty ?? MASK, revealed[field] !== undefined)}
+      title={title}
+      subtitle={value(revealed[field] === undefined ? (empty ?? MASK) : as(revealed[field]), revealed[field] !== undefined)}
       trailing={
         <View style={{ flexDirection: 'row', gap: space.xs }}>
           {revealed[field] === undefined ? (
@@ -166,7 +167,12 @@ export function EntryScreen({ id, onBack, onEdit, onLocked }: Props) {
   } else if (entry?.type === 'note') {
     fields.push(<Row key="text" title="Note" subtitle={value(entry.text ?? '')} />);
   } else if (entry?.type === 'pass') {
-    fields.push(<Row key="format" title="Format" subtitle={value(entry.format === 'code128' ? 'Code 128' : entry.format === 'ean13' ? 'EAN-13' : 'QR')} />, secretRow('code'));
+    if (entry.wifi) fields.push(secretRow('code', undefined, 'Wi-Fi password', (raw) => {
+      const w = parseWifi(raw);
+      return w ? w.password || 'None (open network)' : raw;
+    }));
+    else fields.push(<Row key="format" title="Format" subtitle={value(entry.format === 'code128' ? 'Code 128' : entry.format === 'ean13' ? 'EAN-13' : 'QR')} />, secretRow('code'));
+    if (entry.expiresOn) fields.push(<Row key="expiresOn" title="Expires" subtitle={value(entry.expiresOn)} />);
   }
   if (entry && entry.type !== 'note' && entry.note) fields.push(<Row key="note" title="Note" subtitle={value(entry.note)} />);
 
@@ -177,7 +183,7 @@ export function EntryScreen({ id, onBack, onEdit, onLocked }: Props) {
       {message && <Notice tone={message.tone}>{message.text}</Notice>}
       {entry && (
         <>
-          {entry.type === 'pass' && <PassView id={id} onLocked={onLocked} />}
+          {entry.type === 'pass' && <PassView id={id} onLocked={onLocked} presentable={entry.presentable !== false} />}
           <Group>{fields}</Group>
           {entry.type === 'login' && entry.totp && (
             <Button label="Remove code" variant="secondary" onPress={() => setRemovingCode(true)} block />

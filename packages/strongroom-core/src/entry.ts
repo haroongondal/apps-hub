@@ -15,7 +15,12 @@ export type Card = {
   expMonth: number | null; expYear: number | null; cvc: string; note: string; updatedAt: number;
 };
 export type PassFormat = 'qr' | 'code128' | 'ean13';
-export type Pass = { type: 'pass'; name: string; code: string; format: PassFormat; note: string; updatedAt: number };
+export type Pass = {
+  type: 'pass'; name: string; code: string; format: PassFormat; note: string;
+  /** Optional last day the pass is valid, `YYYY-MM-DD`; absent when unset. An older build that edits the pass drops it. */
+  expiresOn?: string;
+  updatedAt: number;
+};
 export type Note = { type: 'note'; name: string; text: string; updatedAt: number };
 export type Deleted = { type: 'deleted'; updatedAt: number };
 export type Entry = Login | Card | Note | Pass | Deleted;
@@ -41,7 +46,12 @@ export function encodeEntry(e: Entry): string {
     case 'note':
       return JSON.stringify({ type: e.type, name: e.name, text: e.text, updatedAt: e.updatedAt });
     case 'pass':
-      return JSON.stringify({ type: e.type, name: e.name, code: e.code, format: e.format, note: e.note, updatedAt: e.updatedAt });
+      return JSON.stringify({
+        type: e.type, name: e.name, code: e.code, format: e.format, note: e.note,
+        // Absent, never null: older readers ignore an unknown key but throw on a null they don't expect.
+        ...(e.expiresOn !== undefined ? { expiresOn: e.expiresOn } : {}),
+        updatedAt: e.updatedAt,
+      });
     case 'deleted':
       return JSON.stringify({ type: e.type, updatedAt: e.updatedAt });
   }
@@ -61,6 +71,13 @@ const passFormat = (o: Obj, k: string): PassFormat => {
   const f = str(o, k);
   return f === 'qr' || f === 'code128' || f === 'ean13' ? f : bad(k);
 };
+/** A real calendar day in 2000..2999, as `YYYY-MM-DD`. */
+export function isIsoDate(s: string): boolean {
+  const m = /^(2\d{3})-(\d{2})-(\d{2})$/.exec(s);
+  if (!m) return false;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  return d.toISOString().slice(0, 10) === s;
+}
 const optStr = (o: Obj, k: string): string | null => (o[k] === null ? null : str(o, k));
 const optInt = (o: Obj, k: string): number | null => (o[k] === null ? null : int(o, k));
 /** Absent (missing) or null reads as null; a present non-string is malformed. */
@@ -99,8 +116,15 @@ export function decodeEntry(text: string): Entry | null {
         };
       case 'note':
         return { type: 'note', name: str(o, 'name'), text: str(o, 'text'), updatedAt };
-      case 'pass':
-        return { type: 'pass', name: str(o, 'name'), code: str(o, 'code'), format: passFormat(o, 'format'), note: str(o, 'note'), updatedAt };
+      case 'pass': {
+        // A date that doesn't read is dropped, not fatal: the pass itself stays usable.
+        const exp = o.expiresOn;
+        return {
+          type: 'pass', name: str(o, 'name'), code: str(o, 'code'), format: passFormat(o, 'format'), note: str(o, 'note'),
+          ...(typeof exp === 'string' && isIsoDate(exp) ? { expiresOn: exp } : {}),
+          updatedAt,
+        };
+      }
       case 'deleted':
         return { type: 'deleted', updatedAt };
       default:

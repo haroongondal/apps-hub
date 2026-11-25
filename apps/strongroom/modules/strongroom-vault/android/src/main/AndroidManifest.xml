@@ -19,7 +19,7 @@
   <permission android:name="com.haroon.permission.AUTOPILOT" android:protectionLevel="signature" />
   <uses-permission android:name="com.haroon.permission.AUTOPILOT" />
   <application>
-    <!-- Card expiry dates for sibling apps, when the owner turns it on in Settings. Read-only, no URI grants. -->
+    <!-- Card and pass expiry dates for sibling apps, when the owner turns it on in Settings. Read-only, no URI grants. -->
     <provider
       android:name="expo.modules.strongroomvault.android.ExpiryLinkProvider"
       android:authorities="com.haroon.strongroom.applink"

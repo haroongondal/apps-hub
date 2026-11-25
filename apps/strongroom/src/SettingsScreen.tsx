@@ -208,14 +208,14 @@ export function SettingsScreen({ status, refresh, notice, onOpen }: Props) {
         footer={
           status.expiryShare
             ? status.expiryNames
-              ? 'Your other Haroon apps see each card name you typed and when the card runs out, even while Strongroom is locked. Never numbers, security codes or passwords.'
-              : 'Your other Haroon apps see only "Card" and when each card runs out, even while Strongroom is locked. Never names, numbers, security codes or passwords.'
+              ? 'Your other Haroon apps see each card or pass name you typed and when it runs out, even while Strongroom is locked. Never numbers, codes, security codes or passwords.'
+              : 'Your other Haroon apps see only "Card" or "Pass" and when each one runs out, even while Strongroom is locked. Never names, numbers, codes, security codes or passwords.'
             : 'Off: your other apps see nothing from Strongroom except that it is installed and when it last ran.'
         }
       >
         <Row
           title="Share expiry dates with my other Haroon apps"
-          subtitle="So a reminder app can tell you before a card runs out."
+          subtitle="So a reminder app can tell you before a card or pass runs out."
           trailing={
             <Switch
               value={status.expiryShare}
@@ -232,7 +232,7 @@ export function SettingsScreen({ status, refresh, notice, onOpen }: Props) {
               options={LABELS}
               value={status.expiryNames ? 'names' : 'dates'}
               onChange={(key) => setExpiryShare(true, key === 'names')}
-              accessibilityLabel="What your other apps see for each card"
+              accessibilityLabel="What your other apps see for each card or pass"
             />
           </View>
         )}
