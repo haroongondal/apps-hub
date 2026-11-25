@@ -5,6 +5,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LedgerTest {
@@ -51,6 +52,13 @@ class LedgerTest {
     assertEquals(setOf("pkg", "job", "service", "timeMs", "error", "code", "fellBack"), rows[0].keys)
     assertEquals(setOf("pkg", "job", "service", "timeMs"), rows[1].keys)
     assertEquals(log, CallLog.parse(text))
+  }
+
+  @Test fun aFailedCallKeepsItsReplyShape() {
+    val log = listOf(LoggedCall("a", "embed", "gemini", 9, "server", 200, false, "fields data, data 1 of 8 texts"))
+    val text = CallLog.toJson(log)
+    assertEquals(log, CallLog.parse(text))
+    assertTrue(Json.parseToJsonElement(text).jsonObject["calls"]!!.jsonArray.single().jsonObject.keys.contains("detail"))
   }
 
   @Test fun callLogStoresOnlyAppJobServiceAndTime() {

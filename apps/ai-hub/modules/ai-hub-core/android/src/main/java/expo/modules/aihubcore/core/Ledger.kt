@@ -45,6 +45,7 @@ data class LoggedCall(
   val error: String? = null,
   val httpCode: Int? = null,
   val fellBack: Boolean = false,
+  val detail: String? = null,
 )
 
 object CallLog {
@@ -59,6 +60,7 @@ object CallLog {
       o.text("error"),
       o.num("code")?.toInt(),
       (o["fellBack"] as? JsonPrimitive)?.booleanOrNull == true,
+      o.text("detail"),
     )
   }
 
@@ -74,6 +76,7 @@ object CallLog {
             c.error?.let { put("error", it) }
             c.httpCode?.let { put("code", it) }
             if (c.fellBack) put("fellBack", true)
+            c.detail?.let { put("detail", it) }
           }
         },
       ),

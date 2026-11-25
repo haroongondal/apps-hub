@@ -171,12 +171,12 @@ class Worker(context: Context) {
       settle(p) { it.onResult(id, result) }
     } catch (e: AiError) {
       if (e.kind == AiError.Kind.RATE) hold(item.service, e.retryAfterMs)
-      recordFailure(p, e.kind.name.lowercase(), e.service, e.httpCode, e.fellBack)
+      recordFailure(p, e.kind.name.lowercase(), e.service, e.httpCode, e.fellBack, e.detail)
       settle(p) { it.onError(id, e.kind.name.lowercase(), e.message.orEmpty()) }
     } catch (e: BadRequest) {
       settle(p) { it.onError(id, "invalid", e.message.orEmpty()) }
     } catch (e: Exception) {
-      recordFailure(p, "internal", null, null, false)
+      recordFailure(p, "internal", null, null, false, null)
       settle(p) { it.onError(id, "internal", "AI hub hit an unexpected error. Try again.") }
     } catch (e: OutOfMemoryError) {
       settle(p) { it.onError(id, "too_large", "This ${p.request.attachmentName} is too big. Send a smaller one.") }
@@ -234,12 +234,12 @@ class Worker(context: Context) {
   }
 
   // A failed request gets a row too, so the owner can see which call failed and why (kind and HTTP status only, never the provider's text).
-  private fun recordFailure(p: Pending, error: String, service: Service?, httpCode: Int?, fellBack: Boolean) {
+  private fun recordFailure(p: Pending, error: String, service: Service?, httpCode: Int?, fellBack: Boolean, detail: String?) {
     val job = p.request.job
     val used = service ?: runCatching { models().getValue(job).service }.getOrNull() ?: return
     runCatching {
       store.update("call_log") {
-        CallLog.toJson(CallLog.add(CallLog.parse(it), LoggedCall(p.pkg, job.name.lowercase(), Settings.key(used), System.currentTimeMillis(), error, httpCode, fellBack)))
+        CallLog.toJson(CallLog.add(CallLog.parse(it), LoggedCall(p.pkg, job.name.lowercase(), Settings.key(used), System.currentTimeMillis(), error, httpCode, fellBack, detail)))
       }
     }
   }

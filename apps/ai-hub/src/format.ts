@@ -52,14 +52,14 @@ const FAILURE_TEXT: Record<string, string> = {
   internal: 'AI hub error',
 };
 
-export function requestText(call: Pick<CallInfo, 'job' | 'service' | 'time' | 'error' | 'code' | 'fellBack'>, now: number): string {
+export function requestText(call: Pick<CallInfo, 'job' | 'service' | 'time' | 'error' | 'code' | 'fellBack' | 'detail'>, now: number): string {
   const job = JOBS.find((j) => j.key === call.job)?.label ?? 'Request';
   const service = SERVICE_LABEL[call.service] ?? call.service;
   const when = lastUsedText(call.time, now);
   if (!call.error) return `${job} with ${service}. ${when}`;
   const why = FAILURE_TEXT[call.error] ?? 'unexpected error';
   const status = call.code ? ` (HTTP ${call.code})` : '';
-  return `${job} with ${service} failed: ${why}${status}${call.fellBack ? ', other service tried too' : ''}. ${when}`;
+  return `${job} with ${service} failed: ${why}${status}${call.fellBack ? ', other service tried too' : ''}${call.detail ? `, ${call.detail}` : ''}. ${when}`;
 }
 
 // Expo wraps a native failure as "Call to function ... rejected.\n→ Caused by: <message>".
