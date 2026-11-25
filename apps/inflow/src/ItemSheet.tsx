@@ -12,7 +12,7 @@ const OPEN_ERROR = 'This file could not be opened.';
 const INLINE_MAX = 8 * 1024 * 1024;   // as readMedia allows in Kotlin
 const inline = (m: MediaInfo) => (m.kind === 'image' || m.kind === 'sticker') && m.size <= INLINE_MAX;
 
-function MediaGroup({ itemId }: { itemId: number }) {
+export function MediaGroup({ itemId, title = 'Media' }: { itemId: number; title?: string }) {
   const [files, setFiles] = useState<MediaInfo[]>([]);
   const [pictures, setPictures] = useState<Record<number, string>>({});
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +46,7 @@ function MediaGroup({ itemId }: { itemId: number }) {
   };
   return (
     <>
-      <Group title="Media">
+      <Group title={title}>
         {files.map((m) =>
           pictures[m.id] !== undefined ? (
             <View key={m.id} style={{ padding: space.md }}>
