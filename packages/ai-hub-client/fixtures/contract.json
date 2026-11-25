@@ -75,6 +75,42 @@
       "fileName": "note.m4a",
       "mime": "audio/mp4",
       "segments": true
+    },
+    "chatV3": {
+      "apiVersion": 3,
+      "requestId": "chat-3",
+      "job": "chat",
+      "priority": "foreground",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "obs"
+            },
+            {
+              "type": "image_url",
+              "image_url": {
+                "url": "data:image/jpeg;base64,QUJD"
+              }
+            }
+          ]
+        }
+      ],
+      "tools": [
+        {
+          "name": "look",
+          "description": "Look something up",
+          "parameters": {
+            "type": "object"
+          }
+        }
+      ],
+      "maxTokens": 300,
+      "toolChoice": "required",
+      "reasoningEffort": "low",
+      "service": "gemini"
     }
   },
   "replies": {
@@ -121,6 +157,44 @@
           "text": " there"
         }
       ]
+    },
+    "chatV3": {
+      "text": "hello",
+      "toolCalls": [
+        {
+          "id": "c1",
+          "name": "look",
+          "args": {
+            "q": "a"
+          }
+        }
+      ],
+      "usage": {
+        "inputTokens": 10,
+        "cachedTokens": 2,
+        "outputTokens": 5
+      },
+      "model": "gemini-3.5-flash-lite",
+      "service": "gemini",
+      "raw": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "c1",
+            "type": "function",
+            "function": {
+              "name": "look",
+              "arguments": "{\"q\":\"a\"}"
+            },
+            "extra_content": {
+              "google": {
+                "thought_signature": "c2lnbmF0dXJl"
+              }
+            }
+          }
+        ]
+      }
     }
   }
 }

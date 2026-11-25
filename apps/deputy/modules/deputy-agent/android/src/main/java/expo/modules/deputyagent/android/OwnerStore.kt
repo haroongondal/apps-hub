@@ -116,6 +116,13 @@ object OwnerStore {
   /** Written when Deputy opens or a run ends; a link query only reads it. */
   fun heartbeat(c: Context) = linkPrefs(c).edit().putLong("last_seen_at", System.currentTimeMillis()).apply()
 
+  /** What carried the last successful step: "hub" or "own". Written only when it changes. */
+  fun recordAiSource(c: Context, source: String) {
+    if (aiSource(c) != source) linkPrefs(c).edit().putString("ai_source", source).apply()
+  }
+
+  fun aiSource(c: Context): String? = linkPrefs(c).getString("ai_source", null)
+
   fun lastSeen(c: Context): Long? = linkPrefs(c).getLong("last_seen_at", -1L).takeIf { it >= 0 }
 
   fun linkShares(c: Context): Map<String, Boolean> = linkPrefs(c).let { mapOf("waiting" to it.getBoolean("waiting", false), "runs" to it.getBoolean("runs", false)) }

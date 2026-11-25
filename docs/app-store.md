@@ -114,7 +114,8 @@ changelog with `[branch build <short sha>]`. CI is not affected: it builds a pus
 
 ### Rollback
 
-`pnpm release <app> --rollback [--to <sha|tag>] [--dry-run]` republishes an older build of one app.
+`pnpm release <app> --rollback [--to <sha|tag>]` prints the plan for republishing an older build of one app and stops.
+`pnpm release <app> --rollback --yes [--to <sha|tag>] [--accept-newer-data]` builds and publishes it.
 
 - **A rollback is a new release, not a downgrade.** Android refuses to install an APK with a lower `versionCode` over
   a higher one ([versioning](https://developer.android.com/studio/publish/versioning)), and on a user build only the
@@ -124,8 +125,10 @@ changelog with `[branch build <short sha>]`. CI is not affected: it builds a pus
   its `versionName` stays the old one. The changelog defaults to `Rollback to <versionName> (<short sha>)`.
 - **Which commit.** Every release now records the full git sha it was built from in the manifest
   (`android.commit`; optional, releases made before this have none). The Store shows its first seven characters on the
-  app's row as "Build from commit 8b8db0d", and hides the line when there is none. The manifest has no rollback flag, so the
-  Store does not say a build is a rollback. Without `--to`, the target is the first parent
+  app's row as "Build from commit 8b8db0d", and hides the line when there is none. A rollback build also records
+  `android.rolledBackFrom` (`versionCode`, `versionName` and `commit` of the release it replaced; optional, so old
+  manifests parse and an older Store build drops it), and the row adds "Rolled back from 0.3.0 (41)" beside the commit
+  line. The next normal release replaces the whole `android` entry, so the line goes away on its own. Without `--to`, the target is the first parent
   of the last commit that changed the app's folder (`apps/<app>`) at or before that recorded commit, that is, the app as
   it was just before its latest change. (The recorded commit alone is not enough: it can be a merge of another app's
   work, or one HEAD recorded for every app of an `--all` release.) `--to` takes a sha, short sha or tag. The target
@@ -137,22 +140,56 @@ changelog with `[branch build <short sha>]`. CI is not affected: it builds a pus
   `git worktree` (removed afterwards, also on Ctrl-C; a hard kill is cleaned up by `git worktree prune` on the next run), `pnpm install --frozen-lockfile --prefer-offline` runs there, then the normal
   steps (prepare, prebuild, gradle patch, `assembleRelease`, signer check, upload) run with that worktree as the root.
   Your own tree is never touched.
-- **`--dry-run`** prints `app`, `from` (commit and versionCode), `to commit`, `new versionCode` and `target` (Store
-  host) and exits before any worktree, build or upload. It only reads the manifest.
+- **Plan first, `--yes` to go.** Without `--yes` a rollback only prints, then exits 0 without a worktree, build or upload
+  (it still reads the manifest): `app`, `from` (commit and versionCode), `to commit`, `new versionCode`, `target` (Store
+  host), what the Store gets (the new APK key, `manifest.json`, and how the row will read), the files that differ between
+  the release being replaced and the target (those in the app's folder listed, the rest counted) and any database
+  warning. `--dry-run` is still accepted and means the same as leaving `--yes` out; `--yes` with `--dry-run` is an error.
+  `--yes`, `--accept-newer-data`, `--to` and `--dry-run` only work with `--rollback`.
 - **Old code meets the newer database.** A rollback installs old code over the phone's newer on-device
   database. Android accepts the install because the `versionCode` is higher, but `SQLiteOpenHelper`'s default
   `onDowngrade` throws, so an app whose database schema version was raised after the target commit crashes on
-  start until a forward release ships. Examples on the ecosystem branches: Clipboard (`ClipStore`, `clips.db`,
-  version 1 to 2 added `pinned_at`) and Strongroom (`Schema.VERSION` in `SqliteRecordStore.kt`; neither overrides
-  `onDowngrade`). Check the diff between the target and the current release for a schema version bump before a
-  rollback.
-- `pnpm release <app> --rollback` without `--dry-run` builds and publishes. It replaces what every phone gets
-  from the Store, so run it only on the owner's go.
+  start until a forward release ships (Clipboard `clips.db` 1 to 2 added `pinned_at`; Strongroom `Schema.VERSION`).
+  Inflow and HomeNet do not crash on a newer database, and Nexus throws its own `too_new` error, but the older code
+  still cannot be trusted with data in a newer format, so they are treated the same way. The release tool therefore
+  checks while it plans: `tools/release/src/schemas.ts` says, per app, where each database version
+  lives (a number in Kotlin or TypeScript, or the count of a migration track's steps), and the tool reads it with
+  `git show <sha>:<file>` at the target and at every commit whose data may be on the phones: the published commit and,
+  when the published build was itself a rollback, the release it replaced (`android.rolledBackFrom.commit`; the higher
+  schema counts, because an accepted rollback leaves the newer data on the phone). If the phones' version is higher, the
+  rollback is refused with a plain message, with or without `--yes`, and nothing is built. When the tool cannot tell, it
+  refuses too, but says "could not tell whether the data is newer" and names the database and the reason, instead of
+  calling the data newer. It cannot tell in these cases, each with its own advice: a recorded commit is missing locally
+  (fetch origin and run again; the check never guesses from `HEAD`), the Store has no commit recorded for the release
+  and the target is below the higher of `HEAD` and `origin/main` (only a guess: release once normally to record one), a file exists but its constant cannot be read (check by hand), and **a registered file is missing at a
+  commit while the app folder is there**. That last case is deliberately the simplest possible rule: the tool does not
+  try to work out whether the database did not exist yet or was moved, renamed, extracted or rewritten (every
+  heuristic tried for that missed a way to move a database). The message says "<database> is
+  not in the older build's files, so the tool cannot tell whether that build ever opened it. If the database was
+  created after that build, rolling back is safe: pass --accept-newer-data." The cost: **a rollback to a build from
+  before a database existed (for example Nexus before the scan and knowledge tracks, TunnelWall before `firewall.db`)
+  is refused until the owner passes `--accept-newer-data`**; the older build then simply never opens that database. A
+  database is absent, and the rollback may go ahead, only when the whole app folder is missing at that commit. The same
+  rule applies to the target and to the commits holding the phones' data. Nothing is wiped either way.
+  `--accept-newer-data` overrides the refusal. It prints which databases are ahead and that the older app will not
+  open that data until a newer release is installed (the rollback deletes nothing, but clearing the app's storage to
+  recover would). It still needs `--yes` to build. Whether to offer this flag at all is the owner's call.
+- **Keeping the registry honest.** `schemas.test.ts` fails when a registered constant no longer matches its source
+  (a schema bump), and when any tracked file in `apps/` or `packages/` declares or opens a database
+  (`SQLiteOpenHelper(`, `PRAGMA user_version =`, `SCHEMA_VERSION =`, `DB_VERSION =`, a `*_STEPS` migration list,
+  `openDatabaseAsync(`, `openOrCreateDatabase(`) without being listed. A new app needs an entry (an empty one when it has no database).
+- **A release that loses a race.** The build takes minutes. Just before the upload the tool re-reads the manifest and
+  refuses to upload when another release took that `versionCode` while this one was building (it would overwrite that
+  release's APK), saying to run it again. This closes the build-time window only: two releases that reach the upload
+  within seconds of each other can still collide. The proper fix is a write-once APK key in `tools/store-api` (a Worker
+  change that needs a deploy), not done here.
+- A rollback with `--yes` builds and publishes. It replaces what every phone gets from the Store, so run it only
+  on the owner's go.
 
 ```bash
-pnpm release netlens --rollback --dry-run                 # see the plan
-pnpm release netlens --rollback -m "Back out the scan bug" # roll back to main before the released change
-pnpm release netlens --rollback --to 1a2b3c4 --dry-run    # an explicit target
+pnpm release netlens --rollback                           # see the plan, change nothing
+pnpm release netlens --rollback --yes -m "Back out the scan bug" # roll back to main before the released change
+pnpm release netlens --rollback --to 1a2b3c4              # the plan for an explicit target
 ```
 
 ### CI/CD (automatic releases)

@@ -26,6 +26,8 @@ dependencies {
   implementation("androidx.media3:media3-effect:1.11.1")
   // Repeating tasks: WorkManager, Apache-2.0, the same version the Store ships.
   implementation("androidx.work:work-runtime-ktx:2.12.0")
+  // E2: AI hub's client (our own packages/ai-hub-client, autolinked from apps/deputy/package.json); no third-party code.
+  implementation project(':ai-hub-client')
   testImplementation("junit:junit:4.13.2")
   testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
 }

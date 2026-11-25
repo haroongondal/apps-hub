@@ -110,6 +110,30 @@ class ProposalTest {
     }
   }
 
+  private fun proposal(id: String) = Proposal(id, "t", "", emptyList(), "x")
+
+  // The screen has taken the draft and the owner answers; Back lands before the posted answer to the caller runs.
+  private fun backAfter(first: String, then: () -> Unit): String {
+    ProposalInbox.put(proposal(first)) {}
+    try {
+      ProposalInbox.take()
+      then()
+      return ProposalInbox.answerOnLeaving(first)
+    } finally {
+      ProposalInbox.forget(first)
+      ProposalInbox.take()
+    }
+  }
+
+  @Test fun backAfterANewerProposalReplacedItIsCancelled() =
+    assertEquals(ProposeTask.CANCELLED, backAfter("d1") { ProposalInbox.put(proposal("d2")) {} })
+
+  @Test fun backAfterTheOwnerDroppedTheDraftIsCancelled() =
+    assertEquals(ProposeTask.CANCELLED, backAfter("d3") { ProposalInbox.settle("d3", false) })
+
+  @Test fun backAfterTheOwnerSavedTheDraftIsHandedOver() =
+    assertEquals(ProposeTask.HANDED_OVER, backAfter("d4") { ProposalInbox.settle("d4", true) })
+
   @Test fun packageNamesAreCheckedByShape() {
     assertTrue(ProposeTask.isPackageName("com.haroon.inflow"))
     for (bad in listOf("inflow", "com..x", "com.x y", "1com.x", "com.x\n", "x".repeat(199) + ".y")) assertFalse(bad, ProposeTask.isPackageName(bad))

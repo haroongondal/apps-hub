@@ -5,6 +5,7 @@ import {
   StoreAppSchema,
   androidPackageFor,
   StoreManifestSchema,
+  AndroidReleaseSchema,
   emptyManifest,
   nextVersionCode,
   upsertAndroidRelease,
@@ -82,4 +83,23 @@ test('upsertAndroidRelease keeps the commit and it survives a JSON round trip', 
   assert.equal(again.apps[0].android?.commit, sha);
   const next = upsertAndroidRelease(again, app, { ...release(3), commit: 'cd34'.repeat(10) });
   assert.equal(next.apps[0].android?.commit, 'cd34'.repeat(10));
+});
+
+test('rolledBackFrom is optional, survives a round trip, and the next normal release clears it', () => {
+  const from = { versionCode: 41, versionName: '0.3.0', commit: sha };
+  const m = upsertAndroidRelease(emptyManifest(), app, { ...release(42), commit: 'cd34'.repeat(10), rolledBackFrom: from });
+  assert.deepEqual(StoreManifestSchema.parse(JSON.parse(JSON.stringify(m))).apps[0].android?.rolledBackFrom, from);
+  assert.equal(upsertAndroidRelease(m, app, release(43)).apps[0].android?.rolledBackFrom, undefined);
+  assert.equal(upsertAndroidRelease(emptyManifest(), app, release(2)).apps[0].android?.rolledBackFrom, undefined);
+});
+
+test('rolledBackFrom rejects a bad shape, and a reader without the field still parses and drops it', () => {
+  const parse = (rolledBackFrom: unknown) => AndroidReleaseSchema.safeParse({ ...release(2), rolledBackFrom }).success;
+  assert.equal(parse({ versionCode: 41, versionName: '0.3.0' }), true);
+  for (const bad of [{ versionCode: 0, versionName: 'x' }, { versionCode: 41 }, { versionCode: 41, versionName: 'x', commit: 'abc' }, 'x']) {
+    assert.equal(parse(bad), false, JSON.stringify(bad));
+  }
+  // What a Store build from before this field does with a manifest that has it.
+  const old = AndroidReleaseSchema.omit({ rolledBackFrom: true }).parse({ ...release(2), rolledBackFrom: { versionCode: 1, versionName: 'x' } });
+  assert.equal('rolledBackFrom' in old, false);
 });

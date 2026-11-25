@@ -1,5 +1,5 @@
 package expo.modules.aihubcore.core
 
 object ApiVersion {
-  const val CURRENT = 2
+  const val CURRENT = 3
 }

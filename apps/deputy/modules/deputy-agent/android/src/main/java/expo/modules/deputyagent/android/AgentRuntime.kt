@@ -7,6 +7,8 @@ import expo.modules.deputyagent.core.AgentLoop
 import expo.modules.deputyagent.core.Gate
 import expo.modules.deputyagent.core.Gates
 import expo.modules.deputyagent.core.Guard
+import expo.modules.deputyagent.core.HubFirst
+import expo.modules.deputyagent.core.HubPause
 import expo.modules.deputyagent.core.LiveGate
 import expo.modules.deputyagent.core.Msgs
 import expo.modules.deputyagent.core.ObservationBuilder
@@ -38,6 +40,7 @@ object AgentRuntime {
   private lateinit var app: Context
   private var store: RunStore? = null
   private val gates = Gates(System::currentTimeMillis)
+  private val hubPause = HubPause(System::currentTimeMillis)
   private val events = ArrayList<RunEvent>()
   @Volatile private var job: Job? = null
   @Volatile private var runId: String? = null
@@ -54,6 +57,7 @@ object AgentRuntime {
     if (store != null) return
     app = context.applicationContext
     Notifier.channels(app)
+    HubLink.sweep(app)
     store = RunStore(File(app.filesDir, "deputy"), System::currentTimeMillis).also {
       it.closeInterrupted()
       it.prune()
@@ -83,7 +87,13 @@ object AgentRuntime {
     val loop = AgentLoop(
       id,
       DeviceAdapter(app),
-      OpenAiCompatProvider(settings.baseUrl, settings.model, keys, settings.effort, OkHttpTransport::post),
+      HubFirst(
+        HubLink(app),
+        OpenAiCompatProvider(settings.baseUrl, settings.model, keys, settings.effort, OkHttpTransport::post),
+        hubPause,
+        { OwnerStore.recordAiSource(app, it) },
+        { "dep-${UUID.randomUUID()}" },
+      ),
       gates,
       policy,
       Guard(settings.caps, settings.prices(System.currentTimeMillis()), System::currentTimeMillis, store.spentToday()),
@@ -95,7 +105,7 @@ object AgentRuntime {
     synchronized(events) { events.clear() }
     runId = id
     this.task = task
-    store.start(id, task, settings.model, trigger)
+    store.start(id, task, if (hubPause.paused()) settings.model else "AI hub, else ${settings.model}", trigger)
     runCatching { app.startForegroundService(Intent(app, RunService::class.java)) }
     StopChip.show(service)
     job = scope.launch {

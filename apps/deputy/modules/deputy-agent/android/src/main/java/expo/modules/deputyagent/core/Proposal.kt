@@ -46,11 +46,13 @@ object ProposeTask {
 object ProposalInbox {
   private var pending: Proposal? = null
   private var waiting: Pair<String, (kept: Boolean) -> Unit>? = null
+  private val outcome = mutableMapOf<String, Boolean>() // how a caller's proposal ended, until its screen is gone: a Back in the gap before it answers must say the same
   @Volatile var listener: (() -> Unit)? = null
 
   fun put(p: Proposal, onSettled: (kept: Boolean) -> Unit) {
     val replaced = synchronized(this) {
       val old = waiting
+      old?.let { outcome[it.first] = false }
       pending = p
       waiting = p.id to onSettled
       old
@@ -63,17 +65,21 @@ object ProposalInbox {
   fun take(): Proposal? = pending.also { pending = null }
 
   fun settle(id: String, kept: Boolean) {
-    val done = synchronized(this) { waiting?.takeIf { it.first == id }.also { if (it != null) waiting = null } }
+    val done = synchronized(this) { waiting?.takeIf { it.first == id }?.also { waiting = null; outcome[id] = kept } }
     done?.second?.invoke(kept)
   }
 
-  /** What a caller hears when the waiting screen is left with Back: the draft counts as handed over only once the screen has taken it. */
+  /** What a caller hears when the waiting screen is left with Back: what already happened to its draft stands (replaced or dropped is cancelled); otherwise it counts as handed over only once the screen has taken it. */
   @Synchronized
-  fun answerOnLeaving(id: String) = if (pending?.id == id) ProposeTask.CANCELLED else ProposeTask.HANDED_OVER
+  fun answerOnLeaving(id: String): String {
+    val kept = outcome[id] ?: (pending?.id != id)
+    return if (kept) ProposeTask.HANDED_OVER else ProposeTask.CANCELLED
+  }
 
   @Synchronized
   fun forget(id: String) {
     if (waiting?.first == id) waiting = null
     if (pending?.id == id) pending = null
+    outcome.remove(id)
   }
 }

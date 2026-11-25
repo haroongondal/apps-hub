@@ -62,6 +62,7 @@ const val OTHER_ACCOUNT = "Other account"
 
 object Dedup {
   const val MERGE_WINDOW_MS = 10 * 60_000L
+  const val COMPLETE_WINDOW_MS = 2 * 60_000L
 
   fun match(p: Parsed, channel: Channel, at: Long, candidates: List<Txn>, byTxId: Txn?): Long? {
     if (p.txId != null && byTxId != null) return byTxId.id
@@ -116,12 +117,17 @@ class Ledger(
       store.deleteTxn(existing)
     }
     val w = Dedup.MERGE_WINDOW_MS
-    val hit = Dedup.match(p, channel, at, store.near(p.direction, p.amountMinor, p.currency, at - w, at + w), p.txId?.let(store::byTxId))
+    val near = store.near(p.direction, p.amountMinor, p.currency, at - w, at + w)
+    val hit = Dedup.match(p, channel, at, near, p.txId?.let(store::byTxId)) ?: completes(p, at, near)
     val id = if (hit != null) {
       store.addSource(hit, itemId, channel, p.txId, at)
       if (store.get(hit)?.byAi == true) store.clearByAi(hit)
       p.txId?.let { store.setTxIdIfNull(hit, it) }
       p.counterparty?.let { store.setCounterpartyIfNull(hit, it) }
+      // A name that arrives by merging can make the transaction an own transfer, as it would have when the name came first.
+      store.get(hit)?.let { t ->
+        if (!t.own && !t.ownSet && t.pairId == null && OwnTransfer.nameMatches(t.counterparty, ownerName())) store.setOwn(hit, true, false, null)
+      }
       hit
     } else {
       val added = store.add(p, at, OwnTransfer.nameMatches(p.counterparty, ownerName()))
@@ -139,6 +145,21 @@ class Ledger(
       if (r.own && !target.own && !target.ownSet) store.setOwn(id, true, false, target.pairId)
     }
     return id
+  }
+
+  // Alfalah texts one transfer twice on one channel: nameless "Debited from", then "sent to <name> ... Tx ID"; Dedup keeps same-channel texts apart on purpose.
+  // shortcut: a genuine nameless debit within 2 minutes of a named one (same amount, account) merges too; tighten if that shows up.
+  private fun completes(p: Parsed, at: Long, candidates: List<Txn>): Long? {
+    val bare = p.counterparty == null && p.txId == null
+    return candidates
+      .filter {
+        val itBare = it.counterparty == null && it.txId == null
+        it.direction == p.direction && it.amountMinor == p.amountMinor && it.currency == p.currency && it.account == p.account &&
+          abs(at - it.at) <= Dedup.COMPLETE_WINDOW_MS && bare != itBare && (itBare || store.sourceCount(it.id) == 1) &&
+          !(p.txId != null && it.txId != null && p.txId != it.txId)
+      }
+      .minWithOrNull(compareBy<Txn>({ abs(at - it.at) }, { it.id }))
+      ?.id
   }
 
   // Only pattern transactions pair: an AI-only one is a model's reading of a message, never proof that money moved between accounts.

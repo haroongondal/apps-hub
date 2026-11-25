@@ -36,7 +36,7 @@ class DeputyLinkProvider : ContentProvider() {
   private fun health(c: Context): Array<Any?> {
     val enabled = Settings.Secure.getString(c.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
     val on = ServiceSetting.isEnabled(enabled, c.packageName, DeputyAccessibilityService::class.java.name)
-    return LinkRows.health(on, KeyVault.has(c, OwnerStore.settings(c)), OwnerStore.lastSeen(c))
+    return LinkRows.health(on, KeyVault.has(c, OwnerStore.settings(c)), OwnerStore.aiSource(c), OwnerStore.lastSeen(c))
   }
 
   private fun waiting(c: Context): List<Array<Any?>> =

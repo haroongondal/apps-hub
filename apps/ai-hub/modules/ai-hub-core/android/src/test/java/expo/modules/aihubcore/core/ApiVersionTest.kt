@@ -4,7 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class ApiVersionTest {
-  @Test fun currentIsTwo() {
-    assertEquals(2, ApiVersion.CURRENT)
+  @Test fun currentIsThree() {
+    assertEquals(3, ApiVersion.CURRENT)
   }
 }

@@ -12,9 +12,11 @@ export function versionLines(app: StoreApp, installed: Installed | null): { labe
     lines.push({ label: 'Available', version: `${release.versionName} (${release.versionCode})` });
   }
   // Only the published build has a known commit: skip when the installed copy is newer than it.
-  if (release?.commit && (!installed || installed.versionCode <= release.versionCode)) {
+  if (release && (!installed || installed.versionCode <= release.versionCode)) {
     const updating = installed !== null && installed.versionCode < release.versionCode;
-    lines.push({ label: updating ? 'Available build from commit' : 'Build from commit', version: release.commit.slice(0, 7) });
+    if (release.commit) lines.push({ label: updating ? 'Available build from commit' : 'Build from commit', version: release.commit.slice(0, 7) });
+    const back = release.rolledBackFrom;
+    if (back) lines.push({ label: 'Rolled back from', version: `${back.versionName} (${back.versionCode})` });
   }
   return lines;
 }

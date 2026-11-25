@@ -242,6 +242,25 @@ class ProviderTest {
     }
   }
 
+  @Test fun aChatTiedToOneServiceNeverFallsBackToTheOther() {
+    val http = Fake(HttpReply(401, ""), HttpReply(401, ""))
+    val e = failure { provider(http, g1, g2, m1).chat(groqChat, history, maxTokens = 100, allowFallback = false) }
+    assertEquals(AiError.Kind.AUTH, e.kind)
+    assertEquals(listOf(g1, g2), http.keysUsed)
+  }
+
+  @Test fun toolChoiceAndReasoningEffortReachGroqAndGeminiTakesToolChoiceOnly() {
+    val http = Fake(ok, ok)
+    provider(http, g1, m1).chat(groqChat, history, listOf(tap), 100, "high", "required")
+    provider(http, g1, m1).chat(geminiChat, history, listOf(tap), 100, "high", "required")
+    val groq = Json.parseToJsonElement(http.calls[0].text).jsonObject
+    assertEquals("required", groq["tool_choice"]!!.jsonPrimitive.content)
+    assertEquals("high", groq["reasoning_effort"]!!.jsonPrimitive.content)
+    val gemini = Json.parseToJsonElement(http.calls[1].text).jsonObject
+    assertEquals("required", gemini["tool_choice"]!!.jsonPrimitive.content)
+    assertNull(gemini["reasoning_effort"])
+  }
+
   @Test fun chatWithNoGroqKeyGoesStraightToGemini() {
     val http = Fake(ok)
     assertEquals(Job.CHAT.fallback, provider(http, m1).chat(groqChat, history, maxTokens = 100).served)

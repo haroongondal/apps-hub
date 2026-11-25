@@ -139,7 +139,7 @@ class AgentLoop(
         modelMs = now() - asked
         actMs = 0
         history += turn.raw
-        guard.addUsage(turn.usage)
+        guard.addUsage(turn.usage, turn.hubModel)
         guard.countStep()
         val first = turn.toolCalls.firstOrNull()
         if (first == null) {

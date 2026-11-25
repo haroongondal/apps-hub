@@ -14,6 +14,7 @@ import {
   parseEmbed,
   parseTranscribe,
   transcribeJson,
+  type ChatMessage,
 } from '../contract.ts';
 
 const fixture = JSON.parse(fs.readFileSync(new URL('../../fixtures/contract.json', import.meta.url), 'utf8'));
@@ -39,6 +40,40 @@ test('builders write exactly the requests the hub is tested against', () => {
 test('only requests that use dimensions or segments ask for apiVersion 2', () => {
   for (const name of ['chat', 'vision', 'embed', 'transcribe']) assert.equal(req[name].apiVersion, 1, name);
   for (const name of ['embedDimensions', 'transcribeSegments']) assert.equal(req[name].apiVersion, 2, name);
+});
+
+test('apiVersion 3 is asked for only by a request that needs it', () => {
+  const messages: ChatMessage[] = [{ role: 'user', content: 'Hi' }];
+  const version = (extra: object, msgs: ChatMessage[] = messages) => JSON.parse(chatJson('chat', { messages: msgs, ...extra }, 'r')).apiVersion;
+  assert.equal(version({}), 1);
+  assert.equal(version({ toolChoice: 'required' }), 3);
+  assert.equal(version({ reasoningEffort: 'low' }), 3);
+  assert.equal(version({ service: 'gemini' }), 3);
+  assert.equal(version({ wantRaw: true }), 3);
+  assert.equal(version({ wantRaw: false }), 1);
+  const picture: ChatMessage = { role: 'user', content: [{ type: 'image_url', image_url: { url: 'data:image/jpeg;base64,QUJD' } }] };
+  assert.equal(version({}, [picture]), 3);
+  assert.equal(JSON.parse(chatJson('chat', { messages, wantRaw: true }, 'r')).toolChoice, undefined);
+});
+
+test('the version 3 chat request and reply match the hub fixture', () => {
+  const r = req.chatV3;
+  const built = chatJson('chat', { messages: r.messages, tools: r.tools, maxTokens: 300, toolChoice: 'required', reasoningEffort: 'low', service: 'gemini' }, 'chat-3');
+  assert.deepEqual(JSON.parse(built), r);
+  const out = parseChat(reply('chatV3'));
+  assert.deepEqual(out.raw, fixture.replies.chatV3.raw);
+  assert.equal(out.service, 'gemini');
+  assert.equal(out.toolCalls[0].name, 'look');
+});
+
+test('a version 2 reply has no raw and still parses, and extra reply fields are ignored', () => {
+  const v2 = parseChat(reply('chat'));
+  assert.equal(v2.raw, undefined);
+  assert.equal(v2.service, undefined);
+  const extra = parseChat(JSON.stringify({ ...fixture.replies.chat, somethingNew: { a: 1 } }));
+  assert.deepEqual(extra, v2);
+  // A raw that is not an assistant message is dropped, never passed on.
+  assert.equal(parseChat(JSON.stringify({ ...fixture.replies.chat, raw: { role: 'user' } })).raw, undefined);
 });
 
 test('embed splits texts into batches of at most 8, each with its own id', () => {

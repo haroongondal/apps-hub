@@ -24,6 +24,7 @@ import { SetupScreen } from './src/SetupScreen.tsx';
 import { TodosScreen } from './src/TodosScreen.tsx';
 import { VitalsScreen } from './src/VitalsScreen.tsx';
 import { setupComplete, setupRows } from './src/setup.ts';
+import { useAutoReceipts } from './src/useAutoReceipts.ts';
 
 type Tab = 'home' | 'money' | 'ask' | 'settings';
 type Route =
@@ -84,6 +85,7 @@ function Root() {
     }
   }, []);
   const complete = status !== null && setupComplete(setupRows(status));
+  useAutoReceipts(!locked && complete);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s) => {
