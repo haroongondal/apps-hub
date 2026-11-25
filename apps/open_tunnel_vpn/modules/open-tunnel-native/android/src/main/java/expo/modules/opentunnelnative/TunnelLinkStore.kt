@@ -39,8 +39,9 @@ object TunnelLinkStore {
 
   private fun prefs(context: Context): SharedPreferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-  fun shield(context: Context): ShieldState? {
-    val p = prefs(context)
+  fun shield(context: Context): ShieldState? = shield(prefs(context))
+
+  internal fun shield(p: SharedPreferences): ShieldState? {
     if (!p.contains(KEY_SINCE)) return null
     return ShieldState(p.getBoolean(KEY_ON, false), p.getBoolean(KEY_UNTRUSTED, false), p.getLong(KEY_SINCE, 0L))
   }
@@ -54,19 +55,26 @@ object TunnelLinkStore {
   // Synchronized: two calls must not both read the old state, or the pulse flip (and its ping) is lost or doubled.
   @Synchronized
   fun publishShield(context: Context, on: Boolean, untrusted: Boolean, nowMs: Long) {
-    val step = ShieldLink.next(shield(context), on, untrusted, nowMs)
+    val step = save(prefs(context), on, untrusted, nowMs)
+    if (step.ping) {
+      val intent = Intent(CHANGED_ACTION).setPackage(SiblingPackages.HALO)
+      sendIfTrusted({ AppLinkTarget.trustedReceiver(context, intent) }) { context.sendBroadcast(intent, AppLinkGuard.PERMISSION) }
+    }
+  }
+
+  /** Saves the step, then counts a Shields-on publish as the first live reading; a save that fails throws before that, so the row stays untrusted. */
+  @Synchronized
+  internal fun save(p: SharedPreferences, on: Boolean, untrusted: Boolean, nowMs: Long): ShieldLink.Step {
+    val step = ShieldLink.next(shield(p), on, untrusted, nowMs)
     check(
-      prefs(context).edit()
+      p.edit()
         .putBoolean(KEY_ON, step.state.on)
         .putBoolean(KEY_UNTRUSTED, step.state.untrusted)
         .putLong(KEY_SINCE, step.state.sinceMs)
         .commit(),
     ) { "Shields state not saved" }
     noteShield(on)
-    if (step.ping) {
-      val intent = Intent(CHANGED_ACTION).setPackage(SiblingPackages.HALO)
-      sendIfTrusted({ AppLinkTarget.trustedReceiver(context, intent) }) { context.sendBroadcast(intent, AppLinkGuard.PERMISSION) }
-    }
+    return step
   }
 
   /** The state is already saved; only the ping is gated. A lookalike Halo (or none) gets nothing, and there is no fallback. */
