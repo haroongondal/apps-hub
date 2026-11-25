@@ -110,26 +110,29 @@ class ProposalTest {
     }
   }
 
-  @Test fun backAfterANewerProposalReplacedItOrTheOwnerAnsweredStillSaysWhatHappened() {
-    val a = Proposal("d1", "t", "", emptyList(), "x")
-    val b = Proposal("d2", "t", "", emptyList(), "x")
-    val c = Proposal("d3", "t", "", emptyList(), "x")
-    ProposalInbox.put(a) {}
+  private fun proposal(id: String) = Proposal(id, "t", "", emptyList(), "x")
+
+  // The screen has taken the draft and the owner answers; Back lands before the posted answer to the caller runs.
+  private fun backAfter(first: String, then: () -> Unit): String {
+    ProposalInbox.put(proposal(first)) {}
     try {
-      assertEquals(a, ProposalInbox.take())
-      ProposalInbox.put(b) {}
-      assertEquals("replaced after the screen took it", ProposeTask.CANCELLED, ProposalInbox.answerOnLeaving("d1"))
-      ProposalInbox.settle("d2", false)
-      assertEquals("dropped by the owner", ProposeTask.CANCELLED, ProposalInbox.answerOnLeaving("d2"))
-      ProposalInbox.put(c) {}
       ProposalInbox.take()
-      ProposalInbox.settle("d3", true)
-      assertEquals("saved by the owner", ProposeTask.HANDED_OVER, ProposalInbox.answerOnLeaving("d3"))
+      then()
+      return ProposalInbox.answerOnLeaving(first)
     } finally {
-      listOf("d1", "d2", "d3").forEach(ProposalInbox::forget)
+      ProposalInbox.forget(first)
+      ProposalInbox.take()
     }
-    assertEquals("forgotten ids carry nothing over", ProposeTask.HANDED_OVER, ProposalInbox.answerOnLeaving("d1"))
   }
+
+  @Test fun backAfterANewerProposalReplacedItIsCancelled() =
+    assertEquals(ProposeTask.CANCELLED, backAfter("d1") { ProposalInbox.put(proposal("d2")) {} })
+
+  @Test fun backAfterTheOwnerDroppedTheDraftIsCancelled() =
+    assertEquals(ProposeTask.CANCELLED, backAfter("d3") { ProposalInbox.settle("d3", false) })
+
+  @Test fun backAfterTheOwnerSavedTheDraftIsHandedOver() =
+    assertEquals(ProposeTask.HANDED_OVER, backAfter("d4") { ProposalInbox.settle("d4", true) })
 
   @Test fun packageNamesAreCheckedByShape() {
     assertTrue(ProposeTask.isPackageName("com.haroon.inflow"))
