@@ -17,7 +17,7 @@ rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 
 await build({
-  entryPoints: { background: root('src/background.ts'), popup: root('src/popup.ts'), content: root('src/content.ts') },
+  entryPoints: { background: root('src/background.ts'), popup: root('src/popup.ts'), fingerprint: root('src/fingerprint.ts'), content: root('src/content.ts') },
   bundle: true,
   format: 'iife',
   target: 'chrome127',
@@ -29,7 +29,7 @@ await build({
 const manifest = JSON.parse(readFileSync(root('src/manifest.json'), 'utf8'));
 if (origin) manifest.host_permissions = [`${origin}/*`];
 writeFileSync(join(out, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
-for (const f of ['popup.html', 'popup.css']) cpSync(root('src', f), join(out, f));
+for (const f of ['popup.html', 'fingerprint.html', 'popup.css']) cpSync(root('src', f), join(out, f));
 const ui = root('../../packages/ui');
 for (const f of ['tokens.css', 'base.css']) cpSync(join(ui, 'web', f), join(out, 'web', f));
 mkdirSync(join(out, 'fonts'), { recursive: true });

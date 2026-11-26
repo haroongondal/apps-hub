@@ -21,9 +21,16 @@ export interface SyncPort extends SyncStore {
   setAccount(a: { header: Header; headerRev: number; accountKey: Uint8Array; info: SyncInfo; pending: PendingUpdate | null; replace: { records: SyncRow[]; quarantine: SyncRow[]; lastRev: number } | null }): Promise<void>;
 }
 export type SyncDeps = { store: SyncPort; transport: Transport };
+// A fingerprint check that runs in an extension window (a service worker has no WebAuthn). prf is the 32-byte secret the authenticator derives, when it can.
+export interface Fingerprint {
+  available(): Promise<boolean>;
+  enroll(): Promise<{ credentialId: string; prf?: Uint8Array } | null>;
+  verify(credentialId: string): Promise<{ prf?: Uint8Array } | null>;
+}
+export type FingerprintStatus = { available: boolean; on: boolean; sealed: boolean };
 export type Deps = {
   store: RecordStore; session: KV; settings: KV; now(): number; resetAutoLock(): void; syncAlarm?(on: boolean): void; sync?: SyncDeps; kdf?: KdfParams;
-  floor?: KdfParams; device?: DeviceVault;
+  floor?: KdfParams; device?: DeviceVault; fingerprint?: Fingerprint;
 };
 export type PageRef = { url: string; tabId: number };
 export type Ctx = PageRef;
@@ -42,7 +49,11 @@ export type Request =
   | { type: 'removeTotp'; id: string }
   | { type: 'remove'; id: string }
   | { type: 'import'; csv: string; commit: boolean }
-  | { type: 'export'; password: string }
+  | { type: 'export'; password?: string; fingerprint?: true }
+  | { type: 'fingerprintStatus' }
+  | { type: 'fingerprintOn' }
+  | { type: 'fingerprintOff'; password?: string }
+  | { type: 'unlockFingerprint' }
   | { type: 'candidates'; page?: PageRef }
   | { type: 'fill'; id: string }
   | { type: 'totpCode'; id: string }
@@ -74,6 +85,8 @@ export type ImportPreview = { added: number; merged: number; flagged: number };
 export type SyncStatus = {
   available: boolean; state: 'off' | 'idle' | 'syncing' | 'needsSignIn' | 'error'; lastSyncAt: number | null; blocked: number; quarantined: number;
   pendingUpdate: boolean; error: string | null; keyLost: boolean;
+  // Sync could run, but the keys are sealed under the fingerprint and nobody has unlocked yet.
+  paused: boolean;
 };
 export type Pending = { intent: 'new' | 'update' | null; host: string; username: string; name: string | null; locked: boolean };
 export type EmailRecoveryStatus = {
@@ -116,6 +129,9 @@ const SIGNIN_DEVICE = 'Strongroom for Chrome';
 const SIGNIN_APPROVED = 'This sign-in is already approved. Check again instead of asking again.';
 const SIGNIN_NOT_READY = 'Approve the sign-in from the email first, then check again.';
 const LOST_STILL_ALIVE = 'A lost-access request is already confirmed, or ready to open. Check again instead of starting a new one.';
+const FINGERPRINT = 'fingerprint';
+const FP_REFUSED = 'Fingerprint not recognised. Try again, or unlock with your master password.';
+const FP_UNAVAILABLE = "This computer can't check a fingerprint here. Use your master password.";
 const noop = () => {};
 
 // A word from the common-password list, one repeated character, or a straight run such as abcdefghijkl.
@@ -152,9 +168,31 @@ export function createService(deps: Deps) {
   // Autofill and sync fall back to the vault key the device holds on disk once the session copy is gone, so they keep working without an unlock.
   const fillKey = async (): Promise<Uint8Array | null> => (await keyOrNull()) ?? (await deps.device?.loadKeys())?.vaultKey ?? null;
   const requireFillKey = async (): Promise<Uint8Array> => (await fillKey()) ?? Promise.reject(new UserError(LOCKED));
+  // Present while the fingerprint is on: the credential to check, and whether it also seals the vault key (prf) or only gates fills.
+  const fpConfig = async (): Promise<{ credentialId: string; prf: boolean } | null> => {
+    try {
+      const j = JSON.parse((await deps.settings.get(FINGERPRINT)) ?? 'null');
+      return j && typeof j.credentialId === 'string' ? { credentialId: j.credentialId, prf: j.prf === true } : null;
+    } catch {
+      return null;
+    }
+  };
+  const verifyFingerprint = async (cfg: { credentialId: string }) => {
+    const v = await deps.fingerprint?.verify(cfg.credentialId);
+    if (!v) throw new UserError(FP_REFUSED);
+    return v;
+  };
+  // The key for one fill. With the fingerprint on, every fill asks for it first; with PRF the on-disk copy opens only from that same touch.
+  const fillKeyChecked = async (): Promise<Uint8Array> => {
+    const cfg = await fpConfig();
+    if (!cfg) return requireFillKey();
+    const v = await verifyFingerprint(cfg);
+    const key = (await keyOrNull()) ?? (await deps.device?.loadKeys(cfg.prf ? v.prf : undefined))?.vaultKey;
+    return key ?? Promise.reject(new UserError(LOCKED));
+  };
   const fillToken = async (): Promise<Uint8Array | null> => (await tokenOrNull()) ?? (await deps.device?.loadKeys())?.loginToken ?? null;
   // The login token lives only in session storage (memory) while unlocked; lock clears it.
-  const opened = async (key: Uint8Array, loginToken?: Uint8Array) => {
+  const opened = async (key: Uint8Array, loginToken?: Uint8Array, prf?: Uint8Array) => {
     await session.set('vaultKey', toBase64(key));
     if (loginToken) {
       await session.set('loginToken', toBase64(loginToken));
@@ -162,7 +200,7 @@ export function createService(deps: Deps) {
     }
     deps.resetAutoLock();
     try {
-      await deps.device?.saveKeys({ vaultKey: key, ...(loginToken && { loginToken }) });
+      await deps.device?.saveKeys({ vaultKey: key, ...(loginToken && { loginToken }) }, prf);
     } catch {
       // The session key above is already set: the unlock is genuinely usable even if device-level persistence (for lock-free autofill) failed.
     }
@@ -252,13 +290,14 @@ export function createService(deps: Deps) {
   }
 
   async function syncStatus(): Promise<SyncStatus> {
-    if (!deps.sync) return { available: false, state: 'off', lastSyncAt: null, blocked: 0, quarantined: 0, pendingUpdate: false, error: null, keyLost: false };
+    if (!deps.sync) return { available: false, state: 'off', lastSyncAt: null, blocked: 0, quarantined: 0, pendingUpdate: false, error: null, keyLost: false, paused: false };
     const { accountKey, info, pending } = await deps.sync.store.getSyncLocal();
     const error = (await session.get('syncError')) ?? null;
     const state = !accountKey ? 'off' : info.needsSignIn ? 'needsSignIn' : syncing > 0 ? 'syncing' : error ? 'error' : 'idle';
     const quarantined = new Set((await deps.sync.store.getQuarantine()).map((q) => q.id)).size;
     const keyLost = !accountKey && (await store.getHeader())?.accountKey === true;
-    return { available: true, state, lastSyncAt: info.lastSyncAt, blocked: info.blocked, quarantined, pendingUpdate: pending !== null, error, keyLost };
+    const paused = accountKey !== null && (await fpConfig())?.prf === true && !(await keyOrNull());
+    return { available: true, state, lastSyncAt: info.lastSyncAt, blocked: info.blocked, quarantined, pendingUpdate: pending !== null, error, keyLost, paused };
   }
 
   async function doSync(password?: string): Promise<SyncReport | null> {
@@ -354,7 +393,14 @@ export function createService(deps: Deps) {
       header: a.header, headerRev: s.headerRev, accountKey: a.accountKey, info, pending: a.pending,
       replace: how === 'replace' ? { records: s.records, quarantine: s.quarantine, lastRev: s.lastRev } : null,
     });
-    if (how === 'replace') await session.remove('recovery');
+    if (how === 'replace') {
+      await session.remove('recovery');
+      // A replaced vault has a new key, so a fingerprint-sealed copy of the old one would be wrong: turn the fingerprint off; it can be set up again.
+      if (await fpConfig()) {
+        await deps.settings.remove(FINGERPRINT);
+        await deps.device?.clearKeys();
+      }
+    }
     await session.remove('syncError');
     await opened(s.vaultKey, a.loginToken);
     if (how === 'merge' || a.pending) await doSync().catch(noop);
@@ -624,6 +670,64 @@ export function createService(deps: Deps) {
           if (accountKey) void exclusive(() => doSync(req.password)).catch(noop);
           return null;
         }
+        case 'fingerprintStatus': {
+          const cfg = await fpConfig();
+          return { available: (await deps.fingerprint?.available().catch(() => false)) === true, on: cfg !== null, sealed: cfg?.prf === true } satisfies FingerprintStatus;
+        }
+        case 'fingerprintOn': {
+          const fp = deps.fingerprint;
+          if (!fp || !(await fp.available().catch(() => false))) throw new UserError(FP_UNAVAILABLE);
+          if (await fpConfig()) throw new UserError('The fingerprint is already on.');
+          const key = await requireKey();
+          const enrolled = await fp.enroll();
+          if (!enrolled) throw new UserError('The fingerprint was not set up. Try again.');
+          let sealed = false;
+          if (enrolled.prf && deps.device) {
+            try {
+              const token = await tokenOrNull();
+              await deps.device.saveKeys({ vaultKey: key, ...(token && { loginToken: token }) });
+              await deps.device.protect(enrolled.prf);
+              sealed = (await deps.device.mode()) === 'fingerprint';
+            } catch {
+              // Sealing failed (a short secret, no IndexedDB): the device-sealed copy is still there, so this is the gate-only mode.
+            }
+          }
+          await deps.settings.set(FINGERPRINT, JSON.stringify({ credentialId: enrolled.credentialId, prf: sealed }));
+          deps.resetAutoLock();
+          return { available: true, on: true, sealed } satisfies FingerprintStatus;
+        }
+        case 'fingerprintOff': {
+          const cfg = await fpConfig();
+          if (!cfg) return null;
+          if (req.password !== undefined) {
+            // The master-password way out, for a credential that is gone: it re-seals the keys under the device key.
+            const header = await store.getHeader();
+            const accountKey = header && keyedFor(header, await accountKeyOf());
+            const keys = header && (await openWithPassword(header, String(req.password), deps.floor, accountKey || undefined));
+            if (!keys) throw new UserError("That master password isn't right.");
+            await deps.device?.clearKeys();
+            await deps.device?.saveKeys({ vaultKey: keys.vaultKey, ...(accountKey && { loginToken: keys.loginToken }) });
+          } else {
+            const v = await verifyFingerprint(cfg);
+            if ((await deps.device?.mode()) === 'fingerprint') {
+              if (!v.prf) throw new UserError(FP_REFUSED);
+              await deps.device?.unprotect(v.prf);
+              if ((await deps.device?.mode()) === 'fingerprint') throw new UserError(FP_REFUSED);
+            }
+          }
+          await deps.settings.remove(FINGERPRINT);
+          return null;
+        }
+        case 'unlockFingerprint': {
+          const cfg = await fpConfig();
+          if (!cfg) throw new UserError(FP_UNAVAILABLE);
+          const v = await verifyFingerprint(cfg);
+          const keys = await deps.device?.loadKeys(cfg.prf ? v.prf : undefined);
+          if (!keys) throw new UserError('The fingerprint is right, but this computer no longer holds your key. Unlock with your master password this time.');
+          await opened(keys.vaultKey, keys.loginToken, cfg.prf ? v.prf : undefined);
+          void exclusive(() => doSync()).catch(noop);
+          return null;
+        }
         case 'recover': {
           strong(req.password);
           const accountKey = await accountKeyOf();
@@ -639,7 +743,8 @@ export function createService(deps: Deps) {
           await session.remove('loginToken');
           // A non-manual lock (auto-lock) leaves the device-held keys in place, so background sync keeps answering from them; only stop the alarm when it won't.
           if (req.manual || !deps.device) deps.syncAlarm?.(false);
-          if (req.manual) await deps.device?.clearKeys();
+          // A fingerprint-sealed copy cannot be opened without a touch, so a manual lock leaves it; the device-sealed copy is the one it clears.
+          if (req.manual && (await deps.device?.mode()) !== 'fingerprint') await deps.device?.clearKeys();
           return null;
         case 'syncStatus':
           return await syncStatus();
@@ -734,10 +839,16 @@ export function createService(deps: Deps) {
         }
         case 'export': {
           const key = await requireKey();
-          // Re-checking the password stops someone at an unlocked, unattended browser from taking every password in plain text.
-          const header = await store.getHeader();
-          const keys = header && (await openWithPassword(header, String(req.password), deps.floor, keyedFor(header, await accountKeyOf())));
-          if (!keys || !equalBytes(keys.vaultKey, key)) throw new UserError("That master password isn't right.");
+          // Re-checking the password (or the fingerprint) stops someone at an unlocked, unattended browser from taking every password in plain text.
+          if (req.fingerprint === true) {
+            const cfg = await fpConfig();
+            if (!cfg) throw new UserError(FP_UNAVAILABLE);
+            await verifyFingerprint(cfg);
+          } else {
+            const header = await store.getHeader();
+            const keys = header && (await openWithPassword(header, String(req.password), deps.floor, keyedFor(header, await accountKeyOf())));
+            if (!keys || !equalBytes(keys.vaultKey, key)) throw new UserError("That master password isn't right.");
+          }
           deps.resetAutoLock();
           return exportForChrome((await logins(key)).found.map((f) => f.login));
         }
@@ -746,12 +857,14 @@ export function createService(deps: Deps) {
           const key = await fillKey();
           if (!key) return { locked: true, rows: [] };
           const { found } = await logins(key);
-          return { locked: false, rows: site ? found.filter((f) => matches(f.login.sites, site)).map(row).sort(byName) : [] };
+          // The page is told the fingerprint is on so it does not fetch a code per row just to preview it (each fetch would ask for a touch).
+          const gated = (await fpConfig()) !== null;
+          return { locked: false, rows: site ? found.filter((f) => matches(f.login.sites, site)).map(row).sort(byName) : [], ...(gated && { gated: true }) };
         }
         case 'fill': {
           const site = where && siteFromUrl(where.url);
           if (!site) throw new UserError(NOT_ALLOWED);
-          const target = (await logins(await requireFillKey())).found.find((f) => f.id === req.id);
+          const target = (await logins(await fillKeyChecked())).found.find((f) => f.id === req.id);
           if (!target || !matches(target.login.sites, site)) throw new UserError("That login isn't saved for this website.");
           deps.resetAutoLock();
           return { username: target.login.username, password: target.login.password, code: codeStateOf(target.login) };
@@ -759,10 +872,11 @@ export function createService(deps: Deps) {
         case 'totpCode': {
           // Same gate as fill: the request must come from the page itself and the login must match that page.
           // The phone refuses codes while locked; the extension follows its own lock-free fill policy, so the
-          // device-held key answers here exactly as it does for a password.
+          // device-held key answers here exactly as it does for a password. With the fingerprint on, a code is as
+          // secret as a password, so it asks for a touch every time too.
           const site = where && siteFromUrl(where.url);
           if (!site) throw new UserError(NOT_ALLOWED);
-          const target = (await logins(await requireFillKey())).found.find((f) => f.id === req.id);
+          const target = (await logins(await fillKeyChecked())).found.find((f) => f.id === req.id);
           if (!target || !matches(target.login.sites, site)) throw new UserError("That login isn't saved for this website.");
           deps.resetAutoLock();
           return codeStateOf(target.login);
