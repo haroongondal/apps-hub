@@ -9,6 +9,7 @@ export function syncLines(sync: SyncStatus, time: (at: number) => string): strin
   else if (sync.state === 'needsSignIn') lines.push('Sign in again to keep syncing. What you changed on this computer is kept and sent once you do.');
   else if (sync.state === 'syncing') lines.push('Syncing…');
   else if (sync.state === 'error') lines.push(sync.error ?? 'Sync stopped. Try again.');
+  else if (sync.paused) lines.push('Sync paused. Unlock to continue.');
   else lines.push(sync.lastSyncAt ? `Synced at ${time(sync.lastSyncAt)}.` : 'Not synced yet.');
   if (sync.pendingUpdate && sync.state === 'needsSignIn') lines.push("The new master password you set on this computer wasn't sent, and signing in replaces it with the one the vault server has.");
   else if (sync.pendingUpdate) lines.push("Your new master password hasn't reached the vault server yet. Strongroom sends it as soon as it can connect, and sync waits until then.");

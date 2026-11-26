@@ -1,4 +1,4 @@
-import type { Detail, EmailRecoveryStatus, ImportPreview, LostAccessState, PageRef, Pending, Request, Row, Status, SyncStatus } from './service.ts';
+import type { Detail, EmailRecoveryStatus, FingerprintStatus, ImportPreview, LostAccessState, PageRef, Pending, Request, Row, Status, SyncStatus } from './service.ts';
 import { syncLines } from './sync-copy.ts';
 
 type Child = Node | string | null | false | undefined;
@@ -325,9 +325,40 @@ function emailRecoveryGroup(s: EmailRecoveryStatus | null, refresh: () => unknow
 // Anti-goal #4: lock-free autofill (Task 8) means a locked vault still answers fills, so both screens say so plainly.
 const PROFILE_NOTICE = 'Autofill works while locked. Anyone who can use this browser profile can use this vault. Press Lock to stop that.';
 
+// WebAuthn is asked here, in an extension page; the worker cannot.
+async function fingerprintBlocker(): Promise<string | null> {
+  const ok = typeof PublicKeyCredential !== 'undefined' && (await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().catch(() => false));
+  return ok ? null : "Chrome can't read a fingerprint on this computer. Set up Touch ID, Windows Hello or a screen lock with a fingerprint first.";
+}
+
+function fingerprintGroup(s: FingerprintStatus, blocker: string | null, refresh: () => unknown) {
+  const msg = msgBox();
+  const pw = input({ type: 'password', autocomplete: 'current-password', placeholder: 'Master password' });
+  const toggle = button(s.on ? 'Stop using fingerprint' : 'Use fingerprint', () => guarded(msg, [toggle], async () => {
+    await call({ type: s.on ? 'fingerprintOff' : 'fingerprintOn' });
+    await refresh();
+  }), s.on ? '' : 'ui-btn--primary');
+  toggle.disabled = !s.on && blocker !== null;
+  const how = s.on
+    ? s.sealed
+      ? 'On. Every fill asks for your fingerprint, and the key kept on this computer opens only with it. Background sync pauses until you unlock.'
+      : "On, as a check only. Every fill asks for your fingerprint, but this browser can't tie the stored key to it, so someone with your whole browser profile could still read the vault."
+    : 'Ask for a fingerprint before every fill, and before unlocking Strongroom.';
+  const off = button('Stop with master password', () => guarded(msg, [off], async () => {
+    await call({ type: 'fingerprintOff', password: pw.value });
+    await refresh();
+  }), 'ui-btn--ghost');
+  return h('div', { class: 'ui-group card', id: 'fingerprint' }, h('p', { class: 'ui-caption' }, 'Fingerprint'), h('p', {}, how), !s.on && blocker && h('p', { class: 'ui-muted' }, blocker), msg, toggle,
+    s.on && h('p', { class: 'ui-muted' }, "Lost the fingerprint, or it doesn't work? Stop using it with your master password."), s.on && pw, s.on && off);
+}
+
 async function settingsScreen() {
-  const s = await call<EmailRecoveryStatus>({ type: 'emailRecovery', action: 'status' }).catch(() => null);
-  screen('Settings', vaultScreen, h('p', { class: 'ui-muted' }, PROFILE_NOTICE), emailRecoveryGroup(s, settingsScreen));
+  const [s, fp, blocker] = await Promise.all([
+    call<EmailRecoveryStatus>({ type: 'emailRecovery', action: 'status' }).catch(() => null),
+    call<FingerprintStatus>({ type: 'fingerprintStatus' }),
+    fingerprintBlocker(),
+  ]);
+  screen('Settings', vaultScreen, h('p', { class: 'ui-muted' }, PROFILE_NOTICE), fingerprintGroup(fp, blocker, settingsScreen), emailRecoveryGroup(s, settingsScreen));
 }
 
 function recoveryScreen(key: string) {
@@ -349,8 +380,13 @@ async function unlockScreen() {
   // never hold up the one thing this screen needs to do instantly: let the owner type their master password.
   const pending = tab && await call<Pending | null>({ type: 'pending', tabId: tab.tabId });
   const sync = await call<SyncStatus>({ type: 'syncStatus' });
+  const fp = await call<FingerprintStatus>({ type: 'fingerprintStatus' });
   const go = button('Unlock', () => guarded(msg, [go], async () => {
     await call({ type: 'unlock', password: pw.value });
+    await route();
+  }), fp.on ? '' : 'ui-btn--primary');
+  const touch: HTMLButtonElement | false = fp.on && button('Unlock with fingerprint', () => guarded(msg, [go, touch as HTMLButtonElement], async () => {
+    await call({ type: 'unlockFingerprint' });
     await route();
   }), 'ui-btn--primary');
   pw.addEventListener('keydown', (e) => e.key === 'Enter' && go.click());
@@ -359,7 +395,7 @@ async function unlockScreen() {
     bannerSlot,
     pending && h('p', { class: 'ui-muted' }, `After you unlock, you can save the sign-in you just used on ${pending.host}.`),
     h('p', { class: 'ui-muted' }, PROFILE_NOTICE),
-    label('Master password', pw), msg, go, button('Forgot master password?', resetScreen, 'ui-btn--ghost'),
+    touch, label('Master password', pw), msg, go, button('Forgot master password?', resetScreen, 'ui-btn--ghost'),
     sync.available && (sync.state !== 'off' || sync.keyLost) && button('Sign in with your account', () => signInScreen(unlockScreen), 'ui-btn--ghost'),
     sync.available && button('Lost access to your account?', () => lostAccessScreen(unlockScreen), 'ui-btn--ghost'));
   if (sync.available) void loadRecoveryBanner(bannerSlot, msg);
@@ -554,12 +590,13 @@ function importScreen() {
     file, msg, out);
 }
 
-function exportScreen() {
+async function exportScreen() {
   const msg = msgBox();
   const pw = input({ type: 'password', autocomplete: 'current-password' });
   const out = h('div', { class: 'stack' });
-  const go = button('Export for Chrome', () => guarded(msg, [go], async () => {
-    const { csv, rows, leftOut } = await call<{ csv: string; rows: number; leftOut: number }>({ type: 'export', password: pw.value });
+  const fp = await call<FingerprintStatus>({ type: 'fingerprintStatus' });
+  const run = (req: Request): Promise<void> => guarded(msg, [go, touch].filter((b): b is HTMLButtonElement => !!b), async () => {
+    const { csv, rows, leftOut } = await call<{ csv: string; rows: number; leftOut: number }>(req);
     pw.value = '';
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     h('a', { href: url, download: 'strongroom-passwords.csv' }).click();
@@ -569,11 +606,13 @@ function exportScreen() {
       leftOut > 0 && h('p', { class: 'ui-muted' }, `${leftOut} ${leftOut === 1 ? 'login has' : 'logins have'} no website, so ${leftOut === 1 ? 'it was' : 'they were'} left out. Add a website to ${leftOut === 1 ? 'it' : 'them'} to export ${leftOut === 1 ? 'it' : 'them'}.`),
       h('p', { class: 'ui-muted' }, 'Delete the file as soon as Chrome has imported it. It holds your passwords in plain text.'),
       button('Done', vaultScreen, 'ui-btn--primary')));
-  }), 'ui-btn--primary');
+  });
+  const go = button('Export for Chrome', () => run({ type: 'export', password: pw.value }), fp.on ? '' : 'ui-btn--primary');
+  const touch: HTMLButtonElement | false = fp.on && button('Export with fingerprint', () => run({ type: 'export', fingerprint: true }), 'ui-btn--primary');
   pw.addEventListener('keydown', (e) => e.key === 'Enter' && go.click());
   screen('Export for Chrome', vaultScreen,
     h('p', { class: 'ui-muted' }, "This makes a file you can import into Chrome's password manager. The file holds your passwords in plain text, so anyone who gets it can read them. It leaves out cards, notes and logins without a website."),
-    label('Master password', pw), msg, go, out);
+    touch, label('Master password', pw), msg, go, out);
 }
 
 async function main() {

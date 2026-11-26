@@ -28,6 +28,11 @@ declare namespace chrome {
     function setBadgeText(details: { text: string; tabId?: number }): Promise<void>;
     function openPopup(): Promise<void>;
   }
+  namespace windows {
+    function create(props: { url: string; type: 'popup'; width: number; height: number; focused?: boolean }): Promise<{ id?: number }>;
+    function remove(windowId: number): Promise<void>;
+    const onRemoved: { addListener(cb: (windowId: number) => void): void };
+  }
   namespace tabs {
     function query(info: { active: boolean; currentWindow: boolean }): Promise<{ id?: number; url?: string }[]>;
     function create(props: { url: string }): Promise<unknown>;
