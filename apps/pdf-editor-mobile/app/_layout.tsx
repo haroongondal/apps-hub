@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { startAskSources } from '../src/nexus/ask-sources';
+import { PdfTextWorker } from '../src/nexus/PdfTextWorker';
 import { sweepInboxes } from '../src/nexus/share-inbox';
 import { startShares } from '../src/nexus/today-share';
 import { startWorker } from '../src/nexus/worker';
@@ -45,6 +46,7 @@ export default function RootLayout() {
           <Stack.Screen name="scan/receipt" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="scan-text" options={{ animation: 'slide_from_right' }} />
         </Stack>
+        <PdfTextWorker />
       </ThemeProvider>
     </GestureHandlerRootView>
   );

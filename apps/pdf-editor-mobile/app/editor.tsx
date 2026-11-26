@@ -11,15 +11,13 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-nat
 import { SafeAreaView } from 'react-native-safe-area-context';
 import WebView, { type WebViewMessageEvent, type WebViewNavigation } from 'react-native-webview';
 
-import { injectCommand, parseMessage, type PageEvent } from '../src/editor/bridge';
+import { injectCommand, parseMessage } from '../src/editor/bridge';
 import { pageParam, pendingPage } from '../src/editor/goto-page';
 import { dirSize, writeBase64Atomic } from '../src/library/files';
 import { newId } from '../src/library/ids';
 import { openLibrary } from '../src/library/open-library';
 import { itemDir, itemFile } from '../src/library/paths';
-import { enqueue } from '../src/nexus/worker';
-
-type DocInfo = Extract<PageEvent, { type: 'docInfo' }>;
+import { indexPdfItem, type DocInfo } from '../src/nexus/index-pdf';
 
 // Survives hot reloads: on the ready handshake after a reload the editor is
 // re-opened with this doc instead of stranding an empty page.
@@ -27,23 +25,6 @@ let lastDoc: { uri: string; name: string; append: boolean } | null = null;
 
 async function readPdfBase64(uri: string) {
   return FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-}
-
-async function indexItem(itemId: string, info: DocInfo) {
-  try {
-    const lib = await openLibrary();
-    await lib.setBody(itemId, info.text.join('\n\n'));
-    const thumb = itemFile(itemId, 'thumb.jpg');
-    if (info.thumb && !thumb.exists) await writeBase64Atomic(thumb, info.thumb);
-    const pages = itemFile(itemId, 'pages.json');
-    const text = JSON.stringify(info.text);
-    const changed = !pages.exists || (await pages.text()) !== text;
-    if (changed) pages.write(text); // Nexus cites PDFs by page, so it keeps the text per page
-    await lib.updateItem(itemId, { pageCount: info.pages, sizeBytes: dirSize(itemId) });
-    if (changed) await enqueue(itemId);
-  } catch (err) {
-    console.warn('Could not index the PDF', err);
-  }
 }
 
 async function saveEditedCopy(sourceId: string, base64: string, info: DocInfo | null) {
@@ -134,7 +115,7 @@ export default function EditorScreen() {
       }
       case 'docInfo':
         lastInfo.current = msg;
-        if (activeItem.current && !merged.current) void indexItem(activeItem.current, msg);
+        if (activeItem.current && !merged.current) void indexPdfItem(activeItem.current, msg);
         break;
       case 'pickPdf':
         void (async () => {
