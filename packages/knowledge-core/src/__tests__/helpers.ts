@@ -3,6 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { Library, serialPort, type Item, type RawSql, type Row, type SqlValue } from '@apps-hub/library-core';
 
 import { Knowledge } from '../knowledge.ts';
+import type { AnswerOptions } from '../prompts.ts';
 import type { AiPort, ContentPort, Segment } from '../types.ts';
 
 // Copied from library-core's test driver (test helpers aren't exported across packages).
@@ -41,6 +42,7 @@ export interface FakeAi extends AiPort {
   vectors: Map<string, number[]>;
   onExtract: (segments: string[]) => unknown;
   onAnswer: (question: string, sources: string[]) => string;
+  lastAnswerOpts: AnswerOptions | undefined;
   fail: Error | null;
 }
 
@@ -50,6 +52,7 @@ export function fakeAi(): FakeAi {
     vectors: new Map(),
     onExtract: () => ({ concepts: [], atoms: [], relations: [] }),
     onAnswer: () => 'An answer [1].',
+    lastAnswerOpts: undefined,
     fail: null,
     async embed(texts) {
       ai.calls.embed++;
@@ -61,8 +64,9 @@ export function fakeAi(): FakeAi {
       if (ai.fail) throw ai.fail;
       return ai.onExtract(segments);
     },
-    async answer(question, sources) {
+    async answer(question, sources, opts) {
       ai.calls.answer++;
+      ai.lastAnswerOpts = opts;
       if (ai.fail) throw ai.fail;
       return ai.onAnswer(question, sources);
     },

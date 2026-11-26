@@ -1,5 +1,7 @@
 import type { Item } from '@apps-hub/library-core';
 
+import type { AnswerOptions } from './prompts.ts';
+
 export type Locator = { page: number } | { startSec: number; endSec: number } | null;
 
 export interface Segment {
@@ -21,7 +23,7 @@ export interface AiPort {
   embed(texts: string[]): Promise<Float32Array[]>;
   /** The reply is untrusted: the pipeline runs it through `cleanExtraction`. */
   extract(segments: string[]): Promise<unknown>;
-  answer(question: string, sources: string[]): Promise<string>;
+  answer(question: string, sources: string[], opts?: AnswerOptions): Promise<string>;
 }
 
 export interface ContentPort {

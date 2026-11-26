@@ -1,4 +1,4 @@
-import type { Answer, Job } from '@apps-hub/knowledge-core';
+import { isProfileQuestion, type Answer, type Job } from '@apps-hub/knowledge-core';
 import type { Item } from '@apps-hub/library-core';
 import { Button, Empty, Header, Notice, Pill, Progress, radius, Screen, Segmented, space, Text, useTheme } from '@apps-hub/ui';
 import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
@@ -6,12 +6,14 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, FlatList, Pressable, TextInput, View } from 'react-native';
+import { Alert, FlatList, KeyboardAvoidingView, Pressable, TextInput, View } from 'react-native';
 
+import { listCvs } from '../../src/cv/store';
 import { addPdf } from '../../src/library/files';
 import { IconButton } from '../../src/library/icon-button';
 import { openItem } from '../../src/library/open-item';
 import { errorMessage } from '../../src/library/use-library';
+import { askContext, NAME_NUDGE } from '../../src/nexus/about-you';
 import { hubState } from '../../src/nexus/ai';
 import { HubNotice, WaitingNotice } from '../../src/nexus/hub-notice';
 import { WAITING_LINE, type HubState } from '../../src/nexus/hub-state';
@@ -179,7 +181,11 @@ export default function StreamScreen() {
     const settle = (patch: Partial<Exchange>) => setThread((t) => t.map((x) => (x.id === id ? { ...x, ...patch } : x)));
     settle({ answer: null, error: null });
     openKnowledge()
-      .then((kn) => kn.ask(value))
+      .then(async (kn) => {
+        const ctx = await askContext(kn.lib.db, listCvs);
+        const answer = await kn.ask(value, ctx);
+        return isProfileQuestion(value) && !ctx.about?.name ? { ...answer, text: `${answer.text}\n\n${NAME_NUDGE}` } : answer;
+      })
       .then((answer) => settle({ answer }))
       .catch((err) => settle({ error: actionError(err) }));
   };
@@ -243,6 +249,7 @@ export default function StreamScreen() {
 
   return (
     <Screen>
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
       <FlatList<Card | Exchange>
         data={mode === 'capture' ? cards : thread}
         keyExtractor={(row) => ('item' in row ? row.item.id : String(row.id))}
@@ -306,6 +313,7 @@ export default function StreamScreen() {
         ) : null}
         {recording.isRecording ? null : <IconButton icon="arrow-up-circle" label={mode === 'capture' ? 'Save the note' : 'Ask'} onPress={send} />}
       </View>
+      </KeyboardAvoidingView>
     </Screen>
   );
 }
