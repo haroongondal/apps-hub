@@ -8,7 +8,7 @@ import {
 import type { Header, RecordStore, StoredRecord, SyncReport, TotpState } from 'strongroom-core';
 import { COMMON_PASSWORDS } from '../common-passwords.ts';
 import { createService } from '../service.ts';
-import type { Ctx, Detail, EmailRecoveryStatus, ImportPreview, KV, Pending, Row, Status, SyncStatus } from '../service.ts';
+import type { Ctx, Detail, EmailRecoveryStatus, Fingerprint, FingerprintStatus, ImportPreview, KV, Pending, Row, Status, SyncStatus } from '../service.ts';
 import { createLocalStore, localKv } from '../storage.ts';
 import { createDeviceVault } from '../device-vault.ts';
 import type { DeviceVault, KeyStore } from '../device-vault.ts';
@@ -48,18 +48,19 @@ function deviceVault(): DeviceVault {
   return createDeviceVault(memoryKv(), keys);
 }
 
-function setup(device?: DeviceVault) {
+function setup(device?: DeviceVault, fingerprint?: Fingerprint) {
   const store = new MemoryStore();
   const session = memoryKv();
+  const settings = memoryKv();
   const clock = { t: 1_000_000 };
   const timer = { resets: 0 };
-  const service = createService({ store, session, settings: memoryKv(), now: () => clock.t, resetAutoLock: () => timer.resets++, device, ...LOW });
+  const service = createService({ store, session, settings, now: () => clock.t, resetAutoLock: () => timer.resets++, device, fingerprint, ...LOW });
   const call = <T>(req: object, ctx?: Ctx) => service.handle(req as never, ctx) as Promise<T>;
-  return { store, session, clock, timer, service, call };
+  return { store, session, settings, clock, timer, service, call };
 }
 
-async function unlocked(device?: DeviceVault) {
-  const s = setup(device);
+async function unlocked(device?: DeviceVault, fingerprint?: Fingerprint) {
+  const s = setup(device, fingerprint);
   await s.call({ type: 'setup', password: PASSWORD });
   return s;
 }
@@ -524,7 +525,7 @@ function deviceKeyStore(local: ReturnType<typeof fakeChrome>): KeyStore {
   return ks;
 }
 
-function extension(world: World, local = fakeChrome()) {
+function extension(world: World, local = fakeChrome(), fingerprint?: Fingerprint) {
   useChrome(local);
   const session = memoryKv();
   const alarms: boolean[] = [];
@@ -533,10 +534,10 @@ function extension(world: World, local = fakeChrome()) {
   const store = createLocalStore(device);
   const service = createService({
     store, session, settings: localKv, now: () => clock.t, resetAutoLock() {}, syncAlarm: (on) => void alarms.push(on),
-    sync: { store, transport: world.transport }, device, ...LOW,
+    sync: { store, transport: world.transport }, device, fingerprint, ...LOW,
   });
   const call = <T = unknown>(req: object, ctx?: Ctx) => service.handle(req as never, ctx) as Promise<T>;
-  return { world, local, session, alarms, clock, service, store, device, call, restart: () => extension(world, local) };
+  return { world, local, session, alarms, clock, service, store, device, call, restart: () => extension(world, local, fingerprint) };
 }
 type Ext = ReturnType<typeof extension>;
 
@@ -719,7 +720,7 @@ test('pageContextCannotSignInOrSync', async () => {
 
 test('syncIsUnavailableWithoutAServerUrl', async () => {
   const s = setup();
-  assert.deepEqual(await s.call({ type: 'syncStatus' }), { available: false, state: 'off', lastSyncAt: null, blocked: 0, quarantined: 0, pendingUpdate: false, error: null, keyLost: false });
+  assert.deepEqual(await s.call({ type: 'syncStatus' }), { available: false, state: 'off', lastSyncAt: null, blocked: 0, quarantined: 0, pendingUpdate: false, error: null, keyLost: false, paused: false });
   for (const req of [{ type: 'signIn', password: PHONE_PASSWORD, accountKey: 'x' }, { type: 'signInRecovery', recoveryKey: 'x', newPassword: NEW_PASSWORD, accountKey: 'x' }, { type: 'syncNow' }]) {
     await assert.rejects(s.call(req), /isn't available in this build/, req.type);
   }
@@ -1321,4 +1322,162 @@ test('emailSignIn is refused from a page', async () => {
   for (const action of ['request', 'check', 'open']) {
     await assert.rejects(call({ type: 'emailSignIn', action, code: 'x', password: PASSWORD }, page('https://example.com')), /isn't allowed/);
   }
+});
+
+// ---- Fingerprint: a touch before every fill, behind a toggle. The fake authenticator answers like a platform one, with or without PRF.
+const PRF = new Uint8Array(32).fill(5);
+function fakeFingerprint(o: { available?: boolean; prf?: boolean } = {}) {
+  const f = {
+    verifies: 0, enrolls: 0, allow: true,
+    available: async () => o.available !== false,
+    enroll: async () => (f.enrolls++, { credentialId: 'cred-1', ...(o.prf !== false && { prf: PRF }) }),
+    verify: async (id: string) => (f.verifies++, f.allow && id === 'cred-1' ? { ...(o.prf !== false && { prf: PRF }) } : null),
+  };
+  return f;
+}
+const BANK = page('https://login.bank.com/signin');
+const BANK_PASSWORD = login().password;
+const fillBank = (s: { call<R>(req: object, ctx?: Ctx): Promise<R> }, id: string) => s.call<{ username: string; password: string }>({ type: 'fill', id }, BANK);
+async function withFingerprint(o: { prf?: boolean } = {}) {
+  const fp = fakeFingerprint(o);
+  const device = deviceVault();
+  const s = await unlocked(device, fp);
+  const { id } = await add(s);
+  await s.call({ type: 'fingerprintOn' });
+  return { ...s, fp, device, id };
+}
+
+test('fingerprintStatus is unavailable when the port says so, and on is false until it is turned on', async () => {
+  const s = await unlocked(deviceVault(), fakeFingerprint({ available: false }));
+  assert.deepEqual(await s.call<FingerprintStatus>({ type: 'fingerprintStatus' }), { available: false, on: false, sealed: false });
+  await assert.rejects(s.call({ type: 'fingerprintOn' }), /can't check a fingerprint/);
+  const none = await unlocked(deviceVault());
+  assert.equal((await none.call<FingerprintStatus>({ type: 'fingerprintStatus' })).available, false);
+});
+
+test('with the fingerprint on, each fill calls verify', async () => {
+  const x = await withFingerprint({ prf: false });
+  assert.equal(x.fp.verifies, 0);
+  assert.equal((await fillBank(x, x.id)).password, BANK_PASSWORD);
+  assert.equal((await fillBank(x, x.id)).password, BANK_PASSWORD);
+  assert.equal(x.fp.verifies, 2);
+});
+
+test('a refused fingerprint refuses the fill and returns nothing', async () => {
+  const x = await withFingerprint({ prf: false });
+  x.fp.allow = false;
+  await assert.rejects(fillBank(x, x.id), /Fingerprint not recognised/);
+});
+
+test('a page-context fill without a passing verify is refused, with PRF too', async () => {
+  const x = await withFingerprint();
+  await x.call({ type: 'lock' });
+  x.fp.allow = false;
+  await assert.rejects(fillBank(x, x.id), /Fingerprint not recognised/);
+});
+
+test('turning on with prf seals the keys and removes the device-sealed copy', async () => {
+  const x = await withFingerprint();
+  assert.deepEqual(await x.call<FingerprintStatus>({ type: 'fingerprintStatus' }), { available: true, on: true, sealed: true });
+  assert.equal(await x.device.mode(), 'fingerprint');
+  assert.equal(await x.device.loadKeys(), null);
+  assert.ok(await x.device.loadKeys(PRF));
+});
+
+test('with prf, a fill after the popup locks opens the sealed copy from the same touch, and candidates stay locked', async () => {
+  const x = await withFingerprint();
+  await x.call({ type: 'lock' });
+  assert.deepEqual(await x.call({ type: 'candidates' }, BANK), { locked: true, rows: [] });
+  assert.equal((await fillBank(x, x.id)).password, BANK_PASSWORD);
+});
+
+test('turning on without prf keeps device mode and a fill still needs verify', async () => {
+  const x = await withFingerprint({ prf: false });
+  assert.equal((await x.call<FingerprintStatus>({ type: 'fingerprintStatus' })).sealed, false);
+  assert.equal(await x.device.mode(), 'device');
+  await x.call({ type: 'lock' });
+  assert.equal((await x.call<{ rows: Row[] }>({ type: 'candidates' }, BANK)).rows.length, 1);
+  x.fp.allow = false;
+  await assert.rejects(fillBank(x, x.id), /Fingerprint not recognised/);
+});
+
+test('turning off needs a passing verify, and restores the device-sealed copy', async () => {
+  const x = await withFingerprint();
+  x.fp.allow = false;
+  await assert.rejects(x.call({ type: 'fingerprintOff' }), /Fingerprint not recognised/);
+  assert.equal((await x.call<FingerprintStatus>({ type: 'fingerprintStatus' })).on, true);
+  x.fp.allow = true;
+  await x.call({ type: 'fingerprintOff' });
+  assert.equal((await x.call<FingerprintStatus>({ type: 'fingerprintStatus' })).on, false);
+  assert.equal(await x.device.mode(), 'device');
+  assert.ok(await x.device.loadKeys());
+});
+
+test('turning off with the master password works when the fingerprint is gone, and a wrong one changes nothing', async () => {
+  const x = await withFingerprint();
+  x.fp.allow = false;
+  await assert.rejects(x.call({ type: 'fingerprintOff', password: `${PASSWORD} (wrong)` }), /isn't right/);
+  assert.equal((await x.call<FingerprintStatus>({ type: 'fingerprintStatus' })).on, true);
+  await x.call({ type: 'fingerprintOff', password: PASSWORD });
+  assert.equal((await x.call<FingerprintStatus>({ type: 'fingerprintStatus' })).on, false);
+  assert.equal(await x.device.mode(), 'device');
+  assert.ok(await x.device.loadKeys());
+});
+
+test('master-password unlock still works while the fingerprint is on', async () => {
+  const x = await withFingerprint();
+  await x.call({ type: 'lock' });
+  x.fp.allow = false;
+  await x.call({ type: 'unlock', password: PASSWORD });
+  assert.equal((await x.call<Status>({ type: 'status' })).state, 'unlocked');
+});
+
+test('unlockFingerprint opens the popup session, and a refused fingerprint does not', async () => {
+  const x = await withFingerprint();
+  await x.call({ type: 'lock' });
+  x.fp.allow = false;
+  await assert.rejects(x.call({ type: 'unlockFingerprint' }), /Fingerprint not recognised/);
+  assert.equal((await x.call<Status>({ type: 'status' })).state, 'locked');
+  x.fp.allow = true;
+  await x.call({ type: 'unlockFingerprint' });
+  assert.equal((await x.call<Status>({ type: 'status' })).state, 'unlocked');
+  assert.equal((await x.call<{ rows: Row[] }>({ type: 'list' })).rows.length, 1);
+});
+
+test('a manual lock keeps the fingerprint-sealed copy, which still needs a touch to open', async () => {
+  const x = await withFingerprint();
+  await x.call({ type: 'lock', manual: true });
+  assert.equal(await x.device.mode(), 'fingerprint');
+  assert.equal((await fillBank(x, x.id)).password, BANK_PASSWORD);
+});
+
+test('export can be confirmed with the fingerprint instead of the password', async () => {
+  const x = await withFingerprint({ prf: false });
+  const out = await x.call<{ rows: number }>({ type: 'export', fingerprint: true });
+  assert.equal(out.rows, 1);
+  x.fp.allow = false;
+  await assert.rejects(x.call({ type: 'export', fingerprint: true }), /Fingerprint not recognised/);
+});
+
+test('sync is paused, not failed, when keys are sealed and nothing is unlocked', async () => {
+  const fp = fakeFingerprint();
+  const x = extension(await newWorld(), undefined, fp);
+  await signIn(x);
+  await x.call({ type: 'fingerprintOn' });
+  await x.call({ type: 'lock' });
+  const paused = await x.call<SyncStatus>({ type: 'syncStatus' });
+  assert.equal(paused.paused, true);
+  await assert.rejects(x.call({ type: 'syncNow' }), /Unlock/);
+  assert.notEqual((await x.call<SyncStatus>({ type: 'syncStatus' })).state, 'error');
+  await x.call({ type: 'unlockFingerprint' });
+  assert.equal((await x.call<SyncStatus>({ type: 'syncStatus' })).paused, false);
+});
+
+test('signing in with replace turns the fingerprint off, so no stale sealed key is left', async () => {
+  const fp = fakeFingerprint();
+  const x = extension(await newWorld(), undefined, fp);
+  await x.call({ type: 'setup', password: PASSWORD });
+  await x.call({ type: 'fingerprintOn' });
+  await signIn(x, { replace: true });
+  assert.equal((await x.call<FingerprintStatus>({ type: 'fingerprintStatus' })).on, false);
 });

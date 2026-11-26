@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import type { SyncStatus } from '../service.ts';
 import { syncLines } from '../sync-copy.ts';
 
-const base: SyncStatus = { available: true, state: 'idle', lastSyncAt: 1, blocked: 0, quarantined: 0, pendingUpdate: false, error: null, keyLost: false };
+const base: SyncStatus = { available: true, state: 'idle', lastSyncAt: 1, blocked: 0, quarantined: 0, pendingUpdate: false, error: null, keyLost: false, paused: false };
 const lines = (over: Partial<SyncStatus>) => syncLines({ ...base, ...over }, () => '10:00');
 const text = (over: Partial<SyncStatus>) => lines(over).join(' ');
 
@@ -35,4 +35,10 @@ test('the other states keep their one line', () => {
   assert.deepEqual(lines({ state: 'syncing' }), ['Syncing…']);
   assert.match(text({ blocked: 2 }), /2 items couldn't be synced and were left as they are/);
   assert.match(text({ quarantined: 1 }), /1 item on the vault server couldn't be read here and was left untouched/);
+});
+
+test('a paused sync says to unlock, not that it failed', () => {
+  const copy = text({ paused: true });
+  assert.match(copy, /Sync paused\. Unlock to continue\./);
+  assert.doesNotMatch(copy, /stopped|error/i);
 });

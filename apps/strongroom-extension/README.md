@@ -21,7 +21,9 @@ Chrome → `chrome://extensions` → turn on Developer mode → Load unpacked �
 - **Email recovery** (opt-in, off by default): turn it on in Settings to get back in by email if you forget your master password. See `docs/handoffs/strongroom-extension-security.md` for the flow and its disclosed risk.
 - **Locks** the popup after 5 minutes without use, and with the Lock button.
 
-Not in this version: cards and notes in the UI, change master password, a standalone "new recovery key" with no email involved, clipboard auto-clear, fingerprint (designed, waiting on a hardware spike), Firefox, QR scanning, HOTP and SMS codes.
+Not in this version: cards and notes in the UI, change master password, a standalone "new recovery key" with no email involved, clipboard auto-clear, Firefox, QR scanning, HOTP and SMS codes.
+
+Fingerprint (Settings): when on, every fill and the popup unlock ask for the platform fingerprint (Touch ID, Windows Hello). If the authenticator supports WebAuthn PRF, the key kept on this computer opens only with it; if not, the fingerprint is a check in front of the fill and the screen says so. The credential belongs to this extension id, so a different build (unpacked vs Web Store) has to enrol again, or turn it off with the master password.
 
 ## Develop
 

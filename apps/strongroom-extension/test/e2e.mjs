@@ -159,6 +159,7 @@ async function syncSuite() {
     await popup.getByRole('button', { name: 'Settings' }).click();
     await popup.getByRole('heading', { name: 'Settings' }).waitFor();
     check('the Settings screen discloses that autofill works while locked', (await popup.innerText('body')).includes('Anyone who can use this browser profile can use this vault'));
+    check('fingerprint toggle explains why it is unavailable', (await popup.innerText('body')).includes("Chrome can't read a fingerprint") && (await popup.getByRole('button', { name: 'Use fingerprint' }).isDisabled()));
     const mailCode = /code is ([A-Z2-7-]+)\./.exec(world.mail.sent.at(-1)?.text ?? '')?.[1];
     check('enrol asks for the emailed code', (await popup.innerText('body')).includes('Check your email for the code') && !!mailCode, mailCode);
 
