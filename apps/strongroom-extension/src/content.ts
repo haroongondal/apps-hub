@@ -1,5 +1,5 @@
 type Row = { id: string; name: string; username: string; totp?: boolean };
-type Candidates = { locked: boolean; rows: Row[] };
+type Candidates = { locked: boolean; rows: Row[]; gated?: boolean };
 type TotpState = { code: string; secondsLeft: number; period: number };
 
 const MENU_CSS = `
@@ -156,12 +156,13 @@ async function offerCodes(field: HTMLInputElement) {
   if (found.locked) return showMenu(field, [{ html: ['Strongroom is locked', 'Click to unlock'], run: () => void send({ type: 'openPopup' }) }]);
   const coded = found.rows.filter((row) => row.totp);
   if (coded.length === 0) return;
-  const states = await Promise.all(coded.map(async (row) => ({ row, state: await send<TotpState | null>({ type: 'totpCode', id: row.id }) })));
+  // With the fingerprint on every code fetch asks for a touch, so nothing is previewed: the menu lists the logins and the click fetches the code.
+  const states = await Promise.all(coded.map(async (row) => ({ row, state: found.gated ? null : await send<TotpState | null>({ type: 'totpCode', id: row.id }) })));
   if (document.activeElement !== field || field.value !== '') return;
-  const items = states.filter((entry): entry is { row: Row; state: TotpState } => entry.state !== null);
+  const items = states.filter((entry): entry is { row: Row; state: TotpState | null } => found.gated === true || entry.state !== null);
   if (items.length === 0) return;
   showMenu(field, items.map(({ row, state }) => ({
-    html: [grouped(state.code), `· ${row.name}`],
+    html: [state ? grouped(state.code) : 'Use code', `· ${row.name}`],
     run: async () => {
       // A displayed code goes stale; fetch the current one at click time and never fill the menu's copy.
       const current = await send<TotpState | null>({ type: 'totpCode', id: row.id });

@@ -1481,3 +1481,22 @@ test('signing in with replace turns the fingerprint off, so no stale sealed key 
   await signIn(x, { replace: true });
   assert.equal((await x.call<FingerprintStatus>({ type: 'fingerprintStatus' })).on, false);
 });
+
+test('totpCode asks for the fingerprint too, and a refused check returns no code', async () => {
+  const fp = fakeFingerprint({ prf: false });
+  const s = await unlocked(deviceVault(), fp);
+  const id = await addWithCode(s);
+  await s.call({ type: 'fingerprintOn' });
+  assert.deepEqual(await s.call<TotpState | null>({ type: 'totpCode', id }, BANK), codeAt(s.clock.t));
+  assert.equal(fp.verifies, 1);
+  fp.allow = false;
+  await assert.rejects(s.call({ type: 'totpCode', id }, BANK), /Fingerprint not recognised/);
+});
+
+test('candidates say the fingerprint is on, so the page does not preview codes, and say nothing when it is off', async () => {
+  const x = await withFingerprint({ prf: false });
+  assert.equal((await x.call<{ gated?: boolean }>({ type: 'candidates' }, BANK)).gated, true);
+  const plain = await unlocked(deviceVault());
+  await add(plain);
+  assert.equal('gated' in (await plain.call<object>({ type: 'candidates' }, BANK)), false);
+});

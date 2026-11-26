@@ -857,7 +857,9 @@ export function createService(deps: Deps) {
           const key = await fillKey();
           if (!key) return { locked: true, rows: [] };
           const { found } = await logins(key);
-          return { locked: false, rows: site ? found.filter((f) => matches(f.login.sites, site)).map(row).sort(byName) : [] };
+          // The page is told the fingerprint is on so it does not fetch a code per row just to preview it (each fetch would ask for a touch).
+          const gated = (await fpConfig()) !== null;
+          return { locked: false, rows: site ? found.filter((f) => matches(f.login.sites, site)).map(row).sort(byName) : [], ...(gated && { gated: true }) };
         }
         case 'fill': {
           const site = where && siteFromUrl(where.url);
@@ -870,10 +872,11 @@ export function createService(deps: Deps) {
         case 'totpCode': {
           // Same gate as fill: the request must come from the page itself and the login must match that page.
           // The phone refuses codes while locked; the extension follows its own lock-free fill policy, so the
-          // device-held key answers here exactly as it does for a password.
+          // device-held key answers here exactly as it does for a password. With the fingerprint on, a code is as
+          // secret as a password, so it asks for a touch every time too.
           const site = where && siteFromUrl(where.url);
           if (!site) throw new UserError(NOT_ALLOWED);
-          const target = (await logins(await requireFillKey())).found.find((f) => f.id === req.id);
+          const target = (await logins(await fillKeyChecked())).found.find((f) => f.id === req.id);
           if (!target || !matches(target.login.sites, site)) throw new UserError("That login isn't saved for this website.");
           deps.resetAutoLock();
           return codeStateOf(target.login);
