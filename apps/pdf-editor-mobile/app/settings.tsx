@@ -6,6 +6,7 @@ import { View } from 'react-native';
 import { IconButton } from '../src/library/icon-button';
 import { errorMessage } from '../src/library/use-library';
 import { SETTINGS_LEAVES } from '../src/nexus/consent-copy';
+import { AboutYouSettings } from '../src/nexus/about-you-settings';
 import { AskMyLife, TodayShare } from '../src/nexus/ask-settings';
 import { HubNotice, useHubState } from '../src/nexus/hub-notice';
 import { kick, openKnowledge } from '../src/nexus/worker';
@@ -35,6 +36,7 @@ export default function SettingsScreen() {
           </View>
         </Group>
       ) : null}
+      <AboutYouSettings />
       <AskMyLife />
       <TodayShare />
     </Screen>

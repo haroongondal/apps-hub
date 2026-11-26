@@ -6,6 +6,10 @@ import { openItem } from '../library/open-item';
 import { openLibrary } from '../library/open-library';
 
 export async function openCitation(c: Source): Promise<void> {
+  if (c.itemId.startsWith('cv:')) {
+    router.push({ pathname: '/cv/[id]', params: { id: c.itemId.slice(3) } });
+    return;
+  }
   const item = await (await openLibrary()).getItem(c.itemId);
   if (!item) throw new Error('That item is no longer in your library.');
   if (c.locator && 'startSec' in c.locator) {

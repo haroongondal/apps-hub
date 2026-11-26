@@ -3,6 +3,7 @@ import { migrate, type Item, type ItemKind, type Library, type Row, type SourceA
 import { chunkSegments } from './chunk.ts';
 import { cleanExtraction, normLabel } from './extraction.ts';
 import { composeMinutes, minutesFingerprint, minutesSegments, type Minutes, type MinutesChat, type MinutesOptions, type SavedMinutes } from './minutes.ts';
+import { isProfileQuestion, LIFE_AREAS, normaliseCitations, wantsCvs, type AskContext } from './profile.ts';
 import { KNOWLEDGE_STEPS } from './schema.ts';
 import { sourceLabel } from './sources.ts';
 import { AiError, BOUNDED_PAUSE, MAX_PAUSES, PAUSING, type AiPort, type ContentPort, type Extraction, type Locator, type Segment } from './types.ts';
@@ -48,6 +49,10 @@ export const MAX_ATTEMPTS = 3;
 export const MERGE_AT = 0.88;
 const ASK_CHUNKS = 8;
 const ASK_ATOMS = 6;
+// A profile spreads the search over every part of a life: a few of the owner's own documents per area, one message at most, and no item fills the answer.
+const AREA_OWN = 3;
+const AREA_MESSAGES = 1;
+const PROFILE_PER_ITEM = 3;
 const EMBED_BATCH = 64;
 // shortcut: only the first ~24k characters of an item feed the graph (Ask still searches every chunk); extract per window when long PDFs need full graphs.
 const EXTRACT_CHARS = 24_000;
@@ -543,15 +548,16 @@ export class Knowledge {
     return out;
   }
 
-  async ask(question: string): Promise<Answer> {
+  async ask(question: string, ctx: AskContext = {}): Promise<Answer> {
     const q = question.trim();
-    const [qv] = await this.deps.ai.embed([q]);
+    const profile = isProfileQuestion(q);
+    const [qv, ...probes] = await this.deps.ai.embed([q, ...(profile ? LIFE_AREAS.map((a) => a.probe) : [])]);
     // shortcut: brute-force cosine over every chunk; fine to ~20k chunks, switch to sqlite-vec beyond that.
     const rows = await this.db.all(
       `SELECT c.item_id, c.text, c.locator, c.embedding, i.title, i.kind, s.app, s.source_at
        FROM kn_chunks c JOIN items i ON i.id = c.item_id LEFT JOIN item_sources s ON s.item_id = c.item_id`,
     );
-    const hits = topK(rows, (r) => cosine(qv, fromBlob(r.embedding as Uint8Array)), ASK_CHUNKS).filter((h) => h.score > 0);
+    const hits = profile ? profileHits(rows, probes) : topK(rows, (r) => cosine(qv, fromBlob(r.embedding as Uint8Array)), ASK_CHUNKS).filter((h) => h.score > 0);
     const hitItems = [...new Set(hits.map((h) => h.item.item_id as string))];
     const atoms = hitItems.length
       ? await this.db.all(
@@ -570,12 +576,16 @@ export class Knowledge {
       text: text as string,
       origin: r.app === null || r.app === undefined ? null : sourceLabel({ app: r.app as SourceApp, sourceAt: r.source_at as number }),
     });
-    const sources: Source[] = [...hits.map(({ item: r }) => source(r, r.text)), ...atoms.map((r) => source(r, r.label))];
+    const extras: Source[] = wantsCvs(q) ? (ctx.extras ?? []).map((e) => ({ itemId: e.id, title: e.title, kind: 'note', locator: null, text: e.text, origin: null })) : [];
+    const sources: Source[] = [...extras, ...hits.map(({ item: r }) => source(r, r.text)), ...atoms.map((r) => source(r, r.label))];
     if (!sources.length) return { text: 'Nothing in your library matches that yet.', citations: [] };
 
-    const text = await this.deps.ai.answer(
-      q,
-      sources.map((s) => `${s.origin ?? s.title}${s.locator ? ` (${locatorLabel(s.locator)})` : ''}: ${s.text}`),
+    const text = normaliseCitations(
+      await this.deps.ai.answer(
+        q,
+        sources.map((s) => `${s.origin ?? s.title}${s.locator ? ` (${locatorLabel(s.locator)})` : ''}: ${s.text}`),
+        { profile, about: profile ? ctx.about : undefined },
+      ),
     );
     const cited: number[] = [];
     for (const m of text.matchAll(/\[(\d+(?:\s*,\s*\d+)*)\]/g)) {
@@ -583,6 +593,29 @@ export class Knowledge {
     }
     return { text, citations: cited.map((n) => ({ n, ...sources[n - 1] })) };
   }
+}
+
+function profileHits(rows: Row[], probes: Float32Array[]): { item: Row; score: number }[] {
+  const chunks = rows.map((r) => ({ r, v: fromBlob(r.embedding as Uint8Array) }));
+  const taken = new Set<Row>();
+  const perItem = new Map<string, number>();
+  const out: { item: Row; score: number }[] = [];
+  for (const probe of probes) {
+    for (const [own, quota] of [[true, AREA_OWN], [false, AREA_MESSAGES]] as const) {
+      const pool = chunks.filter((c) => !taken.has(c.r) && (c.r.app === null || c.r.app === undefined) === own);
+      let n = 0;
+      for (const { item, score } of topK(pool, (c) => cosine(probe, c.v), quota * 4)) {
+        const id = item.r.item_id as string;
+        if (n === quota) break;
+        if (score <= 0 || (perItem.get(id) ?? 0) >= PROFILE_PER_ITEM) continue;
+        perItem.set(id, (perItem.get(id) ?? 0) + 1);
+        taken.add(item.r);
+        out.push({ item: item.r, score });
+        n++;
+      }
+    }
+  }
+  return out;
 }
 
 // A run whose job was re-queued (an edit, or recover after a kill) must not overwrite newer results.

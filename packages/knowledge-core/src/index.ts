@@ -8,7 +8,9 @@ export { composeMinutes, MINUTES_WINDOW_CHARS, minutesFingerprint, minutesSegmen
 export type { Minutes, MinutesAction, MinutesChat, MinutesCite, MinutesDraft, MinutesOptions, MinutesPoint, SavedMinutes } from './minutes.ts';
 export { EMBED_DIMS, EMBED_MODEL, EMBED_TAG, unit } from './embedding.ts';
 export { answerMessages, SOURCES_CLOSE, SOURCES_OPEN, extractMessages, IMAGE_PROMPT } from './prompts.ts';
-export type { ChatText } from './prompts.ts';
+export type { AnswerOptions, ChatText } from './prompts.ts';
+export { isProfileQuestion, LIFE_AREAS, normaliseCitations, wantsCvs } from './profile.ts';
+export type { AboutYou, AskContext, ExtraSource, LifeArea } from './profile.ts';
 export { KNOWLEDGE_STEPS } from './schema.ts';
 export { cleanRow, dayLabel, looksLikeOneTimeCode, MAX_SOURCE_TEXT, sourceBody, sourceLabel, SourceSync, sourceTitle } from './sources.ts';
 export type { PagedSource, SnapshotSource, SourceProvider, SourceRow, SourceStatus, SwitchStore, SyncReport } from './sources.ts';

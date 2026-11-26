@@ -140,7 +140,7 @@ export function hubAi({ hub, onState, onWorked }: HubAiOptions): NexusAi {
         }
       }),
 
-    answer: (question, sources) => run(() => chat(answerMessages(question, sources))),
+    answer: (question, sources, opts) => run(() => chat(answerMessages(question, sources, opts))),
 
     complete: (system, user, json) =>
       run(async () => {
