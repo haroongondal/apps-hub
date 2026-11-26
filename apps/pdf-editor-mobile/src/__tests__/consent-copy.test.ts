@@ -32,4 +32,5 @@ test('the consent texts name no key of the owner and no old provider', () => {
   for (const [name, text] of Object.entries(CHAT_TEXTS)) assert.doesNotMatch(text, /your (Gemini|Groq)? ?keys?|OpenAI|Anthropic/i, name);
   assert.match(copy.MINUTES_FOOTER, /no keys of its own/);
   assert.match(copy.SETTINGS_LEAVES, /Without AI hub nothing is sent/);
+  assert.match(copy.SETTINGS_LEAVES, /name and notes from About you, and your saved CVs/);
 });
