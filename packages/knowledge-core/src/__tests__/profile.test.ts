@@ -21,6 +21,8 @@ test('the answer prompt names the owner, or says not to guess a name', () => {
   assert.match(named.content, /The user is Sam Reed/);
   assert.match(named.content, /I live in Lahore\. I run daily\./);
   assert.match(named.content, /Not found:/);
+  assert.match(named.content, /no asterisks/);
+  assert.match(named.content, /Automated messages/);
   const [anon] = answerMessages('who am i', ['x']);
   assert.match(anon.content, /never guess it/);
   assert.doesNotMatch(anon.content, /Not found:/);
