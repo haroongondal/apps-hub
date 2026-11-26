@@ -200,7 +200,7 @@ export function SettingsScreen({ status, refreshStatus }: { status: Status; refr
               />
             ) : (
               <Text variant="caption" tone="muted">
-                Never sent to AI
+                Sent to AI only for chats you pick in Autopilot
               </Text>
             )}
             <Segmented
