@@ -584,7 +584,7 @@ export class Knowledge {
       await this.deps.ai.answer(
         q,
         sources.map((s) => `${s.origin ?? s.title}${s.locator ? ` (${locatorLabel(s.locator)})` : ''}: ${s.text}`),
-        { profile, about: ctx.about },
+        { profile, about: profile ? ctx.about : undefined },
       ),
     );
     const cited: number[] = [];

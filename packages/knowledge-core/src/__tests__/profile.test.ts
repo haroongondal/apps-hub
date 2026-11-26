@@ -8,7 +8,8 @@ import { setup } from './helpers.ts';
 test('broad questions about the owner are profile questions; specific ones are not', () => {
   for (const q of ['what do you know about me', 'Tell me about myself', 'who am I?', 'summarise me']) assert.ok(isProfileQuestion(q), q);
   for (const q of ['when does the depot open', 'what did the doctor say about my knee', 'how do I make a cake']) assert.ok(!isProfileQuestion(q), q);
-  assert.ok(wantsCvs('what is on my resume') && !wantsCvs('where is my parcel'));
+  assert.ok(wantsCvs('what is on my resume') && wantsCvs('what is my work experience') && wantsCvs('list my skills'));
+  assert.ok(!wantsCvs('where is my parcel') && !wantsCvs('what skills does the course teach') && !wantsCvs('how much experience does kafka need'));
 });
 
 test('citations written as 【2†source】 become [2]', () => {
@@ -56,8 +57,9 @@ test('CVs ride along for a profile or CV question, not for others', async () => 
   const about = await kn.ask('who am i', { extras });
   assert.equal(seen[0], 'CV: Sam Reed: Sam Reed, engineer at Acme');
   assert.deepEqual(about.citations.map((c) => c.itemId), ['cv:1']);
-  await kn.ask('depot parcel', { extras });
+  await kn.ask('depot parcel', { extras, about: { name: 'Sam Reed' } });
   assert.ok(!seen.some((s) => s.includes('Acme')));
+  assert.deepEqual(ai.lastAnswerOpts, { profile: false, about: undefined });
 });
 
 test('a profile question over an empty library still answers without calling the model', async () => {

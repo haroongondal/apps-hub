@@ -40,7 +40,7 @@ function aboutLine(about: AboutYou | undefined): string {
   const notes = oneLine(about?.notes ?? '', 2000);
   const who = name
     ? `The user is ${name}. "Me", "my" and "I" in the question mean ${name}. This needs no source number.`
-    : 'The user has not said their name, so never guess it from a document.';
+    : 'The user\'s name is not available here, so never guess it from a document.';
   return notes ? `${who}\nThe user wrote this about themselves; it is true: ${notes}` : who;
 }
 

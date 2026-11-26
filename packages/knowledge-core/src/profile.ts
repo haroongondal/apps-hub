@@ -35,7 +35,11 @@ const PROFILE = /\b(about (?:me|myself)|know me|who am i|my profile|my life|my b
 const CV_WORDS = /\b(cv|resume|résumé|curriculum vitae|experience|skills?|career|employment|work history|education|qualifications?)\b/i;
 
 export const isProfileQuestion = (q: string): boolean => PROFILE.test(q);
-export const wantsCvs = (q: string): boolean => PROFILE.test(q) || CV_WORDS.test(q);
+const CV_NAMES = /\b(cv|resume|résumé|curriculum vitae)\b/i;
+const SELF = /\b(my|me|mine|i)\b/i;
+
+// "skills" in "what skills does the course teach" is not about the owner; only an explicit CV word, or a self-reference beside a career word, sends a CV.
+export const wantsCvs = (q: string): boolean => PROFILE.test(q) || CV_NAMES.test(q) || (SELF.test(q) && CV_WORDS.test(q));
 
 // Some chat models cite as 【2†source】 whatever the prompt says; the app and the citation parser only know [2].
 export const normaliseCitations = (text: string): string => text.replace(/【\s*(\d+)[^】]*】/g, '[$1]');
