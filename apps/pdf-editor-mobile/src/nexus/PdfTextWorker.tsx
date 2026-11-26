@@ -22,8 +22,10 @@ export function PdfTextWorker() {
   const [assetUri, setAssetUri] = useState<string | null>(null);
   const web = useRef<WebView>(null);
   const ready = useRef(false);
-  const busy = useRef<{ id: string; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const busy = useRef<{ id: string; timer: ReturnType<typeof setTimeout>; loaded: boolean } | null>(null);
   const tried = useRef(new Set<string>());
+  // A new key is a new page: a reply that was still on its way from the PDF that timed out can never reach the next one.
+  const [epoch, setEpoch] = useState(0);
 
   useEffect(() => {
     let alive = true;
@@ -41,6 +43,12 @@ export function PdfTextWorker() {
     busy.current = null;
   }, []);
 
+  const restart = useCallback(() => {
+    finish();
+    ready.current = false;
+    setEpoch((e) => e + 1);
+  }, [finish]);
+
   const next = useCallback(async () => {
     if (busy.current || !ready.current) return;
     try {
@@ -50,18 +58,14 @@ export function PdfTextWorker() {
       const item = nextUnindexedPdf(items, { hasPages: (id) => itemFile(id, 'pages.json').exists, excluded, tried: tried.current });
       if (!item || busy.current) return;
       tried.current.add(item.id);
-      const timer = setTimeout(() => {
-        busy.current = null;
-        void next();
-      }, PER_PDF_MS);
-      busy.current = { id: item.id, timer };
+      busy.current = { id: item.id, timer: setTimeout(restart, PER_PDF_MS), loaded: false };
       const base64 = await FileSystem.readAsStringAsync(itemFile(item.id, 'document.pdf').uri, { encoding: FileSystem.EncodingType.Base64 });
       injectCommand(web, { type: 'open', name: `${item.title}.pdf`, base64, append: false });
     } catch (err) {
       finish();
       console.warn('The PDF text reader could not start a PDF', err);
     }
-  }, [finish]);
+  }, [finish, restart]);
 
   useEffect(() => {
     const again = () => void next();
@@ -75,15 +79,19 @@ export function PdfTextWorker() {
 
   const onMessage = useCallback(
     (ev: WebViewMessageEvent) => {
+      if (!ev.nativeEvent.url.startsWith('file:')) return; // the guard keeps the page on local files, so only our own page can speak
       const msg = parseMessage(ev.nativeEvent.data);
       if (!msg) return;
       if (msg.type === 'ready') {
         ready.current = true;
         void next();
-      } else if (msg.type === 'documentLoaded' && !msg.ok) {
-        finish();
-        void next();
-      } else if (msg.type === 'docInfo' && busy.current) {
+      } else if (msg.type === 'documentLoaded' && busy.current) {
+        if (msg.ok) busy.current.loaded = true;
+        else {
+          finish();
+          void next();
+        }
+      } else if (msg.type === 'docInfo' && busy.current?.loaded) {
         const { id } = busy.current;
         finish();
         void indexPdfItem(id, msg).then(() => next());
@@ -95,7 +103,17 @@ export function PdfTextWorker() {
   if (!assetUri) return null;
   return (
     <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ position: 'absolute', top: 0, left: 0, width: 360, height: 640, opacity: 0 }}>
-      <WebView ref={web} source={{ uri: assetUri }} onMessage={onMessage} originWhitelist={['*']} allowFileAccess textZoom={100} style={{ width: 360, height: 640 }} />
+      <WebView
+        key={epoch}
+        ref={web}
+        source={{ uri: assetUri }}
+        onMessage={onMessage}
+        originWhitelist={['file://*', 'about:*']}
+        onShouldStartLoadWithRequest={(req) => (req.url ?? '').startsWith('file:') || (req.url ?? '').startsWith('about:')}
+        allowFileAccess
+        textZoom={100}
+        style={{ width: 360, height: 640 }}
+      />
     </View>
   );
 }
